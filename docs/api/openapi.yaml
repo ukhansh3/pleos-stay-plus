@@ -1,0 +1,251 @@
+openapi: 3.1.0
+info:
+  title: Pleos Stay+ API
+  version: 0.1.0-draft
+  description: 'REVIEW_REQUIRED: proposed contract, not implemented or deployed.'
+servers:
+  - url: https://example.invalid/api/v1
+    description: Placeholder; deployment not chosen
+security:
+  - bearerAuth: []
+tags:
+  - name: Parking
+  - name: Waiting
+  - name: Pickup
+paths:
+  /parking/places:
+    get:
+      tags: [Parking]
+      summary: Search parking places
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: lng, in: query, required: true, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: radiusMeters, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: plannedMinutes, in: query, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Data may be incomplete; never invent occupancy or fees
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/ParkingPlace'}}
+        '502': {$ref: '#/components/responses/ApiFailure'}
+  /parking/places/{placeId}:
+    get:
+      tags: [Parking]
+      summary: Parking detail
+      parameters: [{$ref: '#/components/parameters/placeId'}]
+      responses:
+        '200': {description: Parking detail, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingPlace'}}}}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /parking/places/{placeId}/estimate:
+    get:
+      tags: [Parking]
+      summary: Fee estimate, nullable when tariff unknown
+      parameters:
+        - {$ref: '#/components/parameters/placeId'}
+        - {name: plannedMinutes, in: query, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Estimated price
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [amountKrw, assumptions]
+                properties:
+                  amountKrw: {type: [integer, 'null'], minimum: 0}
+                  assumptions: {type: array, items: {type: string}}
+  /waiting-sessions:
+    post:
+      tags: [Waiting]
+      summary: Start a waiting session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plannedMinutes]
+              properties:
+                parkingPlaceId: {type: [string, 'null']}
+                plannedMinutes: {type: integer, minimum: 1}
+                mode: {$ref: '#/components/schemas/StayMode'}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /waiting-sessions/{sessionId}:
+    parameters: [{$ref: '#/components/parameters/sessionId'}]
+    get:
+      tags: [Waiting]
+      summary: Retrieve waiting session
+      responses:
+        '200': {description: Session, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+    patch:
+      tags: [Waiting]
+      summary: Update duration or active mode with optimistic revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRevision]
+              properties:
+                expectedRevision: {type: integer, minimum: 0}
+                plannedMinutes: {type: integer, minimum: 1}
+                mode: {$ref: '#/components/schemas/StayMode'}
+      responses:
+        '200': {description: Updated, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /waiting-sessions/{sessionId}/end:
+    post:
+      tags: [Waiting]
+      summary: End session and invalidate invitations
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Ended, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /waiting-sessions/{sessionId}/invitations:
+    post:
+      tags: [Pickup]
+      summary: Create expiring invitation
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInMinutes: {type: integer, minimum: 1}
+      responses:
+        '201':
+          description: Token must be shown only at creation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitationId, shareUrl, expiresAt]
+                properties:
+                  invitationId: {type: string, format: uuid}
+                  shareUrl: {type: string, format: uri}
+                  expiresAt: {type: string, format: date-time}
+  /pickup/invitations/redeem:
+    post:
+      tags: [Pickup]
+      security: []
+      summary: Redeem invite after consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, consent]
+              properties:
+                token: {type: string, minLength: 1}
+                consent: {type: boolean}
+                displayName: {type: string, maxLength: 60}
+      responses:
+        '200':
+          description: Participant-limited session credential
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [participantId, limitedAccessToken]
+                properties:
+                  participantId: {type: string, format: uuid}
+                  limitedAccessToken: {type: string}
+        '410': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/participants/{participantId}/status:
+    post:
+      tags: [Pickup]
+      summary: Participant changes pickup status
+      parameters: [{$ref: '#/components/parameters/participantId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, clientEventId]
+              properties:
+                status: {$ref: '#/components/schemas/PickupStatus'}
+                clientEventId: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Accepted state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted, status]
+                properties:
+                  accepted: {type: boolean}
+                  status: {$ref: '#/components/schemas/PickupStatus'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /waiting-sessions/{sessionId}/invitations/{invitationId}:
+    delete:
+      tags: [Pickup]
+      summary: Revoke invitation
+      parameters:
+        - {$ref: '#/components/parameters/sessionId'}
+        - {name: invitationId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Revoked}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    placeId: {name: placeId, in: path, required: true, schema: {type: string}}
+    sessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+    participantId: {name: participantId, in: path, required: true, schema: {type: string, format: uuid}}
+  responses:
+    ApiFailure:
+      description: Standard error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ApiError'}
+  schemas:
+    StayMode: {type: string, enum: [NONE, WORK, STUDY, ENTERTAINMENT, REST]}
+    PickupStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
+    ParkingPlace:
+      type: object
+      required: [id, provider, name, lat, lng]
+      properties:
+        id: {type: string}
+        provider: {type: string}
+        name: {type: string}
+        lat: {type: number}
+        lng: {type: number}
+        address: {type: [string, 'null']}
+        availability: {type: [integer, 'null'], minimum: 0}
+        verifiedAt: {type: [string, 'null'], format: date-time}
+    WaitingSession:
+      type: object
+      required: [id, status, activeMode, startedAt, plannedEndAt, revision]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [ACTIVE, ENDING, ENDED, EXPIRED]}
+        activeMode: {$ref: '#/components/schemas/StayMode'}
+        startedAt: {type: string, format: date-time}
+        plannedEndAt: {type: string, format: date-time}
+        endedAt: {type: [string, 'null'], format: date-time}
+        revision: {type: integer, minimum: 0}
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            requestId: {type: string}
