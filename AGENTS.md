@@ -1,7 +1,7 @@
 # AGENTS.md — Pleos Stay+ Coding Agent Instructions
 
-> 적용 대상: 레포 루트 및 모든 하위 디렉터리. **초안/검토용**.  
-> 저장소 문서/폴더 초기화만 승인됨. Android 프로젝트 생성·실행·배포는 사용자 별도 지시 후 진행.
+> 적용 대상: 레포 루트 및 모든 하위 디렉터리. **개발 중 운영 지침** (2026-11-02).  
+> Android 프로젝트 생성·에뮬레이터 앱 빌드는 확인됨. 앱 실행 검증과 Pleos SDK 실제 메서드 호출 검증은 별개. 변경·배포 권한은 사용자 지시 범위에 한정한다.
 
 ## 1. 미션과 문서 우선순위
 Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, 픽업 웹 연결, 업무/여가/휴식 모드, 안전한 운행 복귀를 지원한다.
@@ -36,7 +36,7 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 - Android: Kotlin, Jetpack Compose, ViewModel, Repository, Coroutines/Flow.
 - Pleos: 공개 SDK 문서로 확인 가능한 최소 권한 API만 통합. 도메인별 Capability → Get/Callback 순서. 콜백 실패·해제 처리.
 - Web: Next.js, TypeScript, 접근성·폼 검증·오류 표시.
-- Backend: Supabase(Postgres, RLS, Realtime, Edge Functions) 후보. 확정 전 특정 인증 공급자/과금 기능 사용 금지.
+- Backend: Parking 검색은 Node.js + TypeScript + Fastify를 11/02 구현 기준으로 사용. Waiting/Pickup은 Supabase 익명 인증 + Postgres/RLS/Realtime을 MVP 결정으로 사용하되 서비스 연결·키 설정·배포는 별도 검증/승인을 따른다.
 - Remote PC: Sunshine/Moonlight 후보. 라이선스·배포·보안·AAOS 호환성 검증 전 커스텀 스트리밍 엔진 개발 금지.
 - 모든 외부 연동은 Gateway/Adapter로 격리. Fake/Unsupported는 테스트 또는 명시적 데모 모드에만.
 - 라이브러리 버전은 실제 Maven/npm에서 확인 가능한 고정/잠금 정책 적용. 최신 버전이라는 이유로 자동 업데이트하지 않음.
@@ -109,8 +109,8 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 ## 12. 결정 보류·에스컬레이션
 대표적인 확인 대상: 지도·주차장 공급자, 인증 방식, 초대 링크 수명, 정확한 차량 신호 지원, 원격 PC 통합 수준, Pleos UX 정책, 실제 배포 목표, 프로젝트 일정. `DEVELOPMENT_GUIDE.md`의 DEC-01~12를 참고. 사용자에게 질문할 때는 **선택지별 장단점과 안전한 기본값**을 설명하되 답을 받기 전에 기본값을 확정해 코드로 박지 않는다.
 
-## 13. 현재 지시(2026-11-01)
-**프로젝트 개발 및 GitHub/Notion 수정 보류.** 지금은 문서 검토만 진행한다. 개발 목표는 2026-11-01~11-13이다. **계획·문서 수정만 승인**된 상태이며, 레포 생성/코딩/배포/노션 수정은 아직 금지한다.
+## 13. 현재 지시(2026-11-02)
+**11/02 Parking API 구현 착수 승인.** Kotlin/Compose Android 프로젝트가 생성되어 Pleos Connect Emulator v2.1.0에서 기본 앱 실행, Gradle debug 빌드 성공을 사용자 화면에서 확인했다. Vehicle/NaviHelper 의존성의 Gradle 빌드 성공과 실제 차량 SDK API 동작은 구분한다. 현재 작업은 Parking API 구현과 관련 문서/계약 동기화 범위에 한정된다. 외부 서비스 배포·유료 기능·DB destructive 작업·주요 제품 정책 임의 결정은 승인되지 않았다. GitHub main/dev 문서 변경은 사용자가 별도로 승인했다. 다른 모듈은 일자별 후속 승인 범위에 맞춰 구현한다.
 
 
 ## 14. 모드별 책임·API-first 작업 규칙 (v0.3)
@@ -126,7 +126,15 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 - 병렬 에이전트는 파일 ownership 경계를 따르고 공통 DTO/API를 독단적으로 수정하지 않는다.
 - 변경 보고에 `검증됨/미검증/검토 필요`를 명시하며, 시연에서 실제 작동하지 않는 기능은 작동한다고 주장하지 않는다.
 
-## 일정 업데이트 (2026-11-01)
+## 15. 공식 Pleos 플랫폼·SDK 준수 (2026-11-02)
+- 앱 개발은 현대차그룹 공모전 개발 가이드, Pleos 공식 SDK 문서, 해당 SDK의 권한·지원 범위, Android Automotive UX 및 주행 제한 정책을 준수한다. 일반 Android/Kotlin/Compose와 서버 구현은 허용되나 **차량 시스템에 대한 접근은 공식 문서에서 허용한 API만** 사용한다.
+- 비공개/숨겨진 API, 리플렉션·시스템 서비스 우회, 비공식 차량 CAN/센서 접근, 권한 상승, 서명/루팅 우회, 주행 중 HMI 제한 무력화 및 검증 없는 코드 생성 금지.
+- SDK 함수 호출 전 공식 문서의 클래스·시그니처·권한·버전 및 emulator/실차 지원 차이를 검증하고 출처와 결과를 기록한다. 공식 문서 확인만으로 동작 완료를 선언하지 않는다.
+- 미지원 기능은 SDK_VERIFY 또는 UNSUPPORTED로 표시하고 정상 동작인 것처럼 mock/placeholder를 배포하지 않는다. 규정 해석이 불명확하거나 구현이 이를 벗어날 수 있으면 REVIEW_REQUIRED로 두고 사용자에게 먼저 확인한다.
+- Parking 장소 추천은 합법적 이용 근거가 확인된 대상에 한정한다. 직접 선택한 도로변 대기 세션은 Waiting이 담당한다. Waiting Safety Monitor는 Waiting 모듈 내 Android 로컬에 두며 외부 서버 응답에 의존하지 않고 차량 이동 시 UI를 잠근다.
+- 오늘 기준 Parking 문서: https://app.notion.com/p/40cb74b2b90581cfb9f2e20d22428008 · 계약은 docs/api/openapi.yaml과 일치시킨다.
+
+## 일정 업데이트 (2026-11-02)
 - 11/01: 설계·SDK/원격 PC 사전검증·DB·인증 기반을 하루에 통합하는 목표. 수행하지 못한 검증은 반드시 미검증으로 표시.
 - 11/02: Parking API부터 개발 착수, 이후 Waiting → Pickup → Realtime → Work → Study → Entertainment → Rest → Frontend 통합 순으로 진행.
 - 세부 날짜와 완료 기준은 DEVELOPMENT_GUIDE.md 17장을 우선한다.
