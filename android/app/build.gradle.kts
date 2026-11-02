@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    useLibrary("android.car", false)
     namespace = "com.pleosstay.app"
     compileSdk {
         version = release(37)
@@ -43,6 +44,8 @@ android {
 }
 
 dependencies {
+    implementation("androidx.room:room-runtime:2.7.2")
+    annotationProcessor("androidx.room:room-compiler:2.7.2")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
