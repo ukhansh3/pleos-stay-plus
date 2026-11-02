@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Pleos Stay+ API
-  version: 0.1.0-draft
-  description: 'REVIEW_REQUIRED: proposed contract, not implemented or deployed.'
+  version: 0.2.0-draft
+  description: 'Parking v0.2 aligned to 2026-11-02 Notion specification; not implemented or deployed. Other contracts remain drafts.'
 servers:
   - url: https://example.invalid/api/v1
     description: Placeholder; deployment not chosen
@@ -16,49 +16,47 @@ paths:
   /parking/places:
     get:
       tags: [Parking]
-      summary: Search parking places
+      summary: Search parking and verified short-stop places
+      security: []
       parameters:
         - {name: lat, in: query, required: true, schema: {type: number, minimum: -90, maximum: 90}}
         - {name: lng, in: query, required: true, schema: {type: number, minimum: -180, maximum: 180}}
-        - {name: radiusMeters, in: query, required: true, schema: {type: integer, minimum: 1}}
-        - {name: plannedMinutes, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: radiusMeters, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 10000, default: 2000}}
+        - {name: plannedMinutes, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 1440, default: 10}}
+        - {name: purpose, in: query, required: false, schema: {$ref: '#/components/schemas/ParkingPurpose'}}
+        - {name: freeOnly, in: query, required: false, schema: {type: boolean, default: false}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
       responses:
         '200':
-          description: Data may be incomplete; never invent occupancy or fees
+          description: Filtered results; no legal or physical safety guarantee
           content:
             application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items: {type: array, items: {$ref: '#/components/schemas/ParkingPlace'}}
-        '502': {$ref: '#/components/responses/ApiFailure'}
+              schema: {$ref: '#/components/schemas/ParkingSearchResult'}
+        '400': {$ref: '#/components/responses/ParkingFailure'}
+        '429': {$ref: '#/components/responses/ParkingFailure'}
+        '502': {$ref: '#/components/responses/ParkingFailure'}
+        '503': {$ref: '#/components/responses/ParkingFailure'}
   /parking/places/{placeId}:
     get:
       tags: [Parking]
-      summary: Parking detail
+      security: []
+      summary: Parking/waiting spot detail
       parameters: [{$ref: '#/components/parameters/placeId'}]
       responses:
-        '200': {description: Parking detail, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingPlace'}}}}
-        '404': {$ref: '#/components/responses/ApiFailure'}
+        '200': {description: Place detail, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingPlace'}}}}
+        '404': {$ref: '#/components/responses/ParkingFailure'}
   /parking/places/{placeId}/estimate:
     get:
       tags: [Parking]
-      summary: Fee estimate, nullable when tariff unknown
+      security: []
+      summary: Fee estimate, UNKNOWN when pricing terms are inadequate
       parameters:
         - {$ref: '#/components/parameters/placeId'}
-        - {name: plannedMinutes, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: plannedMinutes, in: query, required: true, schema: {type: integer, minimum: 1, maximum: 1440}}
       responses:
-        '200':
-          description: Estimated price
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [amountKrw, assumptions]
-                properties:
-                  amountKrw: {type: [integer, 'null'], minimum: 0}
-                  assumptions: {type: array, items: {type: string}}
+        '200': {description: Estimate, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingEstimate'}}}}
+        '400': {$ref: '#/components/responses/ParkingFailure'}
+        '404': {$ref: '#/components/responses/ParkingFailure'}
   /waiting-sessions:
     post:
       tags: [Waiting]
@@ -207,6 +205,11 @@ components:
     sessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
     participantId: {name: participantId, in: path, required: true, schema: {type: string, format: uuid}}
   responses:
+    ParkingFailure:
+      description: Parking-specific error with requestId
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ParkingError'}
     ApiFailure:
       description: Standard error
       content:
@@ -215,18 +218,52 @@ components:
   schemas:
     StayMode: {type: string, enum: [NONE, WORK, STUDY, ENTERTAINMENT, REST]}
     PickupStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
+    ParkingPurpose: {type: string, enum: [PICKUP, SHORT_WAIT, LONG_STAY], default: SHORT_WAIT}
+    ParkingType: {type: string, enum: [PARKING_LOT, ON_STREET_PARKING, PICKUP_ZONE, TIME_LIMITED_ZONE, PUBLIC_REST_AREA]}
+    ParkingEligibility: {type: string, enum: [VERIFIED, CONDITIONAL, UNKNOWN]}
+    ParkingSearchResult:
+      type: object
+      required: [places, total, dataFreshness]
+      properties:
+        places: {type: array, items: {$ref: '#/components/schemas/ParkingPlace'}}
+        total: {type: integer, minimum: 0}
+        dataFreshness: {type: string, enum: [FRESH, STALE, UNKNOWN]}
     ParkingPlace:
       type: object
-      required: [id, provider, name, lat, lng]
+      required: [id, name, type, latitude, longitude, distanceMeters, allowedUse, eligibility, eligibilityReason, estimatedFee, feeEstimateStatus, source, sourceUpdatedAt, liveAvailability]
       properties:
         id: {type: string}
-        provider: {type: string}
         name: {type: string}
-        lat: {type: number}
-        lng: {type: number}
+        type: {$ref: '#/components/schemas/ParkingType'}
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
         address: {type: [string, 'null']}
-        availability: {type: [integer, 'null'], minimum: 0}
-        verifiedAt: {type: [string, 'null'], format: date-time}
+        distanceMeters: {type: [number, 'null'], minimum: 0, description: Haversine straight-line distance, not driving route}
+        allowedUse: {type: array, items: {type: string, enum: [PARK, STOP, PICKUP]}}
+        eligibility: {$ref: '#/components/schemas/ParkingEligibility'}
+        eligibilityReason: {type: [string, 'null']}
+        openingHoursText: {type: [string, 'null']}
+        estimatedFee: {type: [integer, 'null'], minimum: 0}
+        feeEstimateStatus: {type: string, enum: [ESTIMATED, FREE, UNKNOWN]}
+        source: {type: string}
+        sourceUpdatedAt: {type: [string, 'null'], format: date-time}
+        liveAvailability: {type: string, enum: [UNKNOWN]}
+    ParkingEstimate:
+      type: object
+      required: [placeId, plannedMinutes, estimatedFeeKrw, status, reason]
+      properties:
+        placeId: {type: string}
+        plannedMinutes: {type: integer, minimum: 1, maximum: 1440}
+        estimatedFeeKrw: {type: [integer, 'null'], minimum: 0}
+        status: {type: string, enum: [ESTIMATED, FREE, UNKNOWN]}
+        reason: {type: [string, 'null']}
+    ParkingError:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        requestId: {type: string}
     WaitingSession:
       type: object
       required: [id, status, activeMode, startedAt, plannedEndAt, revision]
