@@ -1,6 +1,6 @@
 # Pleos SDK feasibility verification — 2026-11-01
 
-Status: **NOT RUN**. This is a test procedure, not evidence of successful SDK integration. User's Android Studio / Pleos Emulator exists, but is not connected to this GitHub tool.
+Status: **COMPILE VERIFIED / RUNTIME NOT RUN**. NaviHelper 3.0.5 route code compiles in the Parking app. At the user's request, emulator route execution remains deferred; compilation is not evidence of successful service integration.
 
 ## Official sources
 - Vehicle SDK: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/Vehicle/intro
@@ -23,7 +23,7 @@ Status: **NOT RUN**. This is a test procedure, not evidence of successful SDK in
 |---|---|---|---|---|---|---|
 | Vehicle initialization | pending | pending | pending | NOT RUN | pending | pending |
 | Park state signal | pending | pending | pending | NOT RUN | pending | pending |
-| NaviHelper route | pending | pending | pending | NOT RUN | pending | pending |
+| NaviHelper route | Pleos Connect v2.1.0 planned | 3.0.5 | Parking detail coordinates → `requestRoute(RouteInfo)` | COMPILE PASS / RUNTIME NOT RUN | Gradle build; runtime log pending | pending |
 | Remote desktop stream | pending | pending | pending | NOT RUN | pending | pending |
 
 ## Decision gates

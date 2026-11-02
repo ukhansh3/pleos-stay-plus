@@ -13,6 +13,20 @@ tags:
   - name: Waiting
   - name: Pickup
 paths:
+  /health:
+    get:
+      summary: Parking API health check
+      security: []
+      responses:
+        '200':
+          description: Server process is ready; provider availability is checked on parking requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ok]}
   /parking/places:
     get:
       tags: [Parking]
@@ -45,6 +59,8 @@ paths:
       responses:
         '200': {description: Place detail, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingPlace'}}}}
         '404': {$ref: '#/components/responses/ParkingFailure'}
+        '502': {$ref: '#/components/responses/ParkingFailure'}
+        '503': {$ref: '#/components/responses/ParkingFailure'}
   /parking/places/{placeId}/estimate:
     get:
       tags: [Parking]
@@ -57,6 +73,8 @@ paths:
         '200': {description: Estimate, content: {application/json: {schema: {$ref: '#/components/schemas/ParkingEstimate'}}}}
         '400': {$ref: '#/components/responses/ParkingFailure'}
         '404': {$ref: '#/components/responses/ParkingFailure'}
+        '502': {$ref: '#/components/responses/ParkingFailure'}
+        '503': {$ref: '#/components/responses/ParkingFailure'}
   /waiting-sessions:
     post:
       tags: [Waiting]
@@ -221,6 +239,7 @@ components:
     ParkingPurpose: {type: string, enum: [PICKUP, SHORT_WAIT, LONG_STAY], default: SHORT_WAIT}
     ParkingType: {type: string, enum: [PARKING_LOT, ON_STREET_PARKING, PICKUP_ZONE, TIME_LIMITED_ZONE, PUBLIC_REST_AREA]}
     ParkingEligibility: {type: string, enum: [VERIFIED, CONDITIONAL, UNKNOWN]}
+    ParkingOperatingStatus: {type: string, enum: [OPEN, CLOSED, UNKNOWN]}
     ParkingSearchResult:
       type: object
       required: [places, total, dataFreshness]
@@ -230,7 +249,7 @@ components:
         dataFreshness: {type: string, enum: [FRESH, STALE, UNKNOWN]}
     ParkingPlace:
       type: object
-      required: [id, name, type, latitude, longitude, distanceMeters, allowedUse, eligibility, eligibilityReason, estimatedFee, feeEstimateStatus, source, sourceUpdatedAt, liveAvailability]
+      required: [id, name, type, latitude, longitude, address, distanceMeters, allowedUse, eligibility, eligibilityReason, openingHoursText, operatingStatus, estimatedFee, feeEstimateStatus, feePolicy, parkingCategory, parkingStructure, capacity, restrictions, operatorName, phoneNumber, source, sourceUpdatedAt, liveAvailability]
       properties:
         id: {type: string}
         name: {type: string}
@@ -243,11 +262,32 @@ components:
         eligibility: {$ref: '#/components/schemas/ParkingEligibility'}
         eligibilityReason: {type: [string, 'null']}
         openingHoursText: {type: [string, 'null']}
+        operatingStatus: {$ref: '#/components/schemas/ParkingOperatingStatus'}
         estimatedFee: {type: [integer, 'null'], minimum: 0}
         feeEstimateStatus: {type: string, enum: [ESTIMATED, FREE, UNKNOWN]}
-        source: {type: string}
+        feePolicy: {$ref: '#/components/schemas/ParkingFeePolicy'}
+        parkingCategory: {type: [string, 'null'], description: Source value such as public or private}
+        parkingStructure: {type: [string, 'null'], description: Source value such as on-street, off-street, or attached}
+        capacity: {type: [integer, 'null'], minimum: 0}
+        restrictions: {type: [string, 'null']}
+        operatorName: {type: [string, 'null']}
+        phoneNumber: {type: [string, 'null']}
+        source: {type: string, enum: [PUBLIC_PARKING_STANDARD]}
         sourceUpdatedAt: {type: [string, 'null'], format: date-time}
         liveAvailability: {type: string, enum: [UNKNOWN]}
+    ParkingFeePolicy:
+      type: object
+      required: [kind, basicMinutes, basicFeeKrw, additionalUnitMinutes, additionalUnitFeeKrw, dailyPassMinutes, dailyPassFeeKrw, rawText, uncertaintyReason]
+      properties:
+        kind: {type: string, enum: [FREE, LINEAR, UNKNOWN]}
+        basicMinutes: {type: [integer, 'null'], minimum: 0}
+        basicFeeKrw: {type: [integer, 'null'], minimum: 0}
+        additionalUnitMinutes: {type: [integer, 'null'], minimum: 0}
+        additionalUnitFeeKrw: {type: [integer, 'null'], minimum: 0}
+        dailyPassMinutes: {type: [integer, 'null'], minimum: 0}
+        dailyPassFeeKrw: {type: [integer, 'null'], minimum: 0}
+        rawText: {type: [string, 'null']}
+        uncertaintyReason: {type: [string, 'null']}
     ParkingEstimate:
       type: object
       required: [placeId, plannedMinutes, estimatedFeeKrw, status, reason]

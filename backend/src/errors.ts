@@ -1,0 +1,11 @@
+export class ParkingApiError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly code: string,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "ParkingApiError";
+  }
+}

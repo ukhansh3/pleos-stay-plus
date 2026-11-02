@@ -24,6 +24,7 @@ out/
 dist/
 coverage/
 *.tsbuildinfo
+backend/.cache/
 
 # OS / tools
 .DS_Store

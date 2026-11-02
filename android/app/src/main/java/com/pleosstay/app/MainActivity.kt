@@ -4,44 +4,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.pleosstay.app.parking.data.HttpParkingRepository
+import com.pleosstay.app.parking.navigation.PleosNavigationGateway
+import com.pleosstay.app.parking.ui.ParkingScreen
+import com.pleosstay.app.parking.ui.ParkingViewModel
 import com.pleosstay.app.ui.theme.PleosStayPlusTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val factory = ParkingViewModel.Factory(
+            repository = HttpParkingRepository(BuildConfig.PARKING_API_BASE_URL),
+            navigationGateway = PleosNavigationGateway(applicationContext),
+        )
         setContent {
             PleosStayPlusTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                val parkingViewModel: ParkingViewModel = viewModel(factory = factory)
+                ParkingScreen(viewModel = parkingViewModel)
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    PleosStayPlusTheme {
-        Greeting("Android")
     }
 }
