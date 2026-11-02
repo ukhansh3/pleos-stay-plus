@@ -2,7 +2,7 @@
 
 ## Scope
 
-Implemented Parking only: search, recommendation order, detail, conservative fee estimate, source metadata, Android list/detail connection, and NaviHelper coordinate handoff. Waiting API and Waiting Safety Monitor were not changed.
+Implemented Parking only: search, recommendation order, detail, conservative fee estimate, source metadata, Android list/detail connection, current-vehicle location, and NaviHelper coordinate handoff. Waiting API and Waiting Safety Monitor were not changed.
 
 ## Approved decisions
 
@@ -43,6 +43,29 @@ The official dataset covers local-government-managed public/private, on-street, 
 
 The UI therefore reports initialization/request/callback/error states and does not label the feature successful until an actual route callback is received.
 
+## FusedLocation implementation and verification
+
+- Official dependency: `ai.pleos.playground:FusedLocation:1.1.3`.
+- Official permission: `pleos.car.permission.FUSED_LOCATION` (`dangerous`). No unverified `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, or Google Play Services class was added.
+- The gateway checks `isSupported()`, initializes with the app/ViewModel lifecycle, registers `FusedLocationListener`, requests `getLastKnownLocation()`, unregisters the same listener, and calls `release()` when cleared.
+- “내 주변 검색” passes the received WGS84 latitude/longitude to the same Parking repository search used by manual input. `ParkingSearchOrigin` separates `CurrentVehicle`, `ManualTest`, and reserved `Destination` origins.
+- Permission denial, platform location-disabled state (`LocationManager.isLocationEnabled`), unsupported SDK, null/error, and 12-second timeout paths show guidance and open the developer coordinate fallback.
+
+Pleos Connect Emulator v2.1.0 evidence on 2026-11-02:
+
+| Scenario | Result |
+|---|---|
+| Runtime permission denied | PASS — denial message shown and developer coordinates expanded |
+| Runtime permission granted | PASS |
+| `isSupported()` / service bind | PASS |
+| Official `getLastKnownLocation()` callback | PASS — UI received and displayed `37.421998, -122.084000` from the Pleos service |
+| Parking repository handoff | PASS by unit test — recorded request received the exact gateway latitude/longitude |
+| Live update after `adb emu geo fix 127.039 37.501` | **SDK_VERIFY** — Android emulator command returned `OK`, but Pleos FusedLocation continued returning its own cached coordinate; official docs do not specify an ADB injection bridge |
+| GPS/location disabled runtime | **SDK_VERIFY** — handler and unit test pass; OS privacy/location setting was not changed during automated verification |
+| Real vehicle fresh GPS | **SDK_VERIFY** — requires approved SDK access and target vehicle/Devbox validation |
+
+The official project-access page currently marks FusedLocation as “Not Available Yet” for SDK access requests. The artifact compiles and the emulator service responds, but production entitlement and App Market approval must be confirmed before release.
+
 ## Commands and results
 
 | Command | Result |
@@ -51,6 +74,8 @@ The UI therefore reports initialization/request/callback/error states and does n
 | `npm test` | Passed (provider mapping/pagination, fee rules, Haversine, cache/stale, query validation, empty result, detail/estimate 404, provider failure) |
 | `npm run build` | Passed |
 | `gradlew testDebugUnitTest assembleDebug` | Passed with Android Studio JBR and local Android SDK |
+| Pleos emulator FusedLocation permission denial | Passed; guidance and fallback rendered |
+| Pleos emulator FusedLocation last-known location | Passed; official SDK value rendered in the app |
 | Actual public-data request | Not run: `PARKING_PROVIDER_API_KEY` absent |
 | Pleos emulator Navi route | Not run: deferred by user |
 
@@ -58,6 +83,7 @@ The UI therefore reports initialization/request/callback/error states and does n
 
 1. Set the public-data decoding key in the server process environment and start the backend.
 2. Confirm `/api/v1/parking/places` returns current public and on-street records near a known coordinate.
-3. Start the Android debug app with the backend reachable from the emulator.
-4. Select a returned place, tap “길 안내”, and record `Ready → Requesting → Started` or the exact `NaviErrorCode`.
-5. Confirm the installed navigation service and app-review permission approval before treating the integration as deployable.
+3. Start the Android debug app with the backend reachable from the emulator and confirm “내 주변 검색” produces a Parking API request for the displayed coordinate.
+4. On a Devbox or approved vehicle, verify a fresh FusedLocation update, location-disabled behavior, and production permission entitlement.
+5. Select a returned place, tap “길 안내”, and record `Ready → Requesting → Started` or the exact `NaviErrorCode`.
+6. Confirm the installed navigation service and app-review permission approval before treating the integration as deployable.

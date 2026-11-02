@@ -20,6 +20,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,7 +35,11 @@ import com.pleosstay.app.parking.domain.ParkingPurpose
 import com.pleosstay.app.parking.navigation.NavigationStatus
 
 @Composable
-fun ParkingScreen(viewModel: ParkingViewModel, modifier: Modifier = Modifier) {
+fun ParkingScreen(
+    viewModel: ParkingViewModel,
+    onNearbySearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val state by viewModel.state.collectAsState()
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(20.dp),
@@ -45,23 +50,43 @@ fun ParkingScreen(viewModel: ParkingViewModel, modifier: Modifier = Modifier) {
             Text("현장 표지와 운영 규칙이 공공데이터보다 우선합니다.", style = MaterialTheme.typography.bodySmall)
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = state.latitude,
-                    onValueChange = { viewModel.updateCoordinates(latitude = it) },
-                    label = { Text("위도") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = state.longitude,
-                    onValueChange = { viewModel.updateCoordinates(longitude = it) },
-                    label = { Text("경도") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("내 주변", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(state.locationMessage, style = MaterialTheme.typography.bodySmall)
+                    state.lastLocationLabel?.let { Text("최근 수신 좌표: $it", style = MaterialTheme.typography.labelSmall) }
+                    Button(onClick = onNearbySearch, enabled = !state.loading) { Text("내 주변 검색") }
+                    if (state.locationState == LocationUiState.FAILED) {
+                        TextButton(onClick = viewModel::showLocationAccessInformation) { Text("위치 접근 차단 안내") }
+                    }
+                    TextButton(onClick = viewModel::toggleDeveloperCoordinates) {
+                        Text(if (state.showDeveloperCoordinates) "개발자용 좌표 닫기" else "개발자용 좌표 입력")
+                    }
+                }
+            }
+        }
+        if (state.showDeveloperCoordinates) {
+            item {
+                Text("개발자용 테스트 좌표", style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = state.latitude,
+                        onValueChange = { viewModel.updateCoordinates(latitude = it) },
+                        label = { Text("위도") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = state.longitude,
+                        onValueChange = { viewModel.updateCoordinates(longitude = it) },
+                        label = { Text("경도") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                    )
+                }
+                Button(onClick = viewModel::searchManual, enabled = !state.loading) { Text("입력 좌표 검색") }
             }
         }
         item {
@@ -97,8 +122,6 @@ fun ParkingScreen(viewModel: ParkingViewModel, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = state.freeOnly, onCheckedChange = { viewModel.updateFilters(freeOnly = it) })
                 Text("무료만")
-                Spacer(Modifier.weight(1f))
-                Button(onClick = viewModel::search, enabled = !state.loading) { Text("검색") }
             }
         }
         if (state.loading) item { CircularProgressIndicator() }
