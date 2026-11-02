@@ -1,7 +1,7 @@
 # Pleos Stay+ — Development Guide
 
-> 상태: **검토용 통합 설계 v0.4** · 2026-11-01  
-> 이 문서는 구현 승인이나 일정 확정이 아니다. **GitHub 초기 명세 게시 완료 예정**, 앱 코드 실행·배포 미수행.  
+> 상태: **구현 중 통합 설계 v0.5** · 2026-11-02  
+> GitHub 초기 문서 게시 및 Kotlin/Compose Android 프로젝트 생성·Pleos 에뮬레이터 기본 앱 실행·Debug Gradle 빌드 성공을 확인했다. Pleos Vehicle/NaviHelper 실제 SDK 함수 동작과 서버 API 연동은 아직 미검증.  
 > 제품명: **Pleos Stay+**. 개발 목표 기간은 **2026-11-01~11-13(13일)**. 날짜별 계획은 목표이며 실행 착수 승인이 아니다.
 
 ## 0. 이 문서의 목적·읽는 순서
@@ -22,14 +22,14 @@
 차량에 머무는 시간을 안전하게 관리하고, 픽업 상대와 연결하며, 정차한 차 안을 업무·여가·휴식 공간으로 전환하는 Pleos Connect 차량용 앱.
 
 ### 1.2 핵심 가치
-1. **장소**: 목적지 주변에서 대기하기에 적합한 관리형 주차장 후보 탐색.
+1. **장소**: 목적지 주변에서 주차장과 적법성이 확인된 단기 정차·승하차 장소 후보 탐색. 사용자가 추천되지 않은 위치를 선택할 수도 있다.
 2. **상태**: 대기시간·예상 비용·차량 상태 및 알림 관리.
 3. **연결**: 웹 초대 링크로 픽업 대상의 출발/도착 상황 공유.
 4. **경험**: Work/Entertainment/Rest 모드로 대기시간 활용.
 5. **복귀**: 차량 이동 준비 시 비운전용 기능 안전 차단과 세션 종료.
 
 ### 1.3 주요 사용자 흐름 (CONFIRMED)
-`HOME → 장소 검색 → 장소 확인/내비 → 대기 시작 → 대기 대시보드 → [픽업 연결 / Work / Entertainment / Rest] → 대기 종료 → 주행 복귀`.
+`HOME → 장소 검색 또는 직접 선택한 위치 → 장소 확인/내비(선택) → 대기 시작 → 대기 대시보드 → [픽업 연결 / Work / Study / Entertainment / Rest] → 대기 종료 → 주행 복귀`.
 - 사용자는 대기 중 언제든 다른 모드로 변경할 수 있다.
 - 현재 대기 세션은 한 번에 최대 하나(단일 차량/운전자 기준, PROPOSED).
 - 외부 알림, 화면 회전, 앱 재시작 후에도 세션 복구 방안을 둔다.
@@ -44,8 +44,8 @@
 - Windows PC에서 Android Studio 2026.2.2 설치.
 - Android SDK API 34 및 Pleos Connect v2.1.0 AVD 설치.
 - Windows Hypervisor Platform 활성화 후 Pleos 가상 차량 기본 UI 표시 확인.
-- **프로젝트 자체는 아직 생성하지 않았음**. Android 앱 실행/SDK 통합은 미검증.
-- Git, Node.js, VS Code, Python의 설치는 확정되지 않음.
+- **Android Kotlin/Compose 프로젝트 생성 완료** (`android/`, applicationId `com.pleosstay.app`, minSdk 28, compileSdk/targetSdk 37). Pleos Connect v2.1.0에서 기본 앱 실행 및 Gradle `assembleDebug` 성공 확인. Vehicle/NaviHelper 의존성 구성 빌드는 성공했지만 실제 SDK 메서드·권한·차량 신호 호출은 미검증.
+- Git 사용 및 GitHub `dev` 푸시 확인. Node.js/VS Code/Python의 현재 실행·버전은 별도 확인 필요.
 
 ### 2.2 기본 빌드 기준
 공모전 개발 가이드는 **Android API 28 이상, Gradle 8.0 이상, Java 또는 Kotlin**을 제시한다. Kotlin + Jetpack Compose를 권장한다. 앱의 `compileSdk`, `targetSdk`, AGP, JDK, Compose 버전은 프로젝트 생성 시 **공식 샘플과 현재 템플릿 호환성을 확인해 고정**한다. SDK API 34 에뮬레이터를 쓴다는 사실만으로 compileSdk/targetSdk도 34로 고정하지 않는다. 공식 Vehicle SDK Sample App의 예는 JDK 17, Gradle 8.10.2, AGP 8.8.2, Kotlin 2.0.0, compile/target 35이지만 **앱에서 반드시 동일 버전을 써야 한다는 뜻은 아님**.
@@ -344,7 +344,7 @@ PickupParticipant: INVITED → JOINED → DEPARTED → NEARBY → ARRIVED
 모든 이벤트: `eventId`, `sessionId`, `type`, `revision`, `occurredAt`, 최소화된 `payload`. 재연결 시 마지막 revision으로 상태 재조회.
 
 ## 7. 외부 API·지도·주차 데이터 (SDK_VERIFY)
-- 지도/주차장 제공자 **아직 미선정**. 공공데이터포털, 지자체 데이터, 민간 지도 API 후보의 약관·커버리지·요금·쿼터·좌표계를 비교한 뒤 사용자 승인.
+- Parking 1차 데이터 원천은 **공공데이터포털 전국주차장정보표준데이터 우선 사용**으로 결정(2026-11-02). 구체 엔드포인트·실제 응답 필드·키 발급/승인·약관·갱신 정책은 REVIEW_REQUIRED. 민간·지자체 확장 공급자는 검증 후 추가. 검색 백엔드는 Node.js + TypeScript + Fastify로 구현하고, 대기/픽업 세션의 Supabase와 책임을 구분한다.
 - `ParkingProvider.search(query)` / `details(providerId)` 추상화와 정규화 레이어를 설계.
 - 통화 단위(KRW), 시간당/구간별 요금, 기본무료시간, 24시간 운영 예외, 휴무를 명시적으로 모델링.
 - 장소 데이터에 출처·갱신시각·확인 수준 표기. 오프라인 캐시는 낡은 데이터를 명시.
@@ -787,3 +787,18 @@ interface WaitingRepository {
 - [ ] 원격 PC 기술 검증 결과 기록
 - [ ] 개발용 Git 저장소 생성 승인
 - [ ] 11/01~11/13 범위 확정
+
+## 19. Parking API v0.2 / Waiting 책임 경계 (2026-11-02, CONFIRMED)
+- 오늘 Parking은 **장소 검색·추천·상세·요금 추정·데이터 출처·NaviHelper 좌표 전달**을 담당한다. 서버 경로는 `GET /api/v1/parking/places`, `GET /api/v1/parking/places/{placeId}`, `GET /api/v1/parking/places/{placeId}/estimate`.
+- 장소 유형: `PARKING_LOT`, `ON_STREET_PARKING`, `PICKUP_ZONE`, `TIME_LIMITED_ZONE`, `PUBLIC_REST_AREA`. MVP 실데이터 대상은 공영·민영/정식 노상주차장; 나머지는 공식 이용허용 데이터가 확보될 때 활성화하며 그전에는 어댑터 경계만 생성.
+- 검색 필터: lat/lng, radiusMeters, plannedMinutes, purpose, freeOnly, limit. 반환: places, total, dataFreshness; 장소별 type, allowedUse, eligibility, source, estimatedFee, feeEstimateStatus, liveAvailability. 상세한 타입·nullable·예시는 `docs/api/openapi.yaml` 및 [Parking 노션 명세](https://app.notion.com/p/40cb74b2b90581cfb9f2e20d22428008)에서 관리.
+- 데이터가 없으면 UNKNOWN/null로 반환한다. 현장 표지와 법적 제한보다 추천 점수를 우선하지 않는다. 불법이지만 단속이 약한 일반 갓길 추천 금지.
+- Waiting API는 **추천 장소 없이 직접 선택한 위치에서도 대기 세션 시작 가능**. Waiting Safety Monitor는 Waiting 모듈 내 Android 로컬에서 수행하며 Pleos SDK 실제 지원 여부를 검증한다. Parking 서버는 차량 상태 감시/정차 적법성 보증을 담당하지 않는다.
+- Fastify Parking 서버와 Android 앱은 계약 일치/오류/캐시 신선도/실제 데이터 수신을 테스트한다. Supabase 별도 서비스와 같은 서버를 강제로 합치지 않는다.
+
+## 20. 공식 SDK·공모전 플랫폼 규정 준수 (필수)
+- 개발은 현대차그룹 공모전 가이드, 공식 Pleos Connect SDK API Reference, 공식 권한/호환성 및 Android Automotive UX·주행 중 표시 제한을 준수한다. **공식 지원된 API로 차량 시스템에 접근**한다. 일반 Android/Compose/백엔드 사용 자체는 금지하지 않는다.
+- 숨겨진/비공개 API, 리플렉션·루팅·서명 권한 우회, 차량 CAN/센서 직접 접근, 제한을 해제하기 위한 해킹/오버레이는 금지한다.
+- 외부 SDK, 공개 라이브러리, 플랫폼 API 사용 시 기능의 공식 지원·배포/라이선스 허용·권한을 확인한다. 공식 문서 확인 → 컴파일 → 에뮬레이터 실제 동작 검증 순서로 결과를 분리 기록한다.
+- 검증되지 않은 Vehicle/Navigation/Surrounding API는 `SDK_VERIFY`로 남긴다. 주변 감시 센서 데이터 접근 불가 시 `UNAVAILABLE`로 표시하고 동작을 가장하지 않는다.
+- 정책 위반 가능성 또는 자료 부족 시 자의적 우회 구현 없이 `REVIEW_REQUIRED`로 사용자에게 확인한다. 차량 이동/상태 UNKNOWN이면 정차 전용 UI는 로컬에서 즉시 차단한다.
