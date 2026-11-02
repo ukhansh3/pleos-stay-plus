@@ -12,6 +12,7 @@ export type ParkingEligibility = "VERIFIED" | "CONDITIONAL" | "UNKNOWN";
 export type FeeEstimateStatus = "ESTIMATED" | "FREE" | "UNKNOWN";
 export type DataFreshness = "FRESH" | "STALE" | "UNKNOWN";
 export type OperatingStatus = "OPEN" | "CLOSED" | "UNKNOWN";
+export type ParkingSource = "PUBLIC_PARKING_STANDARD" | "PUBLIC_REST_AREA_STANDARD";
 
 export interface FeePolicy {
   kind: "FREE" | "LINEAR" | "UNKNOWN";
@@ -47,7 +48,7 @@ export interface ParkingPlace {
   restrictions: string | null;
   operatorName: string | null;
   phoneNumber: string | null;
-  source: "PUBLIC_PARKING_STANDARD";
+  source: ParkingSource;
   sourceUpdatedAt: string | null;
   liveAvailability: "UNKNOWN";
 }

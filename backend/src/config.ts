@@ -1,6 +1,15 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+
+const BACKEND_ENV_FILE = fileURLToPath(new URL("../.env", import.meta.url));
+
+// Keep shell/hosting environment variables authoritative while filling missing
+// local-development values from backend/.env for both src and dist execution.
+dotenv.config({ path: BACKEND_ENV_FILE, override: false });
 
 const DEFAULT_PROVIDER_URL = "https://api.data.go.kr/openapi/tn_pubr_prkplce_info_api";
+const DEFAULT_REST_AREA_PROVIDER_URL = "https://api.data.go.kr/openapi/tn_pubr_public_rest_area_api";
 
 function positiveNumber(value: string | undefined, fallback: number, name: string): number {
   if (value === undefined || value.trim() === "") return fallback;
@@ -14,6 +23,8 @@ export interface AppConfig {
   port: number;
   providerBaseUrl: string;
   providerApiKey: string | null;
+  restAreaProviderBaseUrl: string;
+  restAreaProviderApiKey: string | null;
   cacheTtlMs: number;
   staleMaxAgeMs: number;
   cacheFile: string;
@@ -28,12 +39,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   const providerBaseUrl = env.PARKING_PROVIDER_BASE_URL?.trim() || DEFAULT_PROVIDER_URL;
   const parsedUrl = new URL(providerBaseUrl);
   if (parsedUrl.protocol !== "https:") throw new Error("PARKING_PROVIDER_BASE_URL must use HTTPS");
+  const restAreaProviderBaseUrl = env.REST_AREA_PROVIDER_BASE_URL?.trim() || DEFAULT_REST_AREA_PROVIDER_URL;
+  const parsedRestAreaUrl = new URL(restAreaProviderBaseUrl);
+  if (parsedRestAreaUrl.protocol !== "https:") throw new Error("REST_AREA_PROVIDER_BASE_URL must use HTTPS");
 
   return {
     host: env.PARKING_API_HOST?.trim() || "127.0.0.1",
     port,
     providerBaseUrl,
     providerApiKey: env.PARKING_PROVIDER_API_KEY?.trim() || null,
+    restAreaProviderBaseUrl,
+    restAreaProviderApiKey: env.REST_AREA_PROVIDER_API_KEY?.trim() || null,
     cacheTtlMs: positiveNumber(env.PARKING_CACHE_TTL_HOURS, 24, "PARKING_CACHE_TTL_HOURS") * 60 * 60 * 1000,
     staleMaxAgeMs: positiveNumber(env.PARKING_STALE_MAX_DAYS, 7, "PARKING_STALE_MAX_DAYS") * 24 * 60 * 60 * 1000,
     cacheFile: path.resolve(cwd, env.PARKING_CACHE_FILE?.trim() || ".cache/parking-snapshot.json"),

@@ -15,6 +15,7 @@
     "validate:openapi": "node scripts/validate-openapi.mjs"
   },
   "dependencies": {
+    "dotenv": "^16.6.1",
     "fastify": "5.12.7"
   },
   "devDependencies": {

@@ -40,6 +40,9 @@ private data class ParkingPlaceDto(
             longitude = json.getDouble("longitude"),
             address = json.nullableString("address"),
             distanceMeters = json.nullableInt("distanceMeters"),
+            allowedUse = json.optJSONArray("allowedUse")?.let { values ->
+                buildList { for (index in 0 until values.length()) add(values.getString(index)) }
+            }.orEmpty(),
             eligibility = json.optString("eligibility", "UNKNOWN"),
             eligibilityReason = json.nullableString("eligibilityReason"),
             openingHoursText = json.nullableString("openingHoursText"),

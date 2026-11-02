@@ -37,10 +37,6 @@ export class TimedZoneProvider extends DisabledParkingProvider {
   readonly supportedTypes = ["TIME_LIMITED_ZONE"] as const;
 }
 
-export class RestAreaProvider extends DisabledParkingProvider {
-  readonly supportedTypes = ["PUBLIC_REST_AREA"] as const;
-}
-
 interface PublicDataItem {
   prkplceNo?: unknown;
   prkplceNm?: unknown;
@@ -79,6 +75,26 @@ interface ProviderOptions {
   rowsPerPage?: number;
   fetchImpl?: typeof fetch;
   now?: () => Date;
+}
+
+interface PublicRestAreaItem {
+  entrpsNm?: unknown;
+  roadKnd?: unknown;
+  roadRouteNo?: unknown;
+  roadRouteNm?: unknown;
+  roadRouteDrc?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  restAreaType?: unknown;
+  operOpenHhmm?: unknown;
+  operCloseHhmm?: unknown;
+  prkplceCo?: unknown;
+  shltrYn?: unknown;
+  toiletYn?: unknown;
+  etcCvntl?: unknown;
+  phoneNumber?: unknown;
+  referenceDate?: unknown;
+  instt_code?: unknown;
 }
 
 const text = (value: unknown): string | null => {
@@ -218,6 +234,81 @@ function responseBody(payload: unknown): { items: PublicDataItem[]; totalCount: 
   return { items: items.filter((entry): entry is PublicDataItem => Boolean(entry) && typeof entry === "object"), totalCount: number(body.totalCount) ?? items.length };
 }
 
+function restAreaId(item: PublicRestAreaItem): { id: string; providerId: string } {
+  const providerId = createHash("sha256")
+    .update([
+      text(item.instt_code), text(item.entrpsNm), text(item.roadRouteNo),
+      text(item.roadRouteNm), text(item.roadRouteDrc), text(item.latitude), text(item.longitude),
+    ].join("|"))
+    .digest("hex")
+    .slice(0, 24);
+  return { providerId, id: `public-rest-area:${providerId}` };
+}
+
+export function normalizePublicRestAreaItem(item: PublicRestAreaItem): NormalizedParkingRecord | null {
+  const latitude = number(item.latitude);
+  const longitude = number(item.longitude);
+  const name = text(item.entrpsNm);
+  const capacity = number(item.prkplceCo);
+  const restAreaType = text(item.restAreaType);
+  if (name === null || latitude === null || longitude === null || capacity === null || capacity <= 0
+    || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  if (restAreaType !== "일반휴게소" && restAreaType !== "화물차휴게소" && restAreaType !== "간이휴게소") return null;
+
+  const open = text(item.operOpenHhmm);
+  const close = text(item.operCloseHhmm);
+  const route = [text(item.roadRouteNm), text(item.roadRouteDrc)].filter(Boolean).join(" ");
+  const facilities = [
+    text(item.shltrYn) === "Y" ? "쉼터" : null,
+    text(item.toiletYn) === "Y" ? "화장실" : null,
+    text(item.etcCvntl),
+  ].filter(Boolean).join(", ");
+
+  return {
+    ...restAreaId(item),
+    name,
+    type: "PUBLIC_REST_AREA",
+    latitude,
+    longitude,
+    address: null,
+    allowedUse: ["PARK"],
+    eligibility: "CONDITIONAL",
+    eligibilityReason: `공식 휴게소 표준데이터에 주차면수 ${capacity}면으로 등록됨. 진입 방향과 현장 이용 조건을 확인해야 함`,
+    openingHoursText: open && close ? `매일 ${open}-${close}` : null,
+    feePolicy: {
+      kind: "UNKNOWN",
+      basicMinutes: null,
+      basicFeeKrw: null,
+      additionalUnitMinutes: null,
+      additionalUnitFeeKrw: null,
+      dailyPassMinutes: null,
+      dailyPassFeeKrw: null,
+      rawText: null,
+      uncertaintyReason: "휴게소 표준데이터는 주차 요금을 제공하지 않음",
+    },
+    parkingCategory: restAreaType,
+    parkingStructure: text(item.roadKnd),
+    capacity,
+    restrictions: [route ? `${route} 진입 방향` : null, facilities ? `편의시설: ${facilities}` : null].filter(Boolean).join(" / ") || null,
+    operatorName: null,
+    phoneNumber: text(item.phoneNumber),
+    source: "PUBLIC_REST_AREA_STANDARD",
+    sourceUpdatedAt: dateTime(item.referenceDate),
+    liveAvailability: "UNKNOWN",
+    operationDays: "평일+토요일+일요일+공휴일",
+    weekdayOpen: open,
+    weekdayClose: close,
+    saturdayOpen: open,
+    saturdayClose: close,
+    holidayOpen: open,
+    holidayClose: close,
+  };
+}
+
+function restAreaResponseBody(payload: unknown): { items: PublicRestAreaItem[]; totalCount: number } {
+  return responseBody(payload) as { items: PublicRestAreaItem[]; totalCount: number };
+}
+
 export class PublicDataParkingProvider implements ParkingProvider {
   readonly supportedTypes = ["PARKING_LOT", "ON_STREET_PARKING"] as const;
   private readonly fetchImpl: typeof fetch;
@@ -262,6 +353,51 @@ export class PublicDataParkingProvider implements ParkingProvider {
       pageNo += 1;
     }
 
+    return { fetchedAt: this.now().toISOString(), places: [...normalized.values()] };
+  }
+}
+
+export class RestAreaProvider implements ParkingProvider {
+  readonly supportedTypes = ["PUBLIC_REST_AREA"] as const;
+  private readonly fetchImpl: typeof fetch;
+  private readonly rowsPerPage: number;
+  private readonly now: () => Date;
+
+  constructor(private readonly options: ProviderOptions) {
+    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.rowsPerPage = options.rowsPerPage ?? 1000;
+    this.now = options.now ?? (() => new Date());
+  }
+
+  async fetchSnapshot(): Promise<ParkingSnapshot> {
+    if (!this.options.apiKey) throw new ParkingApiError(503, "REST_AREA_PROVIDER_KEY_MISSING", "REST_AREA_PROVIDER_API_KEY가 설정되지 않았습니다");
+
+    const normalized = new Map<string, NormalizedParkingRecord>();
+    let pageNo = 1;
+    let totalCount = Number.POSITIVE_INFINITY;
+    let receivedCount = 0;
+    while (receivedCount < totalCount) {
+      const url = new URL(this.options.baseUrl);
+      url.searchParams.set("serviceKey", this.options.apiKey);
+      url.searchParams.set("pageNo", String(pageNo));
+      url.searchParams.set("numOfRows", String(this.rowsPerPage));
+      url.searchParams.set("type", "json");
+      const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(this.options.timeoutMs), headers: { accept: "application/json" } });
+      if (!response.ok) throw new ParkingApiError(502, "REST_AREA_PROVIDER_HTTP_ERROR", `휴게소 공공데이터 공급자 HTTP 오류 (${response.status})`);
+      let payload: unknown;
+      try { payload = JSON.parse(await response.text()); } catch (cause) {
+        throw new ParkingApiError(502, "REST_AREA_PROVIDER_INVALID_RESPONSE", "휴게소 공공데이터 공급자가 JSON이 아닌 응답을 반환했습니다", { cause });
+      }
+      const page = restAreaResponseBody(payload);
+      totalCount = page.totalCount;
+      receivedCount += page.items.length;
+      for (const item of page.items) {
+        const place = normalizePublicRestAreaItem(item);
+        if (place) normalized.set(place.providerId, place);
+      }
+      if (page.items.length === 0) break;
+      pageNo += 1;
+    }
     return { fetchedAt: this.now().toISOString(), places: [...normalized.values()] };
   }
 }

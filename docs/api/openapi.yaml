@@ -272,7 +272,7 @@ components:
         restrictions: {type: [string, 'null']}
         operatorName: {type: [string, 'null']}
         phoneNumber: {type: [string, 'null']}
-        source: {type: string, enum: [PUBLIC_PARKING_STANDARD]}
+        source: {type: string, enum: [PUBLIC_PARKING_STANDARD, PUBLIC_REST_AREA_STANDARD]}
         sourceUpdatedAt: {type: [string, 'null'], format: date-time}
         liveAvailability: {type: string, enum: [UNKNOWN]}
     ParkingFeePolicy:

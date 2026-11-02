@@ -23,6 +23,7 @@ data class ParkingPlace(
     val longitude: Double,
     val address: String?,
     val distanceMeters: Int?,
+    val allowedUse: List<String>,
     val eligibility: String,
     val eligibilityReason: String?,
     val openingHoursText: String?,

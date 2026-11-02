@@ -46,7 +46,7 @@ fun ParkingScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Text("주차장 검색", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("주변 대기 장소", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("현장 표지와 운영 규칙이 공공데이터보다 우선합니다.", style = MaterialTheme.typography.bodySmall)
         }
         item {
@@ -143,10 +143,10 @@ private fun ParkingRow(place: ParkingPlace, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(place.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(listOfNotNull(place.parkingCategory, place.parkingStructure, place.distanceMeters?.let { "${it}m" }).joinToString(" · "))
+            Text(listOf(place.type.label(), place.distanceLabel(), place.feeLabel()).joinToString(" · "))
             Text(place.address ?: "주소 정보 없음", style = MaterialTheme.typography.bodySmall)
-            Text("운영 ${place.operatingStatus} · ${place.feeLabel()}", style = MaterialTheme.typography.bodySmall)
-            Text(place.eligibilityReason ?: "이용 조건 미확인", style = MaterialTheme.typography.labelSmall)
+            Text("운영시간: ${place.openingHoursText ?: "미확인"} · 현재 ${place.operatingStatus.label()}", style = MaterialTheme.typography.bodySmall)
+            Text("이용 조건: ${place.eligibilityReason ?: "미확인"}", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -156,15 +156,18 @@ private fun ParkingDetail(place: ParkingPlace, navigationStatus: NavigationStatu
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("상세 · ${place.name}", style = MaterialTheme.typography.titleLarge)
+            Text("유형: ${place.type.label()} · 거리: ${place.distanceLabel()}")
             Text(place.address ?: "주소 정보 없음")
-            Text(place.openingHoursText ?: "운영시간 미확인")
+            Text("운영시간: ${place.openingHoursText ?: "미확인"} · 현재 ${place.operatingStatus.label()}")
             Text("요금: ${place.feeLabel()}${place.feePolicy.rawText?.let { " ($it)" }.orEmpty()}")
             place.capacity?.let { Text("주차 구획: ${it}면") }
-            place.restrictions?.let { Text("조건: $it") }
+            Text("허용 용도: ${place.allowedUse.allowedUseLabel()}")
+            Text("이용 조건: ${place.eligibilityReason ?: "미확인"}")
+            place.restrictions?.let { Text("추가 조건: $it") }
             Text("관리: ${place.operatorName ?: "미확인"} / ${place.phoneNumber ?: "연락처 없음"}")
             Text("출처: ${place.source} · 기준일 ${place.sourceUpdatedAt ?: "미확인"}", style = MaterialTheme.typography.labelSmall)
             Text("실시간 빈자리 정보는 제공하지 않습니다.", style = MaterialTheme.typography.labelSmall)
-            Button(onClick = onNavigate, enabled = navigationStatus is NavigationStatus.Ready || navigationStatus is NavigationStatus.Started) {
+            Button(onClick = onNavigate, enabled = navigationStatus is NavigationStatus.Ready || navigationStatus is NavigationStatus.CallbackReceived) {
                 Text("길 안내")
             }
             Text(navigationStatus.label(), style = MaterialTheme.typography.bodySmall)
@@ -185,10 +188,37 @@ private fun ParkingPlace.feeLabel(): String = when (feeEstimateStatus) {
     FeeEstimateStatus.UNKNOWN -> "요금 미확인"
 }
 
+private fun ParkingPlace.distanceLabel(): String = distanceMeters?.let { distance ->
+    if (distance < 1_000) "${distance}m" else String.format("%.1fkm", distance / 1_000.0)
+} ?: "거리 미확인"
+
+private fun com.pleosstay.app.parking.domain.ParkingType.label(): String = when (this) {
+    com.pleosstay.app.parking.domain.ParkingType.PARKING_LOT -> "주차장"
+    com.pleosstay.app.parking.domain.ParkingType.ON_STREET_PARKING -> "정식 노상주차장"
+    com.pleosstay.app.parking.domain.ParkingType.PUBLIC_REST_AREA -> "공식 휴게소"
+    com.pleosstay.app.parking.domain.ParkingType.PICKUP_ZONE -> "승하차 구역"
+    com.pleosstay.app.parking.domain.ParkingType.TIME_LIMITED_ZONE -> "시간제 허용 구역"
+}
+
+private fun com.pleosstay.app.parking.domain.OperatingStatus.label(): String = when (this) {
+    com.pleosstay.app.parking.domain.OperatingStatus.OPEN -> "운영 중"
+    com.pleosstay.app.parking.domain.OperatingStatus.CLOSED -> "운영 종료"
+    com.pleosstay.app.parking.domain.OperatingStatus.UNKNOWN -> "상태 미확인"
+}
+
+private fun List<String>.allowedUseLabel(): String = if (isEmpty()) "미확인" else joinToString(", ") { use ->
+    when (use) {
+        "PARK" -> "주차"
+        "STOP" -> "정차"
+        "PICKUP" -> "승하차"
+        else -> use
+    }
+}
+
 private fun NavigationStatus.label(): String = when (this) {
     NavigationStatus.Initializing -> "NaviHelper 초기화 중"
-    NavigationStatus.Ready -> "NaviHelper 준비됨 (실제 호출은 에뮬레이터에서 검증 필요)"
+    NavigationStatus.Ready -> "NaviHelper 준비됨"
     is NavigationStatus.Requesting -> "${destination} 길 안내 요청 중"
-    is NavigationStatus.Started -> "${destination} 길 안내 시작 콜백 수신"
+    is NavigationStatus.CallbackReceived -> "${destination}: NaviHelper $callback 콜백 수신"
     is NavigationStatus.Failed -> message
 }

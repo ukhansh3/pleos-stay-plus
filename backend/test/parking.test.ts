@@ -6,7 +6,7 @@ import test from "node:test";
 import { buildApp } from "../src/app.js";
 import type { AppConfig } from "../src/config.js";
 import type { NormalizedParkingRecord, ParkingSnapshot } from "../src/domain.js";
-import { PublicDataParkingProvider, normalizePublicDataItem, type ParkingProvider } from "../src/provider.js";
+import { PublicDataParkingProvider, RestAreaProvider, normalizePublicDataItem, normalizePublicRestAreaItem, type ParkingProvider } from "../src/provider.js";
 import { estimateFee, haversineMeters, ParkingService, ParkingSnapshotCache } from "../src/service.js";
 
 const basePlace: NormalizedParkingRecord = {
@@ -67,6 +67,8 @@ const config = (cacheFile: string): AppConfig => ({
   port: 3000,
   providerBaseUrl: "https://api.data.go.kr/openapi/tn_pubr_prkplce_info_api",
   providerApiKey: null,
+  restAreaProviderBaseUrl: "https://api.data.go.kr/openapi/tn_pubr_public_rest_area_api",
+  restAreaProviderApiKey: null,
   cacheTtlMs: 24 * 60 * 60 * 1000,
   staleMaxAgeMs: 7 * 24 * 60 * 60 * 1000,
   cacheFile,
@@ -87,6 +89,47 @@ test("normalizes actual standard parking fields without inventing availability",
   assert.equal(place.liveAvailability, "UNKNOWN");
   assert.equal(place.feePolicy.kind, "UNKNOWN");
   assert.equal(place.sourceUpdatedAt, "2026-09-22T00:00:00.000Z");
+});
+
+test("normalizes only official rest areas with confirmed parking spaces", () => {
+  const place = normalizePublicRestAreaItem({
+    entrpsNm: "청통(대구)", roadKnd: "고속국도", roadRouteNo: "20", roadRouteNm: "대구포항선",
+    roadRouteDrc: "하행", latitude: "35.993928", longitude: "128.859145", restAreaType: "일반휴게소",
+    operOpenHhmm: "00:00", operCloseHhmm: "23:59", prkplceCo: "158", shltrYn: "Y", toiletYn: "Y",
+    referenceDate: "2026-09-17",
+  });
+  assert.ok(place);
+  assert.equal(place.type, "PUBLIC_REST_AREA");
+  assert.deepEqual(place.allowedUse, ["PARK"]);
+  assert.equal(place.capacity, 158);
+  assert.equal(place.feePolicy.kind, "UNKNOWN");
+  assert.equal(place.source, "PUBLIC_REST_AREA_STANDARD");
+  assert.match(place.restrictions ?? "", /하행 진입 방향/);
+  assert.equal(normalizePublicRestAreaItem({
+    entrpsNm: "주차면 미확인", latitude: "37.5", longitude: "127", restAreaType: "일반휴게소",
+  }), null);
+});
+
+test("rest-area provider reads the official standard API response", async () => {
+  const calls: URL[] = [];
+  const provider = new RestAreaProvider({
+    baseUrl: "https://api.data.go.kr/openapi/tn_pubr_public_rest_area_api",
+    apiKey: "test-key", timeoutMs: 1_000, rowsPerPage: 1000,
+    now: () => new Date("2026-11-02T01:00:00Z"),
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      return new Response(JSON.stringify({ response: { header: { resultCode: "00" }, body: { items: [{
+        entrpsNm: "처인", roadKnd: "고속국도", roadRouteNm: "세종포천선", roadRouteDrc: "양방향",
+        latitude: "37.3418541", longitude: "127.218541", restAreaType: "일반휴게소",
+        operOpenHhmm: "00:00", operCloseHhmm: "23:59", prkplceCo: "600", referenceDate: "2026-09-17",
+      }], totalCount: 1 } } }), { status: 200 });
+    },
+  });
+  const result = await provider.fetchSnapshot();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.searchParams.get("serviceKey"), "test-key");
+  assert.equal(result.places[0]?.type, "PUBLIC_REST_AREA");
 });
 
 test("provider reads paginated public data JSON and deduplicates by provider id", async () => {

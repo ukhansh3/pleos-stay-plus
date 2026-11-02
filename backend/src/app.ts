@@ -4,10 +4,8 @@ import type { ParkingPurpose, ParkingSearchQuery } from "./domain.js";
 import { ParkingApiError } from "./errors.js";
 import {
   CompositeParkingProvider,
-  PickupZoneProvider,
   PublicDataParkingProvider,
   RestAreaProvider,
-  TimedZoneProvider,
   type ParkingProvider,
 } from "./provider.js";
 import { ParkingService, ParkingSnapshotCache } from "./service.js";
@@ -73,16 +71,21 @@ export function buildApp(config: AppConfig, dependencies: AppDependencies = {}):
     requestIdHeader: "x-request-id",
     logController: new LogController({ disableRequestLogging: true }),
   });
-  const provider = dependencies.provider ?? new CompositeParkingProvider([
+  const configuredProviders: ParkingProvider[] = [
     new PublicDataParkingProvider({
       baseUrl: config.providerBaseUrl,
       apiKey: config.providerApiKey,
       timeoutMs: config.requestTimeoutMs,
     }),
-    new PickupZoneProvider(),
-    new TimedZoneProvider(),
-    new RestAreaProvider(),
-  ]);
+  ];
+  if (config.restAreaProviderApiKey) {
+    configuredProviders.push(new RestAreaProvider({
+      baseUrl: config.restAreaProviderBaseUrl,
+      apiKey: config.restAreaProviderApiKey,
+      timeoutMs: config.requestTimeoutMs,
+    }));
+  }
+  const provider = dependencies.provider ?? new CompositeParkingProvider(configuredProviders);
   const service = dependencies.service ?? new ParkingService(new ParkingSnapshotCache(provider, {
     cacheFile: config.cacheFile,
     ttlMs: config.cacheTtlMs,

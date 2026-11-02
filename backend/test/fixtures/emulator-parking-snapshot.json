@@ -1,0 +1,45 @@
+{
+  "fetchedAt": "2026-11-02T00:00:00.000Z",
+  "places": [
+    {
+      "id": "test-fixture:pleos-navi",
+      "providerId": "test-fixture-pleos-navi",
+      "name": "NaviHelper 검증용 장소",
+      "type": "PARKING_LOT",
+      "latitude": 37.5,
+      "longitude": 127.0,
+      "address": "자동 테스트 전용 좌표",
+      "allowedUse": ["PARK"],
+      "eligibility": "CONDITIONAL",
+      "eligibilityReason": "테스트 픽스처이며 실제 장소가 아님",
+      "openingHoursText": "테스트 전용",
+      "feePolicy": {
+        "kind": "UNKNOWN",
+        "basicMinutes": null,
+        "basicFeeKrw": null,
+        "additionalUnitMinutes": null,
+        "additionalUnitFeeKrw": null,
+        "dailyPassMinutes": null,
+        "dailyPassFeeKrw": null,
+        "rawText": null,
+        "uncertaintyReason": "테스트 픽스처"
+      },
+      "parkingCategory": "TEST_FIXTURE",
+      "parkingStructure": "TEST_FIXTURE",
+      "capacity": null,
+      "restrictions": "실제 데이터로 표시하거나 추천하지 않음",
+      "operatorName": null,
+      "phoneNumber": null,
+      "source": "PUBLIC_PARKING_STANDARD",
+      "sourceUpdatedAt": null,
+      "liveAvailability": "UNKNOWN",
+      "operationDays": null,
+      "weekdayOpen": null,
+      "weekdayClose": null,
+      "saturdayOpen": null,
+      "saturdayClose": null,
+      "holidayOpen": null,
+      "holidayClose": null
+    }
+  ]
+}

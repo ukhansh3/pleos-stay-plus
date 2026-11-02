@@ -233,7 +233,7 @@ Android 앱 컴포넌트/권한/manifest/foreground-service는 Google 자동차 
 |---|---|---|
 | UI-00 | Onboarding/권한 | 서비스 설명, 최소권한 요청, SDK 미지원 고지 |
 | UI-01 | Home | 목적지 검색, 최근 대기, 새 세션, 차량 상태 |
-| UI-02 | Parking Search | 목록/지도, 필터, 로딩·빈 결과·재시도 |
+| UI-02 | Parking Search | 목록, 필터, 로딩·빈 결과·재시도 (별도 지도 SDK/내장 지도 제외) |
 | UI-03 | Parking Detail | 위치, 운영정보·요금·출처, 내비 연결 |
 | UI-04 | Waiting Dashboard | 타이머, 요금, 픽업 이벤트, 모드 선택, 종료 |
 | UI-05 | Pickup Share | 초대 생성, 링크 복사/공유, 참가 상태·만료 |
@@ -789,8 +789,8 @@ interface WaitingRepository {
 - [ ] 11/01~11/13 범위 확정
 
 ## 19. Parking API v0.2 / Waiting 책임 경계 (2026-11-02, CONFIRMED)
-- 오늘 Parking은 **장소 검색·추천·상세·요금 추정·데이터 출처·NaviHelper 좌표 전달**을 담당한다. 서버 경로는 `GET /api/v1/parking/places`, `GET /api/v1/parking/places/{placeId}`, `GET /api/v1/parking/places/{placeId}/estimate`.
-- 장소 유형: `PARKING_LOT`, `ON_STREET_PARKING`, `PICKUP_ZONE`, `TIME_LIMITED_ZONE`, `PUBLIC_REST_AREA`. MVP 실데이터 대상은 공영·민영/정식 노상주차장; 나머지는 공식 이용허용 데이터가 확보될 때 활성화하며 그전에는 어댑터 경계만 생성.
+- 오늘 Parking은 **현재 위치 주변 장소 검색·추천·상세·요금 추정·데이터 출처·NaviHelper 좌표 전달**을 담당한다. 서버 경로는 `GET /api/v1/parking/places`, `GET /api/v1/parking/places/{placeId}`, `GET /api/v1/parking/places/{placeId}/estimate`. 별도 지도 SDK와 앱 내부 지도는 사용하지 않는다. 목적지 이름·주소 검색은 공급자와 인증키 결정 전 `REVIEW_REQUIRED`이다.
+- 장소 유형: `PARKING_LOT`, `ON_STREET_PARKING`, `PICKUP_ZONE`, `TIME_LIMITED_ZONE`, `PUBLIC_REST_AREA`. 공영·민영/정식 노상주차장과, 공식 전국휴게소 표준데이터에서 유효 좌표·허용 휴게소 유형·양수 주차면수가 확인된 `PUBLIC_REST_AREA`만 실제 연동한다. `PICKUP_ZONE`, `TIME_LIMITED_ZONE`은 공식 이용허용 데이터가 확보될 때까지 미지원한다.
 - 검색 필터: lat/lng, radiusMeters, plannedMinutes, purpose, freeOnly, limit. 반환: places, total, dataFreshness; 장소별 type, allowedUse, eligibility, source, estimatedFee, feeEstimateStatus, liveAvailability. 상세한 타입·nullable·예시는 `docs/api/openapi.yaml` 및 [Parking 노션 명세](https://app.notion.com/p/40cb74b2b90581cfb9f2e20d22428008)에서 관리.
 - 데이터가 없으면 UNKNOWN/null로 반환한다. 현장 표지와 법적 제한보다 추천 점수를 우선하지 않는다. 불법이지만 단속이 약한 일반 갓길 추천 금지.
 - Waiting API는 **추천 장소 없이 직접 선택한 위치에서도 대기 세션 시작 가능**. Waiting Safety Monitor는 Waiting 모듈 내 Android 로컬에서 수행하며 Pleos SDK 실제 지원 여부를 검증한다. Parking 서버는 차량 상태 감시/정차 적법성 보증을 담당하지 않는다.

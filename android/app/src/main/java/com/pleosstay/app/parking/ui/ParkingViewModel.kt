@@ -25,7 +25,6 @@ enum class LocationUiState { IDLE, LOCATING, READY, PERMISSION_DENIED, DISABLED,
 sealed interface ParkingSearchOrigin {
     data object CurrentVehicle : ParkingSearchOrigin
     data class ManualTest(val latitude: Double, val longitude: Double) : ParkingSearchOrigin
-    data class Destination(val latitude: Double, val longitude: Double, val label: String) : ParkingSearchOrigin
 }
 
 data class ParkingUiState(
@@ -166,7 +165,6 @@ class ParkingViewModel(
         val (latitude, longitude) = when (origin) {
             ParkingSearchOrigin.CurrentVehicle -> current.latitude.toDoubleOrNull() to current.longitude.toDoubleOrNull()
             is ParkingSearchOrigin.ManualTest -> origin.latitude to origin.longitude
-            is ParkingSearchOrigin.Destination -> origin.latitude to origin.longitude
         }
         val radius = current.radiusMeters.toIntOrNull()
         val minutes = current.plannedMinutes.toIntOrNull()

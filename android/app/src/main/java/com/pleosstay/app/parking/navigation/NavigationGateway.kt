@@ -15,7 +15,7 @@ sealed interface NavigationStatus {
     data object Initializing : NavigationStatus
     data object Ready : NavigationStatus
     data class Requesting(val destination: String) : NavigationStatus
-    data class Started(val destination: String) : NavigationStatus
+    data class CallbackReceived(val destination: String, val callback: String) : NavigationStatus
     data class Failed(val message: String) : NavigationStatus
 }
 
@@ -33,11 +33,11 @@ class PleosNavigationGateway(context: Context) : NavigationGateway {
 
     private val listener = object : NaviHelperEventListener {
         override fun onRouteStarted(routeStartInfo: RouteStartInfo) {
-            mutableStatus.value = NavigationStatus.Started(requestedName)
+            mutableStatus.value = NavigationStatus.CallbackReceived(requestedName, "onRouteStarted")
         }
 
         override fun onRoutingCompleted() {
-            mutableStatus.value = NavigationStatus.Started(requestedName)
+            mutableStatus.value = NavigationStatus.CallbackReceived(requestedName, "onRoutingCompleted")
         }
 
         override fun onError(errorCode: NaviErrorCode) {
@@ -57,7 +57,7 @@ class PleosNavigationGateway(context: Context) : NavigationGateway {
     }
 
     override fun requestRoute(place: ParkingPlace) {
-        if (mutableStatus.value !is NavigationStatus.Ready && mutableStatus.value !is NavigationStatus.Started) {
+        if (mutableStatus.value !is NavigationStatus.Ready && mutableStatus.value !is NavigationStatus.CallbackReceived) {
             mutableStatus.value = NavigationStatus.Failed("NaviHelper가 준비되지 않았습니다")
             return
         }
