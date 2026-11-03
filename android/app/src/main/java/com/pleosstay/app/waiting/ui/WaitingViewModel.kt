@@ -4,8 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.pleosstay.app.waiting.data.WaitingRefreshException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+
 import com.pleosstay.app.waiting.data.WaitingRepository
 import com.pleosstay.app.waiting.domain.*
 import com.pleosstay.app.waiting.safety.*
@@ -23,17 +22,19 @@ data class WaitingUiState(
     val busy: Boolean = false,
     val error: String? = null,
     val recoveryRequired: Boolean = false,
+    val drivingRecovery: DrivingRecoveryState = DrivingRecoveryState(),
 ) {
     val active: WaitingSession? get() = sessions.firstOrNull { it.status == WaitingStatus.ACTIVE }
-    val canUse: Boolean get() = ready && safety.canUse && !recoveryRequired
+    val canUse: Boolean get() = ready && safety.canUse && !recoveryRequired && !drivingRecovery.pending
 }
 
 class WaitingViewModel(
     private val repository: WaitingRepository,
     private val safetyGateway: WaitingSafetyGateway,
     private val clock: WaitingClock = WaitingClock(System::currentTimeMillis),
+    drivingMonitor: WaitingDrivingMonitor? = null,
 ) : ViewModel() {
-    private val drivingMutex = Mutex()
+    private val drivingMonitor = drivingMonitor ?: WaitingDrivingMonitor(repository, safetyGateway.drivingEvents, viewModelScope)
     private val mutableState = MutableStateFlow(WaitingUiState(now = clock.now()))
     val state = mutableState.asStateFlow()
     init {
@@ -48,7 +49,9 @@ class WaitingViewModel(
             }
         }
         viewModelScope.launch {
-            safetyGateway.drivingEvents.state.collect { drainDrivingEvents() }
+            this@WaitingViewModel.drivingMonitor.state.collect { recovery ->
+                mutableState.value = mutableState.value.copy(drivingRecovery = recovery)
+            }
         }
         reload()
         viewModelScope.launch {
@@ -56,16 +59,8 @@ class WaitingViewModel(
                 delay(1_000)
                 mutableState.value = mutableState.value.copy(now = clock.now())
                 if (mutableState.value.recoveryRequired) performRecovery { repository.retryPendingEnd() }
-                drainDrivingEvents()
+
             }
-        }
-    }
-    private suspend fun drainDrivingEvents() = drivingMutex.withLock {
-        while (true) {
-            val event = safetyGateway.drivingEvents.state.value.firstOrNull() ?: break
-            mutableState.value = mutableState.value.copy(recoveryRequired = true)
-            if (!performRecovery { repository.onDrivingConfirmed(event.observedAt) }) break
-            safetyGateway.drivingEvents.acknowledge(event.id)
         }
     }
     fun reload() {
@@ -100,14 +95,11 @@ class WaitingViewModel(
             finally { mutableState.value = mutableState.value.copy(busy = false) }
         }
     }
-    class Factory(private val repository: WaitingRepository, private val safety: WaitingSafetyGateway) : ViewModelProvider.Factory {
+    class Factory(private val repository: WaitingRepository, private val safety: WaitingSafetyGateway, private val monitor: WaitingDrivingMonitor? = null) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(WaitingViewModel::class.java))
-            return WaitingViewModel(repository, safety) as T
+            return WaitingViewModel(repository, safety, drivingMonitor = monitor) as T
         }
     }
 }
-
-
-

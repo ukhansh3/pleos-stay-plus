@@ -21,13 +21,13 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
     val policy = remember { WaitingPolicy() }
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("대기 관리", style = MaterialTheme.typography.headlineMedium) }
-        state.error?.let { error -> item { Text(error, color = MaterialTheme.colorScheme.error) } }
+        (state.drivingRecovery.error ?: state.error)?.let { error -> item { Text(error, color = MaterialTheme.colorScheme.error) } }
         if (!state.canUse) {
             item {
                 Text(if (!state.ready) "기록 복구 중 / 사용 제한" else state.safety.message)
                 Text("주차 확인 전에는 대기 조작과 기록 화면을 사용할 수 없습니다.")
                 Text("기존 세션은 백그라운드 진입이나 사용 제한만으로 종료되지 않습니다.")
-                Text("실제 차량 주차·주행 신호 연동은 미검증입니다.", style = MaterialTheme.typography.bodySmall)
+                Text("차량 정보 권한을 허용한 뒤 P 기어에서 다시 대기 관리를 열어 주세요.", style = MaterialTheme.typography.bodySmall)
             }
         } else {
             val active = state.active
@@ -81,4 +81,3 @@ private fun Long.durationLabel(): String {
     return "%02d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
 }
 private fun Long.dateLabel(): String = DateFormat.getDateTimeInstance().format(Date(this))
-

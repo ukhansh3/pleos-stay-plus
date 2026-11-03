@@ -53,8 +53,8 @@ class WaitingViewModelTest {
             safety.confirmDriving(now)
             runCurrent()
             assertFalse(vm.state.value.canUse)
-            assertTrue(vm.state.value.recoveryRequired)
-            assertNotNull(vm.state.value.error)
+            assertTrue(vm.state.value.drivingRecovery.pending)
+            assertNotNull(vm.state.value.drivingRecovery.error)
             store.failWrites = false
             now = 9000
             advanceTimeBy(1000)
@@ -140,8 +140,3 @@ class WaitingViewModelTest {
             assertFalse(vm.state.value.canUse)
         } finally { owner.clear(); Dispatchers.resetMain() }
     }}
-
-
-
-
-

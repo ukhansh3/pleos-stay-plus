@@ -7,7 +7,7 @@ data class WaitingSafety(
     val motion: VehicleMotion = VehicleMotion.UNKNOWN,
     val uxRestricted: Boolean = true,
     val observedAt: Long? = null,
-    val message: String = "주차 상태 확인 기능 미검증: Waiting 조작을 허용하지 않습니다",
+    val message: String = "주차 상태를 확인 중입니다: Waiting 조작을 허용하지 않습니다",
 ) {
     val canUse: Boolean get() = motion == VehicleMotion.PARKED && !uxRestricted
 }
@@ -16,6 +16,7 @@ data class WaitingSafety(
 interface WaitingSafetyGateway : AutoCloseable {
     val drivingEvents: DrivingEventBuffer
     val state: StateFlow<WaitingSafety>
+    fun setForeground(foreground: Boolean) = Unit
     fun start()
     fun stop()
 }
@@ -27,7 +28,6 @@ class UnavailableWaitingSafetyGateway : WaitingSafetyGateway {
     override fun stop() = Unit
     override fun close() = Unit
 }
-
 
 /** Pending observations survive rapid state changes and remain until acknowledged.
  * In-memory handoff only: the repository journal supplies process-restart recovery.
