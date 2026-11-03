@@ -23,6 +23,21 @@ android {
             "PARKING_API_BASE_URL",
             "\"${providers.gradleProperty("PARKING_API_BASE_URL").getOrElse("http://10.0.2.2:3000/api/v1/")}\""
         )
+        buildConfigField(
+            "String",
+            "PICKUP_API_BASE_URL",
+            "\"${providers.gradleProperty("PICKUP_API_BASE_URL").getOrElse("http://10.0.2.2:3000/api/v1/")}\""
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${providers.gradleProperty("SUPABASE_URL").orElse(providers.environmentVariable("SUPABASE_URL")).getOrElse("")}\""
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_PUBLISHABLE_KEY",
+            "\"${providers.gradleProperty("SUPABASE_PUBLISHABLE_KEY").orElse(providers.environmentVariable("SUPABASE_PUBLISHABLE_KEY")).getOrElse("")}\""
+        )
     }
 
     buildTypes {
@@ -67,4 +82,5 @@ dependencies {
     implementation("ai.pleos.playground:Vehicle:2.3.2")
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
     implementation("ai.pleos.playground:FusedLocation:1.1.3")
+    implementation("com.google.zxing:core:3.5.4") // Apache-2.0; QR encoding only.
 }

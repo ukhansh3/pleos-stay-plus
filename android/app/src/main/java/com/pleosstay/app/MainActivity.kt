@@ -32,11 +32,25 @@ import com.pleosstay.app.parking.navigation.PleosNavigationGateway
 import com.pleosstay.app.parking.ui.ParkingScreen
 import com.pleosstay.app.parking.ui.ParkingViewModel
 import com.pleosstay.app.ui.theme.PleosStayPlusTheme
+import com.pleosstay.app.pickup.auth.SupabaseRestDriverIdentityProvider
+import com.pleosstay.app.pickup.data.HttpPickupRepository
+import com.pleosstay.app.pickup.ui.PickupScreen
+import com.pleosstay.app.pickup.ui.PickupViewModel
 
 class MainActivity : ComponentActivity() {
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
+    }
+    private val pickupViewModel: PickupViewModel by viewModels {
+        PickupViewModel.Factory(
+            repository = HttpPickupRepository(
+                BuildConfig.PICKUP_API_BASE_URL,
+                SupabaseRestDriverIdentityProvider(applicationContext, BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_PUBLISHABLE_KEY),
+            ),
+            locationGateway = PleosFusedLocationGateway(applicationContext),
+            safety = waitingDependencies.safety,
+        )
     }
 
     override fun onStart() {
@@ -62,6 +76,9 @@ class MainActivity : ComponentActivity() {
     ) { granted ->
         if (granted) parkingViewModel.searchNearby() else parkingViewModel.onLocationPermissionDenied()
     }
+    private val pickupLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) pickupViewModel.start() else pickupViewModel.start()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,18 +86,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PleosStayPlusTheme {
-                var showWaiting by remember { mutableStateOf(false) }
+                var section by remember { mutableIntStateOf(0) }
                 val parkingState by parkingViewModel.state.collectAsState()
                 Column {
                     Row {
-                        TextButton(onClick = { showWaiting = false }) { Text("장소 검색") }
-                        TextButton(onClick = { showWaiting = true; requestVehicleInformation() }) { Text("대기 관리") }
+                        TextButton(onClick = { section = 0 }) { Text("장소 검색") }
+                        TextButton(onClick = { section = 1; requestVehicleInformation() }) { Text("대기 관리") }
+                        TextButton(onClick = { section = 2; requestVehicleInformation() }) { Text("픽업") }
                     }
-                    if (showWaiting) {
-                        val place = parkingState.selected?.let { WaitingPlace(it.id, it.name) }
-                        WaitingScreen(waitingModel, place)
-                    } else {
-                        ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
+                    when (section) {
+                        1 -> {
+                            val place = parkingState.selected?.let { WaitingPlace(it.id, it.name) }
+                            WaitingScreen(waitingModel, place)
+                        }
+                        2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
+                        else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
                 }
             }
@@ -107,6 +127,13 @@ class MainActivity : ComponentActivity() {
             parkingViewModel.searchNearby()
         } else {
             locationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
+        }
+    }
+    private fun requestPickupStart() {
+        if (ContextCompat.checkSelfPermission(this, FUSED_LOCATION_PERMISSION) == PackageManager.PERMISSION_GRANTED) {
+            pickupViewModel.start()
+        } else {
+            pickupLocationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }
     }
 }

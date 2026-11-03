@@ -13,7 +13,12 @@ import kotlin.coroutines.resume
 
 const val FUSED_LOCATION_PERMISSION = "pleos.car.permission.FUSED_LOCATION"
 
-data class VehicleLocation(val latitude: Double, val longitude: Double, val timestampMillis: Long)
+data class VehicleLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val timestampMillis: Long,
+    val confidence: Float? = null,
+)
 
 sealed interface CurrentLocationResult {
     data class Success(val location: VehicleLocation) : CurrentLocationResult
@@ -121,5 +126,10 @@ class PleosFusedLocationGateway(
         latitude.isFinite() && latitude in -90.0..90.0 && longitude.isFinite() && longitude in -180.0..180.0
 
     private fun LocationData.toVehicleLocation(): VehicleLocation =
-        VehicleLocation(latitude = latitude, longitude = longitude, timestampMillis = timestampMillis)
+        VehicleLocation(
+            latitude = latitude,
+            longitude = longitude,
+            timestampMillis = timestampMillis,
+            confidence = confidence.takeIf { it.isFinite() },
+        )
 }
