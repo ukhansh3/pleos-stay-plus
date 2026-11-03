@@ -810,7 +810,7 @@ interface WaitingRepository {
 - 참가자는 초대 토큰을 자신의 익명 UID와 교환해 해당 Pickup 하나에만 접근한다. Supabase publishable key 자체는 권한 증명이 아니다. RLS와 Fastify 소유권 검사가 운전자·참가자·다른 익명 사용자를 분리한다.
 - 활성 Pickup당 참가자는 한 명이다. 초대는 신규 참가 기준 60분이며 원문 토큰은 저장·로그하지 않는다. 재발급은 기존 초대와 참가자 접근 및 Realtime 구독 권한을 즉시 철회한다.
 - 위치는 명시적 동의 후 최신 좌표만 저장한다. 운전자 위치는 기존 Pleos FusedLocation Gateway를 재사용하고, 참가자 위치는 브라우저 권한 선택 사항이다. 주행·차량 상태 UNKNOWN·권한 상실 시 Android의 위치 공유를 즉시 중단한다.
-- 20m 이내 30초는 합류 후보만 발생시키며 자동 완료하지 않는다. GPS 정확도·신선도 임계값은 측정 전 `REVIEW_REQUIRED`이고 서버 환경설정으로 분리한다.
+- 20m 이내 30초는 합류 후보만 발생시키며 자동 완료하지 않는다. GPS 정확도·신선도 임계값은 측정 전 `REVIEW_REQUIRED`이고 서버 환경설정으로 분리한다. Pleos FusedLocation 1.1.3의 실제 `LocationData`에는 meter 단위 accuracy가 없고 confidence만 있으므로 accuracy를 추정하지 않는다. 정확도를 검증할 수 없는 좌표는 저장·표시는 가능하지만 자동 근접 적립에는 사용하지 않는다.
 - Pickup 완료·취소·종료 시 현재 좌표를 삭제하고 초대·참가자 접근을 차단한다. Pickup 종료는 Waiting을 종료하지 않는다. 선택적으로 연결된 Waiting이 종료될 때만 Android가 Pickup `/end`를 멱등 재시도한다.
 - Web 지도는 Kakao Maps JavaScript SDK를 사용한다. 키는 `.env.local`로 주입하고 허용 도메인·Map API 활성화·쿼터가 확인되기 전 실제 지도 동작은 `BLOCKED`다. 공유 안내 페이지는 위치를 노출하거나 참가를 자동 수행하지 않는다.
 - Android QR은 승인된 Apache-2.0 ZXing Core를 사용한다. TTS는 공식 Pleos TextToSpeech Maven 좌표·클래스·권한 및 에뮬레이터 동작 확인 전 Gateway의 `UNSUPPORTED/SDK_VERIFY` 상태로만 제공한다.

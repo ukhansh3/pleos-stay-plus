@@ -1,21 +1,21 @@
-# Supabase DB/RLS design — REVIEW_REQUIRED
+# Supabase DB/RLS design — Pickup v0.3 approved, cloud application pending
 
 Status: **design only**; no live database/migration applied.
 
 ## Proposed tables
 | Table | Fields | Constraints |
 |---|---|---|
-| waiting_sessions | id uuid, owner_id uuid, parking_place_id text nullable, status, active_mode, started_at, planned_end_at, ended_at, revision int | owner lookup + one-active-session policy TBD |
-| pickup_invitations | id uuid, session_id uuid FK, token_hash text, expires_at, revoked_at, max_uses, used_count | token_hash unique |
-| pickup_participants | id uuid, session_id uuid FK, invitation_id uuid FK, status, display_name, updated_at | participant scoped to session |
-| pickup_status_events | id uuid, participant_id uuid FK, client_event_id uuid, status, created_at | unique(participant_id,client_event_id) |
-| session_events | id uuid, session_id uuid FK, revision int, event_type, payload jsonb, created_at | unique(session_id,revision) |
+| pickup_sessions | id uuid, owner_id uuid, waiting_session_id text nullable, status, location_sharing_consent, revision, created_at, ended_at | owner lookup; Waiting is not a parent FK |
+| pickup_invitations | id uuid, session_id uuid FK, token_hash text, expires_at, revoked_at, used_at | token_hash unique; one current invitation |
+| pickup_participants | id uuid, session_id uuid FK, invitation_id uuid FK, auth_uid uuid, status, display_name, access_revoked_at, updated_at | one participant per active Pickup; auth UID binding |
+| pickup_current_locations | session_id uuid, actor_type, actor_id, latitude, longitude, accuracy_meters, observed_at, received_at, source | latest coordinate only; delete on close |
+| pickup_events | id uuid, session_id uuid FK, revision int, event_type, client_event_id nullable, payload jsonb, occurred_at | unique(session_id,revision), idempotency uniqueness |
 | parking_cache | provider, source_id, payload jsonb, cached_at, expires_at | unique(provider,source_id) |
 
 ## Trust boundaries
 - Driver: authenticated principal may access own waiting sessions only.
-- Invite visitor: link alone grants no owner privileges; redemption requires consent, expiry, use-count check, atomic token consumption.
-- Participant: short-lived credential restricts read/write to its own participant state; do not expose service_role to browser.
+- Invite visitor: link alone grants no location access; redemption requires a separate guest anonymous JWT, consent, expiry check, and atomic one-person binding.
+- Participant: `auth.uid()` must match its active participant binding and may access only that Pickup's allowed snapshot and its own location/status writes.
 - Realtime: private channel authorization and RLS must be tested independently; do not assume REST RLS also protects all broadcast channels.
 - End session: revoke invitation and access tokens, transition state transactionally or with compensating action.
 - Tokens: random high entropy, hash at rest, never log plaintext, no query string analytics on invite pages.
@@ -30,7 +30,7 @@ Status: **design only**; no live database/migration applied.
 6. Concurrent session revision update rejects stale writer.
 7. Offline Realtime client resynchronizes by GET.
 
-## NOT YET DECIDED
-Auth provider (Supabase Auth anonymous/email/device), guest token exchange architecture, data retention, precise RLS SQL, storage of parking-provider cache, hosted backend boundary (Edge Functions vs Next.js routes).
+## Remaining review gates
+GPS accuracy/freshness thresholds, operational backup deletion guarantees, orphan cleanup interval, Kakao allowed domains, and production hosting/CORS remain `REVIEW_REQUIRED`.
 
-**No executable migration included intentionally:** implementing RLS before deciding authentication/session credential architecture would risk creating a false-security implementation.
+An executable migration is versioned under `supabase/migrations`, but it must not be applied to Supabase Cloud until separately approved and reviewed.

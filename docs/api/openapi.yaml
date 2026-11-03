@@ -439,11 +439,12 @@ components:
         expiresAt: {type: string, format: date-time}
     PickupLocationUpdate:
       type: object
-      required: [latitude, longitude, accuracyMeters, observedAt, source]
+      required: [latitude, longitude, observedAt, source]
       properties:
         latitude: {type: number, minimum: -90, maximum: 90}
         longitude: {type: number, minimum: -180, maximum: 180}
-        accuracyMeters: {type: number, exclusiveMinimum: 0}
+        accuracyMeters: {type: [number, 'null'], exclusiveMinimum: 0, description: Optional because Pleos FusedLocation 1.1.3 does not expose meter accuracy; never infer it}
+        confidence: {type: [number, 'null'], description: Provider-specific confidence when exposed; not interchangeable with meter accuracy}
         observedAt: {type: string, format: date-time}
         source: {$ref: '#/components/schemas/PickupLocationSource'}
     PickupLocation:
