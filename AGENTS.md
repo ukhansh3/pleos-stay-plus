@@ -36,7 +36,7 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 - Android: Kotlin, Jetpack Compose, ViewModel, Repository, Coroutines/Flow.
 - Pleos: 공개 SDK 문서로 확인 가능한 최소 권한 API만 통합. 도메인별 Capability → Get/Callback 순서. 콜백 실패·해제 처리.
 - Web: Next.js, TypeScript, 접근성·폼 검증·오류 표시.
-- Backend: Parking 검색은 Node.js + TypeScript + Fastify를 11/02 구현 기준으로 사용. Waiting/Pickup은 Supabase 익명 인증 + Postgres/RLS/Realtime을 MVP 결정으로 사용하되 서비스 연결·키 설정·배포는 별도 검증/승인을 따른다.
+- Backend: Parking 검색은 Node.js + TypeScript + Fastify를 기존 구현 기준으로 유지. **Waiting은 Android Room LOCAL**; Pickup만 Supabase Postgres/RLS/Realtime 및 기존 Fastify 확장 대상으로 설계한다. 운전자 인증/서비스 연결·키 설정·배포는 별도 검증/승인을 따른다.
 - Remote PC: Sunshine/Moonlight 후보. 라이선스·배포·보안·AAOS 호환성 검증 전 커스텀 스트리밍 엔진 개발 금지.
 - 모든 외부 연동은 Gateway/Adapter로 격리. Fake/Unsupported는 테스트 또는 명시적 데모 모드에만.
 - 라이브러리 버전은 실제 Maven/npm에서 확인 가능한 고정/잠금 정책 적용. 최신 버전이라는 이유로 자동 업데이트하지 않음.
@@ -138,3 +138,14 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 - 11/01: 설계·SDK/원격 PC 사전검증·DB·인증 기반을 하루에 통합하는 목표. 수행하지 못한 검증은 반드시 미검증으로 표시.
 - 11/02: Parking API부터 개발 착수, 이후 Waiting → Pickup → Realtime → Work → Study → Entertainment → Rest → Frontend 통합 순으로 진행.
 - 세부 날짜와 완료 기준은 DEVELOPMENT_GUIDE.md 17장을 우선한다.
+
+## 16. Pickup v0.3 구현 감독 규칙 (2026-11-03, 문서 동기화 승인)
+- [Pickup 정책 원본](https://app.notion.com/p/40cb74b2b9058104a652dab710f91487), `DEVELOPMENT_GUIDE.md` 19장, `docs/api/openapi.yaml`을 구현 전에 함께 읽는다. 과거 Waiting 서버 REST 초안보다 2026-11-03 Pickup 독립 세션 정책이 우선한다.
+- **Pickup은 Waiting 없이 홈에서 바로 시작 가능**하고 차량 GPS는 Waiting이 아닌 재사용 가능한 Pleos FusedLocation Gateway에서 가져온다. Waiting은 Room 유지; Pickup은 Supabase 별도 서버 세션. Waiting ID는 선택적 참조일 뿐 서버 Waiting 생성/수정 금지.
+- **Parking API와 Waiting 핵심 코드 변경 금지.** 필요한 변경은 Waiting 종료 → Pickup 종료 통지의 작은 어댑터에 한정하고 영향·회귀 테스트를 보고한다. Pickup 종료는 Waiting 종료를 호출하지 않는다.
+- 1명, 60분 참가 유효 링크, 재발급 시 기존 참가자 권한 포함 즉시 무효화, 별명/참가자 GPS 선택, 카카오맵 차량 실시간 위치, 5초 갱신 목표, 20m/30초 유효 위치의 근접 후보(자동 완료 금지), 양측 Pickup 종료, 위치 데이터 즉시 삭제를 계약에 반영한다.
+- 차량 QR → 운전자 폰 공유 안내 → 카카오톡/문자 전달 → 대상 동의 후 차량 위치 열람 순서를 지키고 QR 스캔 자체를 위치 접근 승인으로 간주하지 않는다.
+- 차량 TTS는 출발·근접·합류 완료만 1회 안내, SDK 이름·지원 여부는 공식 문서/에뮬레이터로 검증 전 SDK_VERIFY.
+- QA: 링크 만료/재발급/1인 제한, 침해된 토큰, 선택 GPS, 20m/30초·오차·신선도, Realtime 재연결·중복, TTS, Waiting 연동, 위치 즉시 삭제 검증. Fake 좌표는 DEV 전용으로 표시하고 실제 사용자·외부 터널 접근 차단.
+- 개발: 로컬 Fastify·Next.js + Supabase Cloud, 실제 폰 E2E는 임시 HTTPS 터널. URL/키는 환경변수 분리; 정식 배포는 추후. 금지된 배포·DB 파괴적 작업·외부 서비스 활성화는 승인받기 전 진행하지 않는다.
+- **인증/토큰 교환·실시간 채널 접근 제어·카카오 API 등록/허용 도메인·GPS 정확도 기준 등 미결정 사항은 REVIEW_REQUIRED**로 남기고 멋대로 구현하지 않는다.
