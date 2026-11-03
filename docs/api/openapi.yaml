@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Pleos Stay+ API
-  version: 0.2.0-draft
-  description: 'Parking v0.2 aligned to 2026-11-02 Notion specification; not implemented or deployed. Other contracts remain drafts.'
+  version: 0.3.0-draft
+  description: 'Parking v0.2 unchanged; Pickup v0.3 independent-session draft aligned to 2026-11-03 Notion. Waiting REST paths below are historical draft only; implemented Waiting remains Android Room LOCAL. No Pickup deployment implied.'
 servers:
   - url: https://example.invalid/api/v1
     description: Placeholder; deployment not chosen
@@ -78,7 +78,7 @@ paths:
   /waiting-sessions:
     post:
       tags: [Waiting]
-      summary: Start a waiting session
+      summary: HISTORICAL DRAFT ONLY - actual Waiting uses Android Room LOCAL
       requestBody:
         required: true
         content:
@@ -121,27 +121,46 @@ paths:
   /waiting-sessions/{sessionId}/end:
     post:
       tags: [Waiting]
-      summary: End session and invalidate invitations
+      summary: HISTORICAL Waiting REST draft; actual Room Waiting termination calls independent Pickup end adapter
       parameters: [{$ref: '#/components/parameters/sessionId'}]
       responses:
         '200': {description: Ended, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
         '404': {$ref: '#/components/responses/ApiFailure'}
-  /waiting-sessions/{sessionId}/invitations:
+  /pickup/sessions:
     post:
       tags: [Pickup]
-      summary: Create expiring invitation
-      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      summary: Create independent Pickup session without requiring Waiting
+      description: Driver authentication and explicit location sharing consent required. localWaitingSessionId is optional and never creates a server Waiting session.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [locationSharingConsent]
               properties:
-                expiresInMinutes: {type: integer, minimum: 1}
+                locationSharingConsent: {type: boolean, const: true}
+                localWaitingSessionId: {type: string, format: uuid, description: Optional Room-local Waiting reference; not a server resource}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '403': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}:
+    get:
+      tags: [Pickup]
+      summary: Read owner-scoped Pickup session; unrelated to Waiting REST
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Current state, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/invitations:
+    post:
+      tags: [Pickup]
+      summary: Issue 60-minute invite; reissue invalidates previous invitation and participant access
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
       responses:
         '201':
-          description: Token must be shown only at creation
+          description: Only disclose raw invitation token in returned share URL; never log it
           content:
             application/json:
               schema:
@@ -151,6 +170,15 @@ paths:
                   invitationId: {type: string, format: uuid}
                   shareUrl: {type: string, format: uri}
                   expiresAt: {type: string, format: date-time}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/revoke-invitation:
+    post:
+      tags: [Pickup]
+      summary: Revoke invitation and participating guest's session-wide access
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Revoked}
+        '404': {$ref: '#/components/responses/ApiFailure'}
   /pickup/invitations/redeem:
     post:
       tags: [Pickup]
@@ -206,15 +234,54 @@ paths:
                   accepted: {type: boolean}
                   status: {$ref: '#/components/schemas/PickupStatus'}
         '409': {$ref: '#/components/responses/ApiFailure'}
-  /waiting-sessions/{sessionId}/invitations/{invitationId}:
-    delete:
+  /pickup/sessions/{sessionId}/vehicle-location:
+    put:
       tags: [Pickup]
-      summary: Revoke invitation
-      parameters:
-        - {$ref: '#/components/parameters/sessionId'}
-        - {name: invitationId, in: path, required: true, schema: {type: string, format: uuid}}
+      summary: Set latest consented vehicle position, independent of Waiting
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PickupLocation'}}}}
       responses:
-        '204': {description: Revoked}
+        '200': {description: Updated latest location}
+        '403': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/participants/{participantId}/location:
+    put:
+      tags: [Pickup]
+      summary: Set latest optional guest position; deny if consent absent
+      parameters: [{$ref: '#/components/parameters/participantId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PickupLocation'}}}}
+      responses:
+        '200': {description: Updated latest location}
+        '403': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/snapshot:
+    get:
+      tags: [Pickup]
+      summary: Authorized snapshot for Realtime resynchronization; location visibility only after participant consent
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Role-scoped snapshot, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSnapshot'}}}}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/complete:
+    post:
+      tags: [Pickup]
+      summary: Driver or guest confirms joined; stop position sharing and erase current coordinates
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Completed and revoked}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/cancel:
+    post:
+      tags: [Pickup]
+      summary: Driver or guest cancels Pickup without ending Room Waiting
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Cancelled and revoked}
+  /pickup/sessions/{sessionId}/end:
+    post:
+      tags: [Pickup]
+      summary: Driver ends Pickup, optionally triggered by a linked Room Waiting ending
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Ended and locations erased}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer}
@@ -236,6 +303,36 @@ components:
   schemas:
     StayMode: {type: string, enum: [NONE, WORK, STUDY, ENTERTAINMENT, REST]}
     PickupStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
+    PickupSessionState: {type: string, enum: [ACTIVE, COMPLETED, CANCELLED, ENDED, EXPIRED]}
+    PickupSession:
+      type: object
+      required: [id, status, createdAt, revision]
+      properties:
+        id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/PickupSessionState'}
+        localWaitingSessionId: {type: [string, 'null'], format: uuid}
+        createdAt: {type: string, format: date-time}
+        revision: {type: integer, minimum: 0}
+    PickupLocation:
+      type: object
+      description: Latest position only; no history. SIMULATED must only be accepted by isolated developer backend.
+      required: [latitude, longitude, accuracyMeters, observedAt]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        accuracyMeters: {type: number, minimum: 0}
+        observedAt: {type: string, format: date-time}
+        source: {type: string, enum: [REAL, SIMULATED], default: REAL}
+    PickupSnapshot:
+      type: object
+      required: [session, revision]
+      properties:
+        session: {$ref: '#/components/schemas/PickupSession'}
+        revision: {type: integer, minimum: 0}
+        participantStatus: {$ref: '#/components/schemas/PickupStatus'}
+        vehicleLocation: {anyOf: [{$ref: '#/components/schemas/PickupLocation'}, {type: 'null'}]}
+        participantLocation: {anyOf: [{$ref: '#/components/schemas/PickupLocation'}, {type: 'null'}]}
+        proximityCandidate: {type: boolean, default: false}
     ParkingPurpose: {type: string, enum: [PICKUP, SHORT_WAIT, LONG_STAY], default: SHORT_WAIT}
     ParkingType: {type: string, enum: [PARKING_LOT, ON_STREET_PARKING, PICKUP_ZONE, TIME_LIMITED_ZONE, PUBLIC_REST_AREA]}
     ParkingEligibility: {type: string, enum: [VERIFIED, CONDITIONAL, UNKNOWN]}
