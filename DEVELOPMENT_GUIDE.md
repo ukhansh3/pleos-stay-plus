@@ -194,14 +194,17 @@ Android 앱 컴포넌트/권한/manifest/foreground-service는 Google 자동차 
 
 **검증:** 안전 상태 변화 즉시 잠금, 다중 콜백 순서 역전, SDK 예외, 프로세스 복구, 백그라운드 복귀, 화면 터치 차단 여부.
 
-### F-04 픽업 초대 및 웹 연결 [P1 · CONFIRMED]
-- 운전자가 현재 세션의 링크를 발급하고 OS 공유 기능으로 전달.
-- 링크는 URL 안전 토큰(원문 DB 저장 금지), 만료·취소 가능.
-- 상대는 이름(또는 별칭, 선택) 및 공유 안내 동의 후 참가.
-- 수동 상태 버튼 `출발 / 곧 도착 / 도착`이 기본. 백그라운드 GPS 자동 수집에 의존하지 않음.
-- 이벤트는 승인된 세션의 운전자에게만 보인다. 중복 요청/네트워크 재전송에도 상태 역행이 일어나지 않게 함.
-- 종료 시 토큰 사용 중지·Realtime 구독 제거·상태 동기화.
-- 개인정보 처리·보존기간은 결정 후 고지. 정확한 현재 위치 공유 여부는 사용자가 별도 확정해야 함.
+### F-04 Pickup 초대·실시간 위치·웹 연결 [P1 · CONFIRMED / API DRAFT]
+- **Waiting 없이 홈에서 Pickup 단독 시작 가능**. Pickup은 Supabase의 독립 서버 세션, Waiting은 현재 Android Room LOCAL 유지. 선택적 localWaitingSessionId만 연결하며 Waiting 종료 시 연결된 Pickup을 종료한다. Pickup 종료는 Waiting을 종료하지 않는다.
+- 차량 현재 위치는 기존 Parking의 **Pleos FusedLocation Gateway를 Waiting과 독립적으로 재사용**한다. 운전자 위치 공유 동의 전 서버 전송 금지; 주행/UNKNOWN 상태는 위치 공유 및 HMI 제약 정책 검증·차단.
+- 활성 참가자 **1명**. 차량 화면 QR → 운전자 폰에서 링크 복사/OS 공유 → 카카오톡·문자로 전달 → 픽업 대상의 모바일 웹 접속. QR 스캔 자체를 참가/차량 위치 열람으로 취급하지 않는다.
+- 신규 참가 가능 시간 발급 후 **60분**. 참가 후 세션 유지, 재발급 시 이전 초대 및 이미 참가한 사용자 권한·Realtime 접근 모두 즉시 철회.
+- 별명 선택, GPS 권한 선택. 동의 후 Kakao Maps 모바일 웹에서 차량 실시간 위치·갱신 시각·길찾기 표시; GPS 거부 시에도 차량 지도·수동 상태 사용 가능.
+- 차량/참가자 위치 약 **5초 갱신 목표**(SDK/브라우저 보장 아님). 참가자 GPS 허용 시 20m 이내 유효 위치가 30초 유지되면 **합류 후보** 알림만 발생; 실제 완료는 운전자 또는 참가자 수동 확인.
+- 운전자 음성 TTS: 출발·근접·합류 완료만 1회 재생, SDK 및 에뮬레이터 지원 검증 필요. 상태 전이/이벤트는 서버 확정 후 Realtime 전송·재연결 재조회.
+- 완료·취소·Waiting 종료 시 Pickup 위치 접근 즉시 차단, 현재 좌표 삭제. 이동 경로는 저장하지 않는다. 세션 유실·장애에 대비한 만료 정리도 필요.
+- 개발자용 로컬 위치 시뮬레이터를 일반 사용자·외부 터널에서 분리하여 E2E 테스트; 운영 배포는 별도 후속 작업.
+- 상세 계약/검토 항목: [Notion Pickup API](https://app.notion.com/p/40cb74b2b9058104a652dab710f91487).
 
 ### F-05 Work Mode: 원격 Windows PC [P1 · SDK_VERIFY]
 - 목표: Windows 호스트와 차량의 Pleos 화면이 연결되고, 화면·터치 클릭·스크롤·텍스트 입력이 가능한지 검증.
@@ -269,10 +272,10 @@ Android 앱 컴포넌트/권한/manifest/foreground-service는 Google 자동차 
 | API-04 | GET | `/waiting-sessions/{sessionId}` | 소유자 | 상태/시간/모드 |
 | API-05 | PATCH | `/waiting-sessions/{sessionId}` | 소유자 | 예정 종료·모드 변경 |
 | API-06 | POST | `/waiting-sessions/{sessionId}/end` | 소유자 | 멱등 종료 |
-| API-07 | POST | `/waiting-sessions/{sessionId}/invitations` | 소유자 | 1회/만료형 링크 발급 |
+| API-07 | POST | `/pickup/sessions/{sessionId}/invitations` | Pickup 소유자 | 60분 초대 발급·재발급 |
 | API-08 | POST | `/pickup/invitations/redeem` | 임시 토큰 | 약관 동의 후 참가 |
 | API-09 | POST | `/pickup/participants/{participantId}/status` | 참가자 | 상태 전송 |
-| API-10 | DELETE | `/waiting-sessions/{sessionId}/invitations/{id}` | 소유자 | 초대 취소 |
+| API-10 | POST | `/pickup/sessions/{sessionId}/revoke-invitation` | Pickup 소유자 | 초대·참가 권한 즉시 무효화 |
 
 ### 6.3 예시 DTO
 `POST /waiting-sessions`
@@ -330,7 +333,7 @@ PickupParticipant: INVITED → JOINED → DEPARTED → NEARBY → ARRIVED
 - Realtime은 진실의 원천이 아니며 DB 확정 결과를 동기화하는 수단이다.
 
 ### 6.6 Supabase DB/RLS 설계
-테이블 후보: `parking_places_cache`, `waiting_sessions`, `pickup_invitations`, `pickup_participants`, `session_events`.  
+Pickup 서버 테이블 후보: `pickup_sessions`, `pickup_invitations`, `pickup_participants`, `pickup_current_locations`, `pickup_events`. Waiting의 `waiting_sessions`는 Android Room에 유지하며 Supabase 테이블 생성은 Pickup에 필요하지 않다.  
 권장 인덱스: `waiting_sessions(owner_id, state)`, `pickup_invitations(token_hash)`, `pickup_participants(session_id)`, `session_events(session_id, revision)`.
 - 모든 소유자 읽기·쓰기에 RLS와 서버 권한 검사 적용.
 - 웹 초대 참가자는 전용 제한 토큰으로 **해당 세션의 필요한 필드만** 접근.
@@ -536,12 +539,12 @@ npm run build
 | PARK-03 | 요금 추산 | 서버 또는 클라이언트 순수 함수 | 무료구간·일 최대요금 |
 | PARK-04 | 즐겨찾기 | LOCAL 기본 | 계정 간 동기화시 REST |
 | PARK-05 | 내비 설정 | NaviHelper SDK | 권한·콜백·실패 |
-| WAIT-01 | 세션 생성 | REST | 사용자의 중복 활성 세션 |
-| WAIT-02 | 상태 조회·재개 | REST | 세션 만료/권한 |
-| WAIT-03 | 시간 변경 | REST | expired 이후 충돌 |
+| WAIT-01 | 세션 생성 | LOCAL (Room) | 사용자의 중복 활성 세션 |
+| WAIT-02 | 상태 조회·재개 | LOCAL (Room) | 세션 만료/복원 |
+| WAIT-03 | 시간 변경 | LOCAL (Room) | expired 이후 충돌 |
 | WAIT-04 | 모드 전환 | LOCAL + 선택 PATCH 세션 | 안전 게이트 |
-| WAIT-05 | 종료·만료 | REST | 링크 회수/재시도 |
-| WAIT-06 | 지난 대기 조회 | REST 선택 | 개인정보 보존 |
+| WAIT-05 | 종료·만료 | LOCAL + Pickup 종료 이벤트 | Pickup 정리 실패시 재시도 |
+| WAIT-06 | 지난 대기 조회 | LOCAL (Room) | 개인정보 보존 |
 | PICK-01 | 링크 발급 | REST | 임의 UUID URL만으로 인증 금지 |
 | PICK-02 | 참가·동의 | REST + WEB | 만료·철회·동의 |
 | PICK-03 | 출발/근접/도착 상태 | REST | 유효 상태 전이·중복 |
@@ -573,10 +576,10 @@ npm run build
 | API-05 | PATCH | `/waiting-sessions/{sessionId}` | expectedRevision, plannedMinutes?,mode? | WaitingSession | 소유자 | P0 |
 | API-06 | POST | `/waiting-sessions/{sessionId}/end` | expectedRevision?,reason | WaitingSession | 소유자 | P0 |
 | API-12 | GET | `/waiting-sessions/history` | cursor?,limit? | items[],nextCursor? | 소유자 | P2 |
-| API-07 | POST | `/waiting-sessions/{sessionId}/invitations` | expiresInMinutes?,maxUses? | invitationId,shareUrl,expiresAt | 소유자 | P0 |
+| API-07 | POST | `/pickup/sessions/{sessionId}/invitations` | 60분 고정 참가 만료 | invitationId,shareUrl,expiresAt | Pickup 소유자 | P0 |
 | API-08 | POST | `/pickup/invitations/redeem` | token,consent,displayName? | participantId, limitedAccessToken,joinPlace | 초대 토큰 | P0 |
 | API-09 | POST | `/pickup/participants/{participantId}/status` | status,clientEventId | accepted,status,revision | 해당 참가자 | P0 |
-| API-10 | DELETE | `/waiting-sessions/{sessionId}/invitations/{id}` | invitationId | 204 | 소유자 | P0 |
+| API-10 | POST | `/pickup/sessions/{sessionId}/revoke-invitation` | - | revoked | Pickup 소유자 | P0 |
 | API-13 | GET | `/pickup/participants/{participantId}` | participantId | 제한된 PickupParticipant DTO | 소유자/참가자 | P1 |
 | API-14 | GET | `/waiting-sessions/{sessionId}/events` | afterRevision? | events[],latestRevision | 소유자 | P1 |
 | API-15 | GET | `/me/preferences` | - | preferences | 인증 필요 | P2 |
@@ -629,12 +632,13 @@ npm run build
 4. 사용자 대기 시작 → `POST /waiting-sessions`.
 5. `GET /waiting-sessions/{id}`로 복구 및 구독 시작.
 
-**픽업**
-1. `POST /waiting-sessions/{id}/invitations` → 공유 URL.
-2. 게스트 웹에서 개인정보 안내·동의 → `POST /pickup/invitations/redeem`.
-3. `POST /pickup/participants/{id}/status` → DB 확정 → Realtime 통지.
-4. 차량 앱은 Realtime 이벤트 수신 뒤 revision 검증/필요하면 재조회.
-5. `DELETE invitation` 또는 `POST session/end` 시 참가 토큰 권한 제거.
+**픽업 (Waiting 독립 시작 가능)**
+1. 차량은 Waiting과 무관하게 FusedLocation 현재 좌표 확인, 공유 동의 후 `POST /pickup/sessions`로 서버 Pickup 세션 생성.
+2. `POST /pickup/sessions/{id}/invitations`로 60분 QR 초대 발급, 운전자 폰에서 복사·메신저 공유.
+3. 게스트 웹 동의 및 별명/GPS 선택 → `POST /pickup/invitations/redeem`, Kakao Maps에 차량 최신 위치 표시.
+4. 차량·게스트 위치는 해당 권한 범위에서 갱신, 20m/30초 유효 위치의 근접 후보는 알림만; 참가자 출발/근접/합류 이벤트는 중복 방지.
+5. 차량은 Realtime 이벤트 수신 뒤 revision 검증/스냅샷 재조회, 출발·근접·합류 완료는 TTS.
+6. Pickup 완료·취소·Waiting 종료 또는 초대 재발급 시 권한 철회; 종료 시 차량·참가자 현재 좌표 삭제. Pickup만 종료하면 Waiting 유지.
 
 **모드**
 1. 사용자 모드 선택 → Android `SafetyGate.assertParked()` 검사.
@@ -764,8 +768,8 @@ interface WaitingRepository {
 | DEC-01 | WORK/ STUDY/ ENT/ REST에서 실제 제출 필수 범위 | 모듈별 Gateway 계약만 확정, 임의 기능 약속 금지 |
 | DEC-03 | 주차장/지도 API 공급자 및 API key | ParkingProvider mock만 |
 | DEC-04 | 운전자 로그인(익명/회원/기기 인증) | 인증 abstraction·RLS 문서만 |
-| DEC-05 | 픽업 상대의 실제 GPS 공유 여부 | 버튼 상태·합류 장소만 설계 |
-| DEC-06 | 초대 만료(제안 30분), 사용횟수, 동의문구, 저장기간 | 상수 하드코딩 금지 |
+| DEC-05 | 픽업 상대 GPS 선택, 차량 실시간 GPS 동의 후 공유 확정 | 근접 후보는 20m/30초, 완료는 수동 확인 |
+| DEC-06 | 초대 60분/한 명/재발급 즉시 권한 철회·종료 즉시 최신 좌표 삭제 | 동의문안·비위치 이벤트 보존·토큰 수명 상세 검토 |
 | DEC-07 | Moonlight 앱 실행 vs 클라이언트 내장 | RemoteDesktopGateway 인터페이스와 실험 계획 |
 | DEC-08 | 실제 차량 vs 에뮬레이터만 | 검증 결과에는 실행 환경 표기 |
 | DEC-09 | AAOS/Pleos HMI UX·외부 앱 허용 정책 | 기본 주행 중 비운전 UI 차단 |
@@ -802,3 +806,30 @@ interface WaitingRepository {
 - 외부 SDK, 공개 라이브러리, 플랫폼 API 사용 시 기능의 공식 지원·배포/라이선스 허용·권한을 확인한다. 공식 문서 확인 → 컴파일 → 에뮬레이터 실제 동작 검증 순서로 결과를 분리 기록한다.
 - 검증되지 않은 Vehicle/Navigation/Surrounding API는 `SDK_VERIFY`로 남긴다. 주변 감시 센서 데이터 접근 불가 시 `UNAVAILABLE`로 표시하고 동작을 가장하지 않는다.
 - 정책 위반 가능성 또는 자료 부족 시 자의적 우회 구현 없이 `REVIEW_REQUIRED`로 사용자에게 확인한다. 차량 이동/상태 UNKNOWN이면 정차 전용 UI는 로컬에서 즉시 차단한다.
+
+
+## 19. Pickup v0.3 확정 정책 및 구형 계약 정정 (2026-11-03)
+
+> **규범 우선순위:** 이 장과 Notion '03. Pickup API'의 2026-11-03 확정 정책이 본 문서의 과거 Waiting 서버 가정·30분 링크·GPS 미정·예시 REST 후보보다 우선한다. 이전 예시는 이력/설계 초안이며 구현 요청이 아니다. OpenAPI는 `docs/api/openapi.yaml` 참조. 기존 Parking 및 Waiting **소스 동작은 변경하지 않는다**.
+
+### 19.1 앱 독립성 및 위치 공급자
+- `HOME → Pickup`과 `Waiting → Pickup` 모두 지원한다. Pickup 세션 생성에 local Waiting ID는 선택이며 서버에서 Waiting을 생성하거나 동기화하지 않는다.
+- Pickup 위치 입력은 `VehicleLocationGateway` 추상화로 제공하고 기존 Parking FusedLocation SDK 어댑터를 재사용한다. Waiting 시작 여부와 상관없이 차량 현재 위치 수신; 사용자가 위치 공유에 동의해야 전송.
+- Waiting 종료로 연결된 Pickup 정리 요청을 보내되 로컬 Waiting 종료 성공을 서버 장애에 종속시키지 않는다. 안정적 재시도/정리 안전망. Pickup이 단독 시작됐으면 Waiting 종료 이벤트 연결이 없다.
+
+### 19.2 정책과 데이터
+- 1명 참가, 별명·상대 GPS 선택, QR → 운전자 폰 공유 → 픽업 대상 웹 링크, 60분 신규 참가 기간, 참가 후 세션 존속, 재발급 시 옛 참가자 접근까지 즉시 폐기.
+- Kakao Maps 웹에 차량 실시간 위치·갱신시각·길찾기, 정차 중 최신 위치 5초 목표. 상대 GPS 허용 시 20m/30초 근접 후보 판정(정확도·신선도 임계값 REVIEW_REQUIRED). 자동 완료 금지.
+- Pickup 앱/웹 어느 쪽이든 합류 완료·취소 가능하지만 **Waiting 종료 권한은 차량 운전자 전용**. 출발·근접·완료 TTS만 중복 없이 실행.
+- 서버 Supabase에는 **현재 좌표만**, 종료 시 참가 권한 차단과 함께 차량·상대 좌표 즉시 삭제(이동 이력 수집 금지). 비정상/오프라인 세션 정리 정책 필요.
+
+### 19.3 API·보안·개발환경
+- Pickup REST: 세션 생성/조회, 초대·철회·교환, 참가자 상태·현재위치, 차량 현재위치, 인증된 스냅샷, 완료/취소/종료. 토큰 원문 비저장·서버 전용 키·RLS/비공개 Realtime·멱등/역행 방지.
+- QR 스캔 공유 안내 페이지는 **운전자 인증/픽업 참가를 자동 부여하지 않는다**. 실제 차량 위치는 참가·안내 동의와 접근권한 검증 이후 공개.
+- 개발은 로컬 Fastify + Next.js + Supabase Cloud. Cloudflare Quick Tunnel은 실기 모바일 테스트 시 HTTPS 연결만 제공; URL을 환경변수로 주입. 배포·고정 도메인/운영 모니터링은 추후.
+- /dev/pickup-simulator는 개발 테스트 자격증명에서만 접근; 외부 터널·운영 URL에서 서버 측 차단. 가상 좌표는 REAL 데이터와 혼용 금지.
+- **미결정/검증:** 운전자 인증, 참가 인증/세션 토큰 설계, 카카오 허용 도메인·쿼터/키, TTS 실제 에뮬레이터 지원, GPS 정확도/신선도 기준, 개발 터널 보안, 일반 이벤트/백업 보존 정책. 임의 확정 금지.
+
+### 19.4 문서 변경 경계
+- 이전 `/waiting-sessions/*` REST 후보는 현재 **로컬 Waiting 구현을 의미하지 않으며 새 서버 구현 금지**. `/waiting-sessions/{id}/invitations`은 폐기된 Pickup 초대 후보.
+- 실구현 전 Supabase 마이그레이션/RLS 및 실제 SDK 적용은 추가 검토. 문서 동기화만으로 QA 또는 배포 완료를 선언하지 않는다.
