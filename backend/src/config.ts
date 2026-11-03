@@ -30,6 +30,13 @@ export interface AppConfig {
   cacheFile: string;
   requestTimeoutMs: number;
   rateLimitPerMinute: number;
+  pickupDevMode: boolean;
+  supabaseUrl: string | null;
+  supabasePublishableKey: string | null;
+  publicWebBaseUrl: string;
+  pickupInvitationHmacSecret: string | null;
+  pickupProximityMaxAccuracyMeters: number | null;
+  pickupProximityMaxAgeMs: number | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {
@@ -42,6 +49,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   const restAreaProviderBaseUrl = env.REST_AREA_PROVIDER_BASE_URL?.trim() || DEFAULT_REST_AREA_PROVIDER_URL;
   const parsedRestAreaUrl = new URL(restAreaProviderBaseUrl);
   if (parsedRestAreaUrl.protocol !== "https:") throw new Error("REST_AREA_PROVIDER_BASE_URL must use HTTPS");
+  const pickupDevMode = env.PICKUP_DEV_MODE?.trim() === "true";
+  const supabaseUrl = env.SUPABASE_URL?.trim() || null;
+  if (supabaseUrl && new URL(supabaseUrl).protocol !== "https:") throw new Error("SUPABASE_URL must use HTTPS");
+  const publicWebBaseUrl = env.PUBLIC_WEB_BASE_URL?.trim() || "http://localhost:3001";
+  const publicWebUrl = new URL(publicWebBaseUrl);
+  if (publicWebUrl.protocol !== "https:" && publicWebUrl.hostname !== "localhost" && publicWebUrl.hostname !== "127.0.0.1") {
+    throw new Error("PUBLIC_WEB_BASE_URL must use HTTPS outside loopback development");
+  }
+  const optionalPositive = (value: string | undefined, name: string): number | null =>
+    value === undefined || value.trim() === "" ? null : positiveNumber(value, 1, name);
 
   return {
     host: env.PARKING_API_HOST?.trim() || "127.0.0.1",
@@ -55,5 +72,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     cacheFile: path.resolve(cwd, env.PARKING_CACHE_FILE?.trim() || ".cache/parking-snapshot.json"),
     requestTimeoutMs: positiveNumber(env.PARKING_PROVIDER_TIMEOUT_MS, 15_000, "PARKING_PROVIDER_TIMEOUT_MS"),
     rateLimitPerMinute: positiveNumber(env.PARKING_RATE_LIMIT_PER_MINUTE, 120, "PARKING_RATE_LIMIT_PER_MINUTE"),
+    pickupDevMode,
+    supabaseUrl,
+    supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY?.trim() || null,
+    publicWebBaseUrl,
+    pickupInvitationHmacSecret: env.PICKUP_INVITATION_HMAC_SECRET?.trim() || null,
+    pickupProximityMaxAccuracyMeters: optionalPositive(env.PICKUP_PROXIMITY_MAX_ACCURACY_METERS, "PICKUP_PROXIMITY_MAX_ACCURACY_METERS"),
+    pickupProximityMaxAgeMs: optionalPositive(env.PICKUP_PROXIMITY_MAX_AGE_SECONDS, "PICKUP_PROXIMITY_MAX_AGE_SECONDS") === null
+      ? null
+      : optionalPositive(env.PICKUP_PROXIMITY_MAX_AGE_SECONDS, "PICKUP_PROXIMITY_MAX_AGE_SECONDS")! * 1_000,
   };
 }

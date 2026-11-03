@@ -22,6 +22,16 @@ npm run dev
 
 `REST_AREA_PROVIDER_API_KEY` is optional and must be set only after separately activating the official 전국휴게소정보표준데이터 API.
 
+## Independent Pickup API
+
+Pickup v0.3 is independent from Waiting and uses `/api/v1/pickup/**`. Driver and guest clients each send a Supabase Anonymous Auth JWT; request-body owner IDs are never trusted. Invitations last 60 minutes, only their SHA-256 hash is stored, and completion/cancellation/end removes current locations and revokes access.
+
+The versioned schema/RLS is `../supabase/migrations/20261103000000_independent_pickup.sql`. It is not automatically applied. Until Cloud migration, Realtime publication, and two-user RLS tests are approved, the production persistence path remains blocked.
+
+For loopback development only, set `PICKUP_DEV_MODE=true` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. This adapter is process-memory only, is refused on non-loopback hosts, and still validates real Supabase JWTs. It must not be exposed through a public tunnel. If Supabase Anonymous Auth is OFF, authentication testing remains `BLOCKED`; do not bypass it with a shared token.
+
+Automatic 20m/30s proximity is disabled unless both accuracy/freshness environment values are explicitly configured after review. Pleos vehicle coordinates without meter accuracy are stored and displayed but never used to accumulate automatic proximity.
+
 The server listens on `127.0.0.1:3000` by default. Health checks are available at `/health` and `/api/v1/health`. Android debug builds use `http://10.0.2.2:3000/api/v1/`; override it with `-PPARKING_API_BASE_URL=https://.../api/v1/` when needed.
 
 ## Data and cache policy

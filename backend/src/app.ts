@@ -9,10 +9,17 @@ import {
   type ParkingProvider,
 } from "./provider.js";
 import { ParkingService, ParkingSnapshotCache } from "./service.js";
+import { SupabaseAuthVerifier, type PickupAuthVerifier } from "./pickup/auth.js";
+import { PickupApiError } from "./pickup/domain.js";
+import { InMemoryPickupRepository } from "./pickup/memory-repository.js";
+import { registerPickupRoutes } from "./pickup/routes.js";
+import { PickupService } from "./pickup/service.js";
 
 interface AppDependencies {
   provider?: ParkingProvider;
   service?: ParkingService;
+  pickupService?: PickupService;
+  pickupAuth?: PickupAuthVerifier;
 }
 
 function one(value: unknown): string | undefined {
@@ -112,10 +119,28 @@ export function buildApp(config: AppConfig, dependencies: AppDependencies = {}):
     service.detail(request.params.placeId));
   app.get<{ Params: { placeId: string } }>("/api/v1/parking/places/:placeId/estimate", async (request) =>
     service.estimate(request.params.placeId, plannedMinutes(request)));
+  let pickupService = dependencies.pickupService;
+  let pickupAuth = dependencies.pickupAuth;
+  if (!pickupService && !pickupAuth && config.pickupDevMode) {
+    if (config.host !== "127.0.0.1" && config.host !== "localhost") throw new Error("PICKUP_DEV_MODE is restricted to a loopback host");
+    if (!config.supabaseUrl || !config.supabasePublishableKey || !config.pickupInvitationHmacSecret) throw new Error("Pickup dev mode requires Supabase public settings and PICKUP_INVITATION_HMAC_SECRET");
+    const proximity = config.pickupProximityMaxAccuracyMeters !== null && config.pickupProximityMaxAgeMs !== null
+      ? { maxAccuracyMeters: config.pickupProximityMaxAccuracyMeters, maxAgeMs: config.pickupProximityMaxAgeMs, distanceMeters: 20, dwellMs: 30_000 }
+      : null;
+    pickupService = new PickupService(new InMemoryPickupRepository(), { publicWebBaseUrl: config.publicWebBaseUrl, invitationHmacSecret: config.pickupInvitationHmacSecret, proximityPolicy: proximity });
+    pickupAuth = new SupabaseAuthVerifier(config.supabaseUrl, config.supabasePublishableKey, config.requestTimeoutMs);
+  }
+  if (pickupService && pickupAuth) {
+    registerPickupRoutes(app, pickupService, pickupAuth);
+  } else {
+    app.all("/api/v1/pickup/*", async () => {
+      throw new PickupApiError(503, "PICKUP_BACKEND_NOT_CONFIGURED", "Pickup Supabase migration과 인증 설정이 필요합니다");
+    });
+  }
 
   app.setNotFoundHandler((request, reply) => reply.code(404).send({ code: "NOT_FOUND", message: "요청한 경로를 찾을 수 없습니다", requestId: request.id }));
   app.setErrorHandler((error, request, reply) => {
-    const known = error instanceof ParkingApiError;
+    const known = error instanceof ParkingApiError || error instanceof PickupApiError;
     const statusCode = known ? error.statusCode : 500;
     if (!known) request.log.error({ err: error }, "Unhandled request error");
     reply.code(statusCode).send({

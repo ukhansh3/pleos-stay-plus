@@ -74,6 +74,13 @@ const config = (cacheFile: string): AppConfig => ({
   cacheFile,
   requestTimeoutMs: 1_000,
   rateLimitPerMinute: 100,
+  pickupDevMode: false,
+  supabaseUrl: null,
+  supabasePublishableKey: null,
+  publicWebBaseUrl: "http://localhost:3001",
+  pickupInvitationHmacSecret: null,
+  pickupProximityMaxAccuracyMeters: null,
+  pickupProximityMaxAgeMs: null,
 });
 
 test("normalizes actual standard parking fields without inventing availability", () => {

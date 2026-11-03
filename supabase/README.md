@@ -1,5 +1,5 @@
 # Supabase backend
 
-Planned: Postgres migrations, RLS, Realtime, API functions for parking/waiting/pickup. Review authentication, invitations, retention, and provider choice before migrations are applied.
+`migrations/20261103000000_independent_pickup.sql` defines the approved independent Pickup tables, latest-location storage, cleanup trigger, read-only client grants, and RLS ownership/participant policies.
 
-No schema deployed and no database credentials stored here.
+The SQL is versioned but has **not** been applied to Supabase Cloud. Applying it, enabling Realtime publication/private channels, and running two-user RLS tests require separate approval and Anonymous Auth activation. No database credentials are stored here.
