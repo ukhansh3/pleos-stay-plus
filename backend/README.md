@@ -26,9 +26,13 @@ npm run dev
 
 Pickup v0.3 is independent from Waiting and uses `/api/v1/pickup/**`. Driver and guest clients each send a Supabase Anonymous Auth JWT; request-body owner IDs are never trusted. Invitations last 60 minutes, only their SHA-256 hash is stored, and completion/cancellation/end removes current locations and revokes access.
 
-The versioned schema/RLS is `../supabase/migrations/20261103000000_independent_pickup.sql`. It is not automatically applied. Until Cloud migration, Realtime publication, and two-user RLS tests are approved, the production persistence path remains blocked.
+The versioned schema/RLS migrations are under `../supabase/migrations/` and must be applied in filename order. They were applied to the approved Supabase project on 2026-11-03 and verified with temporary anonymous users.
 
-For loopback development only, set `PICKUP_DEV_MODE=true` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. This adapter is process-memory only, is refused on non-loopback hosts, and still validates real Supabase JWTs. It must not be exposed through a public tunnel. If Supabase Anonymous Auth is OFF, authentication testing remains `BLOCKED`; do not bypass it with a shared token.
+For Supabase persistence, set `PICKUP_STORAGE=supabase` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, server-only `SUPABASE_SECRET_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. The secret key is sent only through Supabase's `apikey` header and never as a bearer token.
+
+For loopback development only, `PICKUP_DEV_MODE=true` or `PICKUP_STORAGE=memory` selects the process-memory adapter. It is refused on non-loopback hosts and still validates real Supabase JWTs. Do not expose it through a public tunnel.
+
+With an approved project and a running backend, `npm run verify:pickup:live` creates temporary anonymous driver, guest, and isolation users; validates RLS and cleanup; and removes all test users and cascaded Pickup data in `finally`.
 
 Automatic 20m/30s proximity is disabled unless both accuracy/freshness environment values are explicitly configured after review. Pleos vehicle coordinates without meter accuracy are stored and displayed but never used to accumulate automatic proximity.
 

@@ -33,6 +33,8 @@ export interface AppConfig {
   pickupDevMode: boolean;
   supabaseUrl: string | null;
   supabasePublishableKey: string | null;
+  supabaseSecretKey: string | null;
+  pickupStorage: "disabled" | "memory" | "supabase";
   publicWebBaseUrl: string;
   pickupInvitationHmacSecret: string | null;
   pickupProximityMaxAccuracyMeters: number | null;
@@ -50,6 +52,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   const parsedRestAreaUrl = new URL(restAreaProviderBaseUrl);
   if (parsedRestAreaUrl.protocol !== "https:") throw new Error("REST_AREA_PROVIDER_BASE_URL must use HTTPS");
   const pickupDevMode = env.PICKUP_DEV_MODE?.trim() === "true";
+  const pickupStorageRaw = env.PICKUP_STORAGE?.trim() || "disabled";
+  if (pickupStorageRaw !== "disabled" && pickupStorageRaw !== "memory" && pickupStorageRaw !== "supabase") {
+    throw new Error("PICKUP_STORAGE must be disabled, memory, or supabase");
+  }
   const supabaseUrl = env.SUPABASE_URL?.trim() || null;
   if (supabaseUrl && new URL(supabaseUrl).protocol !== "https:") throw new Error("SUPABASE_URL must use HTTPS");
   const publicWebBaseUrl = env.PUBLIC_WEB_BASE_URL?.trim() || "http://localhost:3001";
@@ -75,6 +81,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     pickupDevMode,
     supabaseUrl,
     supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY?.trim() || null,
+    supabaseSecretKey: env.SUPABASE_SECRET_KEY?.trim() || null,
+    pickupStorage: pickupStorageRaw,
     publicWebBaseUrl,
     pickupInvitationHmacSecret: env.PICKUP_INVITATION_HMAC_SECRET?.trim() || null,
     pickupProximityMaxAccuracyMeters: optionalPositive(env.PICKUP_PROXIMITY_MAX_ACCURACY_METERS, "PICKUP_PROXIMITY_MAX_ACCURACY_METERS"),

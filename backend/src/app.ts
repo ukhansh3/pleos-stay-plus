@@ -12,6 +12,7 @@ import { ParkingService, ParkingSnapshotCache } from "./service.js";
 import { SupabaseAuthVerifier, type PickupAuthVerifier } from "./pickup/auth.js";
 import { PickupApiError } from "./pickup/domain.js";
 import { InMemoryPickupRepository } from "./pickup/memory-repository.js";
+import { SupabasePickupRepository } from "./pickup/supabase-repository.js";
 import { registerPickupRoutes } from "./pickup/routes.js";
 import { PickupService } from "./pickup/service.js";
 
@@ -121,7 +122,16 @@ export function buildApp(config: AppConfig, dependencies: AppDependencies = {}):
     service.estimate(request.params.placeId, plannedMinutes(request)));
   let pickupService = dependencies.pickupService;
   let pickupAuth = dependencies.pickupAuth;
-  if (!pickupService && !pickupAuth && config.pickupDevMode) {
+  if (!pickupService && !pickupAuth && config.pickupStorage === "supabase") {
+    if (!config.supabaseUrl || !config.supabasePublishableKey || !config.supabaseSecretKey || !config.pickupInvitationHmacSecret) {
+      throw new Error("Supabase Pickup storage requires Supabase public/server settings and PICKUP_INVITATION_HMAC_SECRET");
+    }
+    const proximity = config.pickupProximityMaxAccuracyMeters !== null && config.pickupProximityMaxAgeMs !== null
+      ? { maxAccuracyMeters: config.pickupProximityMaxAccuracyMeters, maxAgeMs: config.pickupProximityMaxAgeMs, distanceMeters: 20, dwellMs: 30_000 }
+      : null;
+    pickupService = new PickupService(new SupabasePickupRepository(config.supabaseUrl, config.supabaseSecretKey, config.requestTimeoutMs), { publicWebBaseUrl: config.publicWebBaseUrl, invitationHmacSecret: config.pickupInvitationHmacSecret, proximityPolicy: proximity });
+    pickupAuth = new SupabaseAuthVerifier(config.supabaseUrl, config.supabasePublishableKey, config.requestTimeoutMs);
+  } else if (!pickupService && !pickupAuth && (config.pickupDevMode || config.pickupStorage === "memory")) {
     if (config.host !== "127.0.0.1" && config.host !== "localhost") throw new Error("PICKUP_DEV_MODE is restricted to a loopback host");
     if (!config.supabaseUrl || !config.supabasePublishableKey || !config.pickupInvitationHmacSecret) throw new Error("Pickup dev mode requires Supabase public settings and PICKUP_INVITATION_HMAC_SECRET");
     const proximity = config.pickupProximityMaxAccuracyMeters !== null && config.pickupProximityMaxAgeMs !== null

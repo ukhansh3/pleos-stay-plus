@@ -1,5 +1,6 @@
 -- Independent Pickup schema for OpenAPI v0.3.
--- REVIEW_REQUIRED: versioned migration only; do not apply to Supabase Cloud without approval.
+-- Cloud application approved by the user on 2026-11-03. Apply through the reviewed
+-- migration workflow only; never paste secrets into SQL or migration history.
 -- Fastify is the only writer through a server-only secret. Authenticated clients receive
 -- RLS-filtered SELECT access for private Realtime/snapshot support and cannot write tables directly.
 
@@ -13,6 +14,8 @@ create table public.pickup_sessions (
   location_sharing_consent boolean not null check (location_sharing_consent),
   create_idempotency_key uuid not null,
   revision integer not null default 1 check (revision >= 1),
+  proximity_since_at timestamptz,
+  proximity_candidate boolean not null default false,
   created_at timestamptz not null default now(),
   ended_at timestamptz,
   unique(owner_id, create_idempotency_key),
@@ -37,7 +40,7 @@ create index pickup_invitations_session_idx on public.pickup_invitations(session
 
 create table public.pickup_participants (
   id uuid primary key default gen_random_uuid(),
-  session_id uuid not null unique references public.pickup_sessions(id) on delete cascade,
+  session_id uuid not null references public.pickup_sessions(id) on delete cascade,
   invitation_id uuid not null references public.pickup_invitations(id) on delete restrict,
   auth_uid uuid not null references auth.users(id) on delete cascade,
   display_name text not null default '픽업 대상',
@@ -47,6 +50,9 @@ create table public.pickup_participants (
   constraint pickup_display_name_length check (char_length(display_name) between 1 and 60)
 );
 create index pickup_participants_auth_idx on public.pickup_participants(auth_uid, session_id);
+create unique index pickup_participants_one_active_per_session_idx
+  on public.pickup_participants(session_id)
+  where access_revoked_at is null;
 
 create table public.pickup_current_locations (
   session_id uuid not null references public.pickup_sessions(id) on delete cascade,

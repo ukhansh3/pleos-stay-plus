@@ -12,7 +12,7 @@ const config: AppConfig = {
   host: "127.0.0.1", port: 3000, providerBaseUrl: "https://example.test", providerApiKey: null,
   restAreaProviderBaseUrl: "https://example.test/rest", restAreaProviderApiKey: null,
   cacheTtlMs: 1_000, staleMaxAgeMs: 2_000, cacheFile: ".cache/test.json", requestTimeoutMs: 100, rateLimitPerMinute: 1_000,
-  pickupDevMode: false, supabaseUrl: null, supabasePublishableKey: null, publicWebBaseUrl: "http://localhost:3001",
+  pickupDevMode: false, supabaseUrl: null, supabasePublishableKey: null, supabaseSecretKey: null, pickupStorage: "disabled", publicWebBaseUrl: "http://localhost:3001",
   pickupInvitationHmacSecret: null, pickupProximityMaxAccuracyMeters: null, pickupProximityMaxAgeMs: null,
 };
 const provider: ParkingProvider = { async fetchSnapshot() { return { fetchedAt: new Date(0).toISOString(), places: [] }; } };

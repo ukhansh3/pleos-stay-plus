@@ -77,6 +77,8 @@ const config = (cacheFile: string): AppConfig => ({
   pickupDevMode: false,
   supabaseUrl: null,
   supabasePublishableKey: null,
+  supabaseSecretKey: null,
+  pickupStorage: "disabled",
   publicWebBaseUrl: "http://localhost:3001",
   pickupInvitationHmacSecret: null,
   pickupProximityMaxAccuracyMeters: null,

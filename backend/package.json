@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "test": "tsx --test test/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "validate:openapi": "node scripts/validate-openapi.mjs"
+    "validate:openapi": "node scripts/validate-openapi.mjs",
+    "verify:pickup:live": "node scripts/verify-pickup-live.mjs"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
