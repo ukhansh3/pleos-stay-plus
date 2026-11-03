@@ -16,6 +16,7 @@ interface PickupRepository {
     suspend fun create(waitingSessionId: String? = null): PickupSession
     suspend fun issueInvitation(sessionId: String): PickupInvitation
     suspend fun sendVehicleLocation(sessionId: String, location: PickupVehicleLocation)
+    suspend fun snapshot(sessionId: String): PickupSnapshot
     suspend fun complete(sessionId: String): PickupSession
     suspend fun cancel(sessionId: String, reason: String): PickupSession
     suspend fun endLinkedWaiting(sessionId: String): PickupSession
@@ -48,6 +49,18 @@ class HttpPickupRepository(
         request("PUT", "/pickup/sessions/$sessionId/vehicle-location", payload, false)
     }
 
+    override suspend fun snapshot(sessionId: String): PickupSnapshot {
+        val json = request("GET", "/pickup/sessions/$sessionId/snapshot", JSONObject(), false)
+        val vehicle = json.optJSONObject("vehicleLocation")
+        return PickupSnapshot(
+            session = json.getJSONObject("session").toSession(),
+            proximityCandidate = json.getBoolean("proximityCandidate"),
+            revision = json.getInt("revision"),
+            occurredAt = json.getString("occurredAt"),
+            vehicleLocationUpdatedAt = vehicle?.optString("receivedAt")?.ifBlank { null },
+        )
+    }
+
     override suspend fun complete(sessionId: String): PickupSession =
         request("POST", "/pickup/sessions/$sessionId/complete", JSONObject(), true).toSession()
 
@@ -64,16 +77,16 @@ class HttpPickupRepository(
             connection.requestMethod = method
             connection.connectTimeout = 5_000
             connection.readTimeout = 15_000
-            connection.doOutput = true
+            connection.doOutput = method != "GET"
             connection.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
             connection.setRequestProperty("Content-Type", "application/json")
             if (idempotent) connection.setRequestProperty("Idempotency-Key", UUID.randomUUID().toString())
-            connection.outputStream.use { it.write(payload.toString().toByteArray(StandardCharsets.UTF_8)) }
+            if (method != "GET") connection.outputStream.use { it.write(payload.toString().toByteArray(StandardCharsets.UTF_8)) }
             val status = connection.responseCode
             if (status == 204) return@withContext JSONObject()
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val json = JSONObject(stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty().ifBlank { "{}" })
-            if (status !in 200..299) throw PickupApiException(json.optString("message", "Pickup 요청에 실패했습니다 ($status)"), status)
+            if (status !in 200..299) throw PickupApiException(json.optJSONObject("error")?.optString("message").orEmpty().ifBlank { json.optString("message", "Pickup 요청에 실패했습니다 ($status)") }, status)
             json
         } finally { connection.disconnect() }
     }

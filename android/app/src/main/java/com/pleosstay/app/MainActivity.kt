@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import android.content.Context
 import com.pleosstay.app.waiting.data.*
 import com.pleosstay.app.waiting.domain.WaitingPlace
+import com.pleosstay.app.waiting.domain.WaitingStatus
 import com.pleosstay.app.waiting.safety.PlatformWaitingSafetyGateway
 import com.pleosstay.app.waiting.safety.WaitingDrivingMonitor
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +39,7 @@ import com.pleosstay.app.pickup.ui.PickupScreen
 import com.pleosstay.app.pickup.ui.PickupViewModel
 
 class MainActivity : ComponentActivity() {
+    private var pendingPickupWaitingSessionId: String? = null
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
@@ -77,7 +79,8 @@ class MainActivity : ComponentActivity() {
         if (granted) parkingViewModel.searchNearby() else parkingViewModel.onLocationPermissionDenied()
     }
     private val pickupLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) pickupViewModel.start() else pickupViewModel.start()
+        pickupViewModel.start(pendingPickupWaitingSessionId)
+        pendingPickupWaitingSessionId = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +91,14 @@ class MainActivity : ComponentActivity() {
             PleosStayPlusTheme {
                 var section by remember { mutableIntStateOf(0) }
                 val parkingState by parkingViewModel.state.collectAsState()
+                val waitingState by waitingModel.state.collectAsState()
+                val pickupState by pickupViewModel.state.collectAsState()
+                LaunchedEffect(waitingState.sessions, pickupState.session) {
+                    val linkedId = pickupState.session?.waitingSessionId
+                    if (linkedId != null && waitingState.sessions.any { it.id == linkedId && it.status == WaitingStatus.ENDED }) {
+                        pickupViewModel.endLinkedWaiting()
+                    }
+                }
                 Column {
                     Row {
                         TextButton(onClick = { section = 0 }) { Text("장소 검색") }
@@ -99,7 +110,7 @@ class MainActivity : ComponentActivity() {
                             val place = parkingState.selected?.let { WaitingPlace(it.id, it.name) }
                             WaitingScreen(waitingModel, place)
                         }
-                        2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
+                        2 -> PickupScreen(pickupViewModel, { requestPickupStart(waitingState.active?.id) })
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
                 }
@@ -129,9 +140,11 @@ class MainActivity : ComponentActivity() {
             locationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }
     }
-    private fun requestPickupStart() {
+    private fun requestPickupStart(waitingSessionId: String?) {
+        pendingPickupWaitingSessionId = waitingSessionId
         if (ContextCompat.checkSelfPermission(this, FUSED_LOCATION_PERMISSION) == PackageManager.PERMISSION_GRANTED) {
-            pickupViewModel.start()
+            pickupViewModel.start(waitingSessionId)
+            pendingPickupWaitingSessionId = null
         } else {
             pickupLocationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }

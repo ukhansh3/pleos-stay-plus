@@ -83,6 +83,11 @@ class PickupViewModel(
 
     fun complete() = close { repository.complete(it) }
     fun cancel() = close { repository.cancel(it, "DRIVER_CANCELLED") }
+    fun endLinkedWaiting() {
+        val session = mutableState.value.session ?: return
+        if (session.waitingSessionId == null || session.status.name != "ACTIVE" || mutableState.value.busy) return
+        close { repository.endLinkedWaiting(it) }
+    }
 
     private fun close(action: suspend (String) -> PickupSession) {
         val id = mutableState.value.session?.id ?: return
@@ -101,7 +106,10 @@ class PickupViewModel(
                 delay(5_000)
                 when (val result = locationGateway.getCurrentLocation()) {
                     is CurrentLocationResult.Success -> runCatching { repository.sendVehicleLocation(sessionId, result.location.toPickupLocation()) }
-                        .onSuccess { mutableState.update { it.copy(lastLocationAt = result.location.toPickupLocation().observedAt, error = null) } }
+                        .onSuccess {
+                            val snapshot = runCatching { repository.snapshot(sessionId) }.getOrNull()
+                            mutableState.update { current -> current.copy(session = snapshot?.session ?: current.session, lastLocationAt = snapshot?.vehicleLocationUpdatedAt ?: result.location.toPickupLocation().observedAt, error = null) }
+                        }
                         .onFailure { failure -> mutableState.update { current -> current.copy(error = "차량 위치 전송 실패: ${failure.errorMessage()}") } }
                     else -> { stopLocationSharing(result.message()); break }
                 }

@@ -63,6 +63,8 @@ test("independent Pickup enforces owner, one participant, revocation, and locati
   const vehicleLocation = await app.inject({ method: "PUT", url: `/api/v1/pickup/sessions/${session.id}/vehicle-location`, headers: headers("user-driver-a"), payload: { latitude: 37.5, longitude: 127, confidence: 0.8, observedAt: now.toISOString(), source: "REAL" } });
   assert.equal(vehicleLocation.statusCode, 200);
   assert.equal(vehicleLocation.json().proximityCandidate, false);
+  const simulated = await app.inject({ method: "PUT", url: `/api/v1/pickup/sessions/${session.id}/vehicle-location`, headers: headers("user-driver-a"), payload: { latitude: 37.5, longitude: 127, observedAt: now.toISOString(), source: "SIMULATED" } });
+  assert.equal(simulated.statusCode, 403);
 
   const completed = await app.inject({ method: "POST", url: `/api/v1/pickup/sessions/${session.id}/complete`, headers: headers("user-guest-a", key(5)) });
   assert.equal(completed.statusCode, 200);
@@ -87,5 +89,51 @@ test("invitation expires after 60 minutes and reissue revokes the old guest", as
   now = new Date("2026-11-03T01:00:00.001Z");
   const expired = await app.inject({ method: "POST", url: "/api/v1/pickup/invitations/redeem", headers: headers("user-guest-a"), payload: { token, consent: true } });
   assert.equal(expired.statusCode, 410);
+  await app.close();
+});
+
+test("reissuing invitation revokes the old participant and token", async () => {
+  const service = new PickupService(new InMemoryPickupRepository(), {
+    publicWebBaseUrl: "https://pickup.example.test",
+    invitationHmacSecret: "test-secret-that-is-at-least-thirty-two-characters",
+    now: () => new Date("2026-11-03T00:00:00.000Z"),
+  });
+  const app = buildApp(config, { provider, pickupService: service, pickupAuth: auth });
+  const created = await app.inject({ method: "POST", url: "/api/v1/pickup/sessions", headers: headers("user-driver-a", key(21)), payload: { locationSharingConsent: true } });
+  const id = created.json().id;
+  const first = await app.inject({ method: "POST", url: `/api/v1/pickup/sessions/${id}/invitations`, headers: headers("user-driver-a", key(22)) });
+  const oldToken = new URL(first.json().shareUrl).pathname.split("/").at(-1)!;
+  await app.inject({ method: "POST", url: "/api/v1/pickup/invitations/redeem", headers: headers("user-guest-a"), payload: { token: oldToken, consent: true } });
+  const second = await app.inject({ method: "POST", url: `/api/v1/pickup/sessions/${id}/invitations`, headers: headers("user-driver-a", key(23)) });
+  assert.equal(second.statusCode, 201);
+  const oldAccess = await app.inject({ method: "GET", url: `/api/v1/pickup/sessions/${id}/snapshot`, headers: headers("user-guest-a") });
+  assert.equal(oldAccess.statusCode, 404);
+  const oldRedeem = await app.inject({ method: "POST", url: "/api/v1/pickup/invitations/redeem", headers: headers("user-guest-b"), payload: { token: oldToken, consent: true } });
+  assert.equal(oldRedeem.statusCode, 410);
+  await app.close();
+});
+
+test("proximity requires accurate fresh positions for 20m during 30 seconds", async () => {
+  let now = new Date("2026-11-03T00:00:00.000Z");
+  const service = new PickupService(new InMemoryPickupRepository(), {
+    publicWebBaseUrl: "https://pickup.example.test",
+    invitationHmacSecret: "test-secret-that-is-at-least-thirty-two-characters",
+    now: () => now,
+    proximityPolicy: { maxAccuracyMeters: 20, maxAgeMs: 60_000, distanceMeters: 20, dwellMs: 30_000 },
+  });
+  const app = buildApp(config, { provider, pickupService: service, pickupAuth: auth });
+  const created = await app.inject({ method: "POST", url: "/api/v1/pickup/sessions", headers: headers("user-driver-a", key(31)), payload: { locationSharingConsent: true } });
+  const id = created.json().id;
+  const invite = await app.inject({ method: "POST", url: `/api/v1/pickup/sessions/${id}/invitations`, headers: headers("user-driver-a", key(32)) });
+  const token = new URL(invite.json().shareUrl).pathname.split("/").at(-1)!;
+  const joined = await app.inject({ method: "POST", url: "/api/v1/pickup/invitations/redeem", headers: headers("user-guest-a"), payload: { token, consent: true } });
+  const participantId = joined.json().participantId;
+  const position = { latitude: 37.5, longitude: 127, accuracyMeters: 5, observedAt: now.toISOString(), source: "REAL" };
+  await app.inject({ method: "PUT", url: `/api/v1/pickup/sessions/${id}/vehicle-location`, headers: headers("user-driver-a"), payload: position });
+  const first = await app.inject({ method: "PUT", url: `/api/v1/pickup/participants/${participantId}/location`, headers: headers("user-guest-a"), payload: position });
+  assert.equal(first.json().proximityCandidate, false);
+  now = new Date("2026-11-03T00:00:31.000Z");
+  const second = await app.inject({ method: "PUT", url: `/api/v1/pickup/participants/${participantId}/location`, headers: headers("user-guest-a"), payload: { ...position, observedAt: now.toISOString() } });
+  assert.equal(second.json().proximityCandidate, true);
   await app.close();
 });

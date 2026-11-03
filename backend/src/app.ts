@@ -143,6 +143,11 @@ export function buildApp(config: AppConfig, dependencies: AppDependencies = {}):
     const known = error instanceof ParkingApiError || error instanceof PickupApiError;
     const statusCode = known ? error.statusCode : 500;
     if (!known) request.log.error({ err: error }, "Unhandled request error");
+    if (error instanceof PickupApiError) {
+      return reply.code(statusCode).send({
+        error: { code: error.code, message: error.message, requestId: request.id },
+      });
+    }
     reply.code(statusCode).send({
       code: known ? error.code : "INTERNAL_ERROR",
       message: known ? error.message : "서버 오류가 발생했습니다",

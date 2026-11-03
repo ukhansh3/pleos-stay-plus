@@ -30,6 +30,7 @@ function location(value: Record<string, unknown>): PickupLocationUpdate {
   const observedAt = string(value.observedAt, "observedAt")!;
   if (!Number.isFinite(Date.parse(observedAt))) throw new PickupApiError(400, "INVALID_LOCATION", "observedAt이 올바르지 않습니다");
   if (value.source !== "REAL" && value.source !== "SIMULATED") throw new PickupApiError(400, "INVALID_LOCATION", "source가 올바르지 않습니다");
+  if (value.source === "SIMULATED") throw new PickupApiError(403, "SIMULATED_SOURCE_FORBIDDEN", "일반 Pickup API에는 시뮬레이션 위치를 전송할 수 없습니다");
   return { latitude, longitude, accuracyMeters: accuracy, confidence, observedAt, source: value.source as PickupLocationSource };
 }
 
@@ -53,7 +54,11 @@ export function registerPickupRoutes(app: FastifyInstance, service: PickupServic
   app.put<{ Params: { participantId: string } }>("/api/v1/pickup/participants/:participantId/location", async (request) => service.updateParticipantLocation(await principal(request, auth), request.params.participantId, location(body(request))));
   app.get<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/snapshot", async (request) => service.getSnapshot(await principal(request, auth), request.params.sessionId));
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/complete", async (request) => service.close(await principal(request, auth), request.params.sessionId, "COMPLETED", idempotency(request), null, false));
-  app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/cancel", async (request) => service.close(await principal(request, auth), request.params.sessionId, "CANCELLED", idempotency(request), string(body(request).reason, "reason")!, false));
+  app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/cancel", async (request) => {
+    const reason = string(body(request).reason, "reason")!;
+    if (reason.length > 120) throw new PickupApiError(400, "INVALID_REQUEST", "취소 사유는 120자 이하여야 합니다");
+    return service.close(await principal(request, auth), request.params.sessionId, "CANCELLED", idempotency(request), reason, false);
+  });
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/end", async (request) => service.close(await principal(request, auth), request.params.sessionId, "ENDED", idempotency(request), null, true));
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/revoke-invitation", async (request, reply) => { await service.revoke(await principal(request, auth), request.params.sessionId, idempotency(request)); return reply.code(204).send(); });
 }

@@ -16,7 +16,7 @@ async function call<T>(path:string, token:string, init:RequestInit = {}):Promise
   const response = await fetch(`${base()}${path}`, { ...init, headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}`, ...(init.headers||{}) }, cache:"no-store" });
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiFailure(body.message || "Pickup 요청에 실패했습니다", response.status, body.code);
+  if (!response.ok) throw new ApiFailure(body.error?.message || body.message || "Pickup 요청에 실패했습니다", response.status, body.error?.code || body.code);
   return body as T;
 }
 export const pickupApi = {

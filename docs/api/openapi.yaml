@@ -220,7 +220,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [accepted, status]
+                required: [accepted, status, revision]
                 properties:
                   accepted: {type: boolean}
                   status: {$ref: '#/components/schemas/PickupParticipantStatus'}
@@ -329,7 +329,7 @@ components:
     StayMode: {type: string, enum: [NONE, WORK, STUDY, ENTERTAINMENT, REST]}
     PickupSessionStatus: {type: string, enum: [ACTIVE, COMPLETED, CANCELLED, ENDED, EXPIRED]}
     PickupParticipantStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
-    PickupLocationSource: {type: string, enum: [REAL, SIMULATED]}
+    PickupLocationSource: {type: string, enum: [REAL, SIMULATED], description: SIMULATED is reserved for a separately authenticated QA API and is rejected by normal Pickup location endpoints}
     ParkingPurpose: {type: string, enum: [PICKUP, SHORT_WAIT, LONG_STAY], default: SHORT_WAIT}
     ParkingType: {type: string, enum: [PARKING_LOT, ON_STREET_PARKING, PICKUP_ZONE, TIME_LIMITED_ZONE, PUBLIC_REST_AREA]}
     ParkingEligibility: {type: string, enum: [VERIFIED, CONDITIONAL, UNKNOWN]}

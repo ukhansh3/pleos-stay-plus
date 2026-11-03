@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun localSetting(name: String): String = providers.gradleProperty(name).orNull
+    ?: providers.environmentVariable(name).orNull
+    ?: localProperties.getProperty(name, "")
 
 android {
     useLibrary("android.car", false)
@@ -31,12 +40,12 @@ android {
         buildConfigField(
             "String",
             "SUPABASE_URL",
-            "\"${providers.gradleProperty("SUPABASE_URL").orElse(providers.environmentVariable("SUPABASE_URL")).getOrElse("")}\""
+            "\"${localSetting("SUPABASE_URL")}\""
         )
         buildConfigField(
             "String",
             "SUPABASE_PUBLISHABLE_KEY",
-            "\"${providers.gradleProperty("SUPABASE_PUBLISHABLE_KEY").orElse(providers.environmentVariable("SUPABASE_PUBLISHABLE_KEY")).getOrElse("")}\""
+            "\"${localSetting("SUPABASE_PUBLISHABLE_KEY")}\""
         )
     }
 
