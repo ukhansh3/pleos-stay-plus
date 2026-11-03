@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Pleos Stay+ API
   version: 0.3.0-draft
-  description: 'Parking v0.2 plus independent Pickup sessions aligned to the 2026-11-03 Notion specification. Deployment is not configured.'
+  description: 'Parking v0.2 unchanged; Pickup v0.3 independent sessions aligned to the 2026-11-03 Notion specification. Waiting REST paths are historical draft only; implemented Waiting remains Android Room LOCAL. Driver Android/emulator silently uses a separate Supabase Anonymous Auth JWT, and Pleos platform login is not assumed to authenticate this API.'
 servers:
   - url: https://example.invalid/api/v1
     description: Placeholder; deployment not chosen
@@ -130,6 +130,7 @@ paths:
     post:
       tags: [Pickup]
       summary: Create an independent Pickup session
+      description: Driver Android/emulator silently establishes a separate Supabase Anonymous Auth session. The server derives owner identity only from the verified JWT; Pleos login and request-body owner IDs are never trusted. Waiting linkage is optional and does not create a server Waiting session.
       parameters: [{$ref: '#/components/parameters/idempotencyKey'}]
       requestBody:
         required: true
