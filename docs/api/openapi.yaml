@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Pleos Stay+ API
   version: 0.3.0-draft
-  description: 'Parking v0.2 unchanged; Pickup v0.3 independent-session draft aligned to 2026-11-03 Notion. Waiting REST paths below are historical draft only; implemented Waiting remains Android Room LOCAL. No Pickup deployment implied.'
+  description: 'Parking v0.2 unchanged; Pickup v0.3 independent-session draft aligned to 2026-11-03 Notion. Waiting REST paths below are historical draft only; implemented Waiting remains Android Room LOCAL. No Pickup deployment implied. Driver emulator client silently signs into Supabase Anonymous Auth and sends a verified JWT; PLEOS platform login is not assumed to authenticate this API.'
 servers:
   - url: https://example.invalid/api/v1
     description: Placeholder; deployment not chosen
@@ -130,7 +130,7 @@ paths:
     post:
       tags: [Pickup]
       summary: Create independent Pickup session without requiring Waiting
-      description: Driver authentication and explicit location sharing consent required. localWaitingSessionId is optional and never creates a server Waiting session.
+      description: 'Driver Android emulator/app silently establishes Supabase Anonymous Auth session and sends its verified JWT. Owner ID is derived server-side from token, never trusted from request body. No Pleos account token integration or login UI in MVP. Explicit location sharing consent required. localWaitingSessionId is optional and never creates a server Waiting session.'
       requestBody:
         required: true
         content:
@@ -143,6 +143,7 @@ paths:
                 localWaitingSessionId: {type: string, format: uuid, description: Optional Room-local Waiting reference; not a server resource}
       responses:
         '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
         '403': {$ref: '#/components/responses/ApiFailure'}
         '409': {$ref: '#/components/responses/ApiFailure'}
   /pickup/sessions/{sessionId}:
@@ -284,7 +285,11 @@ paths:
         '200': {description: Ended and locations erased}
 components:
   securitySchemes:
-    bearerAuth: {type: http, scheme: bearer}
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Pickup driver endpoints require automatically obtained Supabase Auth JWT from the Android emulator/app, with server-side owner validation. A platform emulator login by itself is not a bearer token. Participant endpoints require a separate strictly scoped guest credential after invitation redemption; exact scheme pending security design. No login UI in MVP.'
   parameters:
     placeId: {name: placeId, in: path, required: true, schema: {type: string}}
     sessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
