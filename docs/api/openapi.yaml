@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Pleos Stay+ API
-  version: 0.2.0-draft
-  description: 'Parking v0.2 aligned to 2026-11-02 Notion specification; not implemented or deployed. Other contracts remain drafts.'
+  version: 0.3.0-draft
+  description: 'Parking v0.2 plus independent Pickup sessions aligned to the 2026-11-03 Notion specification. Deployment is not configured.'
 servers:
   - url: https://example.invalid/api/v1
     description: Placeholder; deployment not chosen
@@ -126,36 +126,51 @@ paths:
       responses:
         '200': {description: Ended, content: {application/json: {schema: {$ref: '#/components/schemas/WaitingSession'}}}}
         '404': {$ref: '#/components/responses/ApiFailure'}
-  /waiting-sessions/{sessionId}/invitations:
+  /pickup/sessions:
     post:
       tags: [Pickup]
-      summary: Create expiring invitation
-      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      summary: Create an independent Pickup session
+      parameters: [{$ref: '#/components/parameters/idempotencyKey'}]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [locationSharingConsent]
               properties:
-                expiresInMinutes: {type: integer, minimum: 1}
+                waitingSessionId: {type: [string, 'null'], description: Optional local Waiting UUID; Pickup does not depend on a server Waiting session}
+                locationSharingConsent: {type: boolean, const: true}
       responses:
-        '201':
-          description: Token must be shown only at creation
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [invitationId, shareUrl, expiresAt]
-                properties:
-                  invitationId: {type: string, format: uuid}
-                  shareUrl: {type: string, format: uri}
-                  expiresAt: {type: string, format: date-time}
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '400': {$ref: '#/components/responses/ApiFailure'}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}:
+    get:
+      tags: [Pickup]
+      summary: Retrieve an owned Pickup session
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Session, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/invitations:
+    post:
+      tags: [Pickup]
+      summary: Issue or reissue the single-participant invitation for 60 minutes
+      parameters:
+        - {$ref: '#/components/parameters/sessionId'}
+        - {$ref: '#/components/parameters/idempotencyKey'}
+      responses:
+        '201': {description: Invitation token is returned only in the share URL, content: {application/json: {schema: {$ref: '#/components/schemas/PickupInvitationIssued'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
   /pickup/invitations/redeem:
     post:
       tags: [Pickup]
-      security: []
-      summary: Redeem invite after consent
+      summary: Redeem an invitation with a guest anonymous-auth JWT
       requestBody:
         required: true
         content:
@@ -169,15 +184,19 @@ paths:
                 displayName: {type: string, maxLength: 60}
       responses:
         '200':
-          description: Participant-limited session credential
+          description: Participant scope is bound to the authenticated guest UID
           content:
             application/json:
               schema:
                 type: object
-                required: [participantId, limitedAccessToken]
+                required: [participantId, sessionId, status, revision]
                 properties:
                   participantId: {type: string, format: uuid}
-                  limitedAccessToken: {type: string}
+                  sessionId: {type: string, format: uuid}
+                  status: {$ref: '#/components/schemas/PickupParticipantStatus'}
+                  revision: {type: integer, minimum: 1}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
         '410': {$ref: '#/components/responses/ApiFailure'}
   /pickup/participants/{participantId}/status:
     post:
@@ -192,7 +211,7 @@ paths:
               type: object
               required: [status, clientEventId]
               properties:
-                status: {$ref: '#/components/schemas/PickupStatus'}
+                status: {$ref: '#/components/schemas/PickupParticipantStatus'}
                 clientEventId: {type: string, format: uuid}
       responses:
         '200':
@@ -204,17 +223,89 @@ paths:
                 required: [accepted, status]
                 properties:
                   accepted: {type: boolean}
-                  status: {$ref: '#/components/schemas/PickupStatus'}
+                  status: {$ref: '#/components/schemas/PickupParticipantStatus'}
+                  revision: {type: integer, minimum: 1}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
         '409': {$ref: '#/components/responses/ApiFailure'}
-  /waiting-sessions/{sessionId}/invitations/{invitationId}:
-    delete:
+  /pickup/sessions/{sessionId}/vehicle-location:
+    put:
       tags: [Pickup]
-      summary: Revoke invitation
-      parameters:
-        - {$ref: '#/components/parameters/sessionId'}
-        - {name: invitationId, in: path, required: true, schema: {type: string, format: uuid}}
+      summary: Replace the latest consented vehicle location
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PickupLocationUpdate'}}}}
+      responses:
+        '200': {description: Snapshot revision, content: {application/json: {schema: {$ref: '#/components/schemas/PickupRevision'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/participants/{participantId}/location:
+    put:
+      tags: [Pickup]
+      summary: Replace the latest optional participant location
+      parameters: [{$ref: '#/components/parameters/participantId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PickupLocationUpdate'}}}}
+      responses:
+        '200': {description: Snapshot revision, content: {application/json: {schema: {$ref: '#/components/schemas/PickupRevision'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/snapshot:
+    get:
+      tags: [Pickup]
+      summary: Retrieve the authorized current snapshot after reconnect
+      parameters: [{$ref: '#/components/parameters/sessionId'}]
+      responses:
+        '200': {description: Authorized snapshot, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSnapshot'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '410': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/complete:
+    post:
+      tags: [Pickup]
+      summary: Confirm manual pickup completion as driver or participant
+      parameters: [{$ref: '#/components/parameters/sessionId'}, {$ref: '#/components/parameters/idempotencyKey'}]
+      responses:
+        '200': {description: Completed and current locations removed, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/cancel:
+    post:
+      tags: [Pickup]
+      summary: Cancel Pickup as driver or participant
+      parameters: [{$ref: '#/components/parameters/sessionId'}, {$ref: '#/components/parameters/idempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties: {reason: {type: string, minLength: 1, maxLength: 120}}
+      responses:
+        '200': {description: Cancelled and current locations removed, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+        '409': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/end:
+    post:
+      tags: [Pickup]
+      summary: End Pickup from the driver, including an optional local Waiting-end propagation
+      parameters: [{$ref: '#/components/parameters/sessionId'}, {$ref: '#/components/parameters/idempotencyKey'}]
+      responses:
+        '200': {description: Ended and current locations removed, content: {application/json: {schema: {$ref: '#/components/schemas/PickupSession'}}}}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/revoke-invitation:
+    post:
+      tags: [Pickup]
+      summary: Revoke the current invitation and participant access
+      parameters: [{$ref: '#/components/parameters/sessionId'}, {$ref: '#/components/parameters/idempotencyKey'}]
       responses:
         '204': {description: Revoked}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer}
@@ -222,6 +313,7 @@ components:
     placeId: {name: placeId, in: path, required: true, schema: {type: string}}
     sessionId: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
     participantId: {name: participantId, in: path, required: true, schema: {type: string, format: uuid}}
+    idempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
   responses:
     ParkingFailure:
       description: Parking-specific error with requestId
@@ -235,7 +327,9 @@ components:
           schema: {$ref: '#/components/schemas/ApiError'}
   schemas:
     StayMode: {type: string, enum: [NONE, WORK, STUDY, ENTERTAINMENT, REST]}
-    PickupStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
+    PickupSessionStatus: {type: string, enum: [ACTIVE, COMPLETED, CANCELLED, ENDED, EXPIRED]}
+    PickupParticipantStatus: {type: string, enum: [JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED]}
+    PickupLocationSource: {type: string, enum: [REAL, SIMULATED]}
     ParkingPurpose: {type: string, enum: [PICKUP, SHORT_WAIT, LONG_STAY], default: SHORT_WAIT}
     ParkingType: {type: string, enum: [PARKING_LOT, ON_STREET_PARKING, PICKUP_ZONE, TIME_LIMITED_ZONE, PUBLIC_REST_AREA]}
     ParkingEligibility: {type: string, enum: [VERIFIED, CONDITIONAL, UNKNOWN]}
@@ -315,6 +409,65 @@ components:
         plannedEndAt: {type: string, format: date-time}
         endedAt: {type: [string, 'null'], format: date-time}
         revision: {type: integer, minimum: 0}
+    PickupSession:
+      type: object
+      required: [id, waitingSessionId, status, locationSharingConsent, participant, invitationExpiresAt, revision, createdAt, endedAt]
+      properties:
+        id: {type: string, format: uuid}
+        waitingSessionId: {type: [string, 'null']}
+        status: {$ref: '#/components/schemas/PickupSessionStatus'}
+        locationSharingConsent: {type: boolean}
+        participant: {anyOf: [{$ref: '#/components/schemas/PickupParticipant'}, {type: 'null'}]}
+        invitationExpiresAt: {type: [string, 'null'], format: date-time}
+        revision: {type: integer, minimum: 1}
+        createdAt: {type: string, format: date-time}
+        endedAt: {type: [string, 'null'], format: date-time}
+    PickupParticipant:
+      type: object
+      required: [id, displayName, status, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        displayName: {type: string, minLength: 1, maxLength: 60}
+        status: {$ref: '#/components/schemas/PickupParticipantStatus'}
+        updatedAt: {type: string, format: date-time}
+    PickupInvitationIssued:
+      type: object
+      required: [invitationId, shareUrl, expiresAt]
+      properties:
+        invitationId: {type: string, format: uuid}
+        shareUrl: {type: string, format: uri, description: Contains the one-time invitation secret and must not be logged}
+        expiresAt: {type: string, format: date-time}
+    PickupLocationUpdate:
+      type: object
+      required: [latitude, longitude, accuracyMeters, observedAt, source]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        accuracyMeters: {type: number, exclusiveMinimum: 0}
+        observedAt: {type: string, format: date-time}
+        source: {$ref: '#/components/schemas/PickupLocationSource'}
+    PickupLocation:
+      allOf:
+        - {$ref: '#/components/schemas/PickupLocationUpdate'}
+        - type: object
+          required: [receivedAt]
+          properties: {receivedAt: {type: string, format: date-time}}
+    PickupRevision:
+      type: object
+      required: [revision, proximityCandidate]
+      properties:
+        revision: {type: integer, minimum: 1}
+        proximityCandidate: {type: boolean, description: Never confirms pickup completion automatically}
+    PickupSnapshot:
+      type: object
+      required: [session, vehicleLocation, participantLocation, proximityCandidate, revision, occurredAt]
+      properties:
+        session: {$ref: '#/components/schemas/PickupSession'}
+        vehicleLocation: {anyOf: [{$ref: '#/components/schemas/PickupLocation'}, {type: 'null'}]}
+        participantLocation: {anyOf: [{$ref: '#/components/schemas/PickupLocation'}, {type: 'null'}]}
+        proximityCandidate: {type: boolean}
+        revision: {type: integer, minimum: 1}
+        occurredAt: {type: string, format: date-time}
     ApiError:
       type: object
       required: [error]

@@ -802,3 +802,16 @@ interface WaitingRepository {
 - 외부 SDK, 공개 라이브러리, 플랫폼 API 사용 시 기능의 공식 지원·배포/라이선스 허용·권한을 확인한다. 공식 문서 확인 → 컴파일 → 에뮬레이터 실제 동작 검증 순서로 결과를 분리 기록한다.
 - 검증되지 않은 Vehicle/Navigation/Surrounding API는 `SDK_VERIFY`로 남긴다. 주변 감시 센서 데이터 접근 불가 시 `UNAVAILABLE`로 표시하고 동작을 가장하지 않는다.
 - 정책 위반 가능성 또는 자료 부족 시 자의적 우회 구현 없이 `REVIEW_REQUIRED`로 사용자에게 확인한다. 차량 이동/상태 UNKNOWN이면 정차 전용 UI는 로컬에서 즉시 차단한다.
+
+## 21. Pickup 독립 세션 계약 v0.3 (2026-11-03, CONFIRMED)
+
+- Pickup은 Waiting 없이 홈에서 독립 생성한다. 서버의 canonical 생성 경로는 `POST /api/v1/pickup/sessions`이며, 로컬 Waiting UUID는 선택적인 `waitingSessionId`일 뿐 Pickup 생성·권한·수명의 전제조건이 아니다.
+- 운전자 Android와 참가자 Web은 화면 입력 없는 Supabase Anonymous Auth 세션을 각각 사용한다. Fastify는 검증된 JWT의 `auth.uid()`만 소유권 주체로 신뢰하며 request body의 owner ID를 신뢰하지 않는다. Anonymous Auth가 비활성화된 환경의 실제 인증 E2E는 `BLOCKED`로 보고하고 인증 우회 모드를 만들지 않는다.
+- 참가자는 초대 토큰을 자신의 익명 UID와 교환해 해당 Pickup 하나에만 접근한다. Supabase publishable key 자체는 권한 증명이 아니다. RLS와 Fastify 소유권 검사가 운전자·참가자·다른 익명 사용자를 분리한다.
+- 활성 Pickup당 참가자는 한 명이다. 초대는 신규 참가 기준 60분이며 원문 토큰은 저장·로그하지 않는다. 재발급은 기존 초대와 참가자 접근 및 Realtime 구독 권한을 즉시 철회한다.
+- 위치는 명시적 동의 후 최신 좌표만 저장한다. 운전자 위치는 기존 Pleos FusedLocation Gateway를 재사용하고, 참가자 위치는 브라우저 권한 선택 사항이다. 주행·차량 상태 UNKNOWN·권한 상실 시 Android의 위치 공유를 즉시 중단한다.
+- 20m 이내 30초는 합류 후보만 발생시키며 자동 완료하지 않는다. GPS 정확도·신선도 임계값은 측정 전 `REVIEW_REQUIRED`이고 서버 환경설정으로 분리한다.
+- Pickup 완료·취소·종료 시 현재 좌표를 삭제하고 초대·참가자 접근을 차단한다. Pickup 종료는 Waiting을 종료하지 않는다. 선택적으로 연결된 Waiting이 종료될 때만 Android가 Pickup `/end`를 멱등 재시도한다.
+- Web 지도는 Kakao Maps JavaScript SDK를 사용한다. 키는 `.env.local`로 주입하고 허용 도메인·Map API 활성화·쿼터가 확인되기 전 실제 지도 동작은 `BLOCKED`다. 공유 안내 페이지는 위치를 노출하거나 참가를 자동 수행하지 않는다.
+- Android QR은 승인된 Apache-2.0 ZXing Core를 사용한다. TTS는 공식 Pleos TextToSpeech Maven 좌표·클래스·권한 및 에뮬레이터 동작 확인 전 Gateway의 `UNSUPPORTED/SDK_VERIFY` 상태로만 제공한다.
+- API 전체 요청·응답·오류 계약은 `docs/api/openapi.yaml` v0.3을 따른다. 기존 `/waiting-sessions/{id}/invitations` Pickup 초안은 폐기하며 별칭으로 유지하지 않는다.

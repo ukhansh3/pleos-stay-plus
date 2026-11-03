@@ -138,3 +138,14 @@ Pleos Stay+는 차량 대기 장소 탐색, 대기시간·차량상태 관리, �
 - 11/01: 설계·SDK/원격 PC 사전검증·DB·인증 기반을 하루에 통합하는 목표. 수행하지 못한 검증은 반드시 미검증으로 표시.
 - 11/02: Parking API부터 개발 착수, 이후 Waiting → Pickup → Realtime → Work → Study → Entertainment → Rest → Frontend 통합 순으로 진행.
 - 세부 날짜와 완료 기준은 DEVELOPMENT_GUIDE.md 17장을 우선한다.
+
+## 16. Pickup 구현 지시 (2026-11-03)
+
+- Issue #5~#8의 Pickup 개발이 승인되었다. 최신 Pickup 노션 명세와 `DEVELOPMENT_GUIDE.md` 21장, OpenAPI v0.3을 우선한다.
+- Pickup은 Waiting 없이 독립 실행한다. Waiting은 기존 Android Room/Safety Monitor를 유지하며 서버 Pickup 세션의 필수 부모로 만들지 않는다.
+- 운전자와 참가자는 각각 Supabase Anonymous Auth JWT를 자동 획득한다. 기능이 비활성화된 환경은 `BLOCKED`로 보고하고 인증 우회나 공통 고정 토큰을 만들지 않는다.
+- Supabase migration/RLS SQL은 저장소에 작성하되 사용자 별도 승인 없이 Cloud 프로젝트에 적용하지 않는다.
+- Android 익명 인증은 공식 Supabase Auth REST 경계로 구현하고, QR은 ZXing Core를 사용한다. 확인되지 않은 Pleos TTS API는 호출하지 않고 `SDK_VERIFY`로 남긴다.
+- Web은 Kakao Maps JavaScript SDK를 사용하되 실제 키는 `.env.local`에만 둔다. 허용 도메인·활성화·쿼터 확인 전 실제 지도 검증 완료를 선언하지 않는다.
+- Backend, Android, Web은 독립 작업 브랜치와 파일 ownership을 사용한다. 공통 OpenAPI·개발 가이드·통합 QA 문서는 총괄 에이전트만 수정한다.
+- 기존 Parking·Waiting 회귀를 검증하고, main 병합·외부 배포·유료 기능 활성화·Supabase Cloud migration 실행은 하지 않는다.
