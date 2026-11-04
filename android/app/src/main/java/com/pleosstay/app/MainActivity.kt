@@ -18,6 +18,7 @@ import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import com.pleosstay.app.waiting.safety.UnavailableWaitingSafetyGateway
 import com.pleosstay.app.waiting.ui.WaitingViewModel
 import com.pleosstay.app.waiting.ui.WaitingScreen
+import com.pleosstay.app.realtime.RealtimeEntry
 import android.os.Bundle
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = { section = 0 }) { Text("장소 검색") }
                         TextButton(onClick = { section = 1; requestVehicleInformation() }) { Text("대기 관리") }
                         TextButton(onClick = { section = 2; requestVehicleInformation() }) { Text("픽업") }
+                        TextButton(onClick = { section = 3; requestVehicleInformation() }) { Text("파일 전송") }
                     }
                     when (section) {
                         1 -> {
@@ -111,6 +113,7 @@ class MainActivity : ComponentActivity() {
                             WaitingScreen(waitingModel, place)
                         }
                         2 -> PickupScreen(pickupViewModel, { requestPickupStart(waitingState.active?.id) })
+                        3 -> RealtimeEntry(applicationContext, waitingDependencies.safety)
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
                 }
