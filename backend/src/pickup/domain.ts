@@ -43,6 +43,26 @@ export interface PickupSnapshot {
   occurredAt: string;
 }
 
+export type PickupEventType =
+  | "PARTICIPANT_STATUS"
+  | "PROXIMITY_CANDIDATE"
+  | "SESSION_COMPLETED"
+  | "SESSION_CANCELLED"
+  | "SESSION_ENDED";
+
+export interface PickupEvent {
+  id: string;
+  eventType: PickupEventType;
+  revision: number;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+}
+
+export interface PickupEventPage {
+  events: PickupEvent[];
+  latestRevision: number;
+}
+
 export interface AuthPrincipal { uid: string }
 
 export class PickupApiError extends Error {

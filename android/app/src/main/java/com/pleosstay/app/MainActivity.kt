@@ -20,6 +20,7 @@ import com.pleosstay.app.waiting.ui.WaitingViewModel
 import com.pleosstay.app.waiting.ui.WaitingScreen
 import com.pleosstay.app.realtime.RealtimeEntry
 import android.os.Bundle
+import android.util.Log
 import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +37,8 @@ import com.pleosstay.app.parking.ui.ParkingViewModel
 import com.pleosstay.app.ui.theme.PleosStayPlusTheme
 import com.pleosstay.app.pickup.auth.SupabaseRestDriverIdentityProvider
 import com.pleosstay.app.pickup.data.HttpPickupRepository
+import com.pleosstay.app.pickup.tts.PleosPickupTtsGateway
+import com.pleosstay.app.pickup.tts.UnsupportedPickupTtsGateway
 import com.pleosstay.app.pickup.ui.PickupScreen
 import com.pleosstay.app.pickup.ui.PickupViewModel
 
@@ -53,6 +56,11 @@ class MainActivity : ComponentActivity() {
             ),
             locationGateway = PleosFusedLocationGateway(applicationContext),
             safety = waitingDependencies.safety,
+            tts = runCatching { PleosPickupTtsGateway(applicationContext) }.getOrElse { error ->
+                val reason = "Pleos TTS SDK_VERIFY: ${error.javaClass.simpleName} while constructing official adapter"
+                Log.w("PickupTts", reason)
+                UnsupportedPickupTtsGateway(reason)
+            },
         )
     }
 

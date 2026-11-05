@@ -83,6 +83,8 @@ const config = (cacheFile: string): AppConfig => ({
   pickupInvitationHmacSecret: null,
   pickupProximityMaxAccuracyMeters: null,
   pickupProximityMaxAgeMs: null,
+  pickupSimulatorEnabled: false,
+  pickupSimulatorToken: null,
 });
 
 test("normalizes actual standard parking fields without inventing availability", () => {

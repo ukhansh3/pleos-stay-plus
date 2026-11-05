@@ -26,7 +26,7 @@ npm run dev
 
 Pickup v0.3 is independent from Waiting and uses `/api/v1/pickup/**`. Driver and guest clients each send a Supabase Anonymous Auth JWT; request-body owner IDs are never trusted. Invitations last 60 minutes, only their SHA-256 hash is stored, and completion/cancellation/end removes current locations and revokes access.
 
-The versioned schema/RLS migrations are under `../supabase/migrations/` and must be applied in filename order. They were applied to the approved Supabase project on 2026-11-03 and verified with temporary anonymous users.
+The versioned schema/RLS migrations are under `../supabase/migrations/` and must be applied in filename order. Migrations through `20261103002000` were applied to the approved Supabase project on 2026-11-03 and verified with temporary anonymous users. The atomic-command migration `20261103003000` requires a separate reviewed application before live verification.
 
 For Supabase persistence, set `PICKUP_STORAGE=supabase` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, server-only `SUPABASE_SECRET_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. The secret key is sent only through Supabase's `apikey` header and never as a bearer token.
 
@@ -35,6 +35,10 @@ For loopback development only, `PICKUP_DEV_MODE=true` or `PICKUP_STORAGE=memory`
 With an approved project and a running backend, `npm run verify:pickup:live` creates temporary anonymous driver, guest, and isolation users; validates RLS and cleanup; and removes all test users and cascaded Pickup data in `finally`.
 
 Automatic 20m/30s proximity is disabled unless both accuracy/freshness environment values are explicitly configured after review. Pleos vehicle coordinates without meter accuracy are stored and displayed but never used to accumulate automatic proximity.
+
+Clients recover missed state transitions with `GET /api/v1/pickup/sessions/{sessionId}/events?afterRevision=N`. Events are revision ordered; the owner can read the final close event, while a participant loses read access when the invitation is reissued or the session ends.
+
+The developer simulator is opt-in and loopback-only. Set `PICKUP_SIMULATOR_ENABLED=true` and a separate random `PICKUP_SIMULATOR_TOKEN` of at least 32 characters only in local ignored environment files. The two `/api/v1/qa/pickup-simulator/**` location routes require both the actor's Supabase bearer token and the server-only simulator token, force `SIMULATED` source, and are not registered when disabled. The token must be injected by a same-origin server proxy and must never enter the browser bundle. Optional `simulatedNow` is accepted only by these QA routes for dwell-time acceleration.
 
 The server listens on `127.0.0.1:3000` by default. Health checks are available at `/health` and `/api/v1/health`. Android debug builds use `http://10.0.2.2:3000/api/v1/`; override it with `-PPARKING_API_BASE_URL=https://.../api/v1/` when needed.
 

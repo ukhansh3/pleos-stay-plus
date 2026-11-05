@@ -1,4 +1,5 @@
 import type {
+  PickupEventPage,
   PickupLocationUpdate,
   PickupParticipantStatus,
   PickupSession,
@@ -14,6 +15,7 @@ export interface PickupRepository {
   updateVehicleLocation(input: { ownerUid: string; sessionId: string; location: PickupLocationUpdate; now: string; proximity: ProximityPolicy | null }): Promise<{ revision: number; proximityCandidate: boolean }>;
   updateParticipantLocation(input: { guestUid: string; participantId: string; location: PickupLocationUpdate; now: string; proximity: ProximityPolicy | null }): Promise<{ revision: number; proximityCandidate: boolean }>;
   getSnapshot(input: { actorUid: string; sessionId: string; now: string }): Promise<PickupSnapshot>;
+  listEvents(input: { actorUid: string; sessionId: string; afterRevision: number }): Promise<PickupEventPage>;
   closeSession(input: { actorUid: string; sessionId: string; action: "COMPLETED" | "CANCELLED" | "ENDED"; reason: string | null; idempotencyKey: string; now: string; driverOnly: boolean }): Promise<PickupSession>;
   revokeInvitation(input: { ownerUid: string; sessionId: string; idempotencyKey: string; now: string }): Promise<void>;
 }

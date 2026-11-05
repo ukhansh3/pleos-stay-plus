@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { bearerToken, type PickupAuthVerifier } from "./auth.js";
 import { PickupApiError, type PickupLocationSource, type PickupLocationUpdate, type PickupParticipantStatus } from "./domain.js";
@@ -20,7 +21,7 @@ function idempotency(request: FastifyRequest): string {
 async function principal(request: FastifyRequest, auth: PickupAuthVerifier): Promise<string> {
   return (await auth.verify(bearerToken(request.headers.authorization))).uid;
 }
-function location(value: Record<string, unknown>): PickupLocationUpdate {
+function location(value: Record<string, unknown>, allowSimulated = false): PickupLocationUpdate {
   const latitude = Number(value.latitude); const longitude = Number(value.longitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new PickupApiError(400, "INVALID_LOCATION", "위치 좌표가 올바르지 않습니다");
   const accuracy = value.accuracyMeters === undefined || value.accuracyMeters === null ? null : Number(value.accuracyMeters);
@@ -30,11 +31,34 @@ function location(value: Record<string, unknown>): PickupLocationUpdate {
   const observedAt = string(value.observedAt, "observedAt")!;
   if (!Number.isFinite(Date.parse(observedAt))) throw new PickupApiError(400, "INVALID_LOCATION", "observedAt이 올바르지 않습니다");
   if (value.source !== "REAL" && value.source !== "SIMULATED") throw new PickupApiError(400, "INVALID_LOCATION", "source가 올바르지 않습니다");
-  if (value.source === "SIMULATED") throw new PickupApiError(403, "SIMULATED_SOURCE_FORBIDDEN", "일반 Pickup API에는 시뮬레이션 위치를 전송할 수 없습니다");
+  if (value.source === "SIMULATED" && !allowSimulated) throw new PickupApiError(403, "SIMULATED_SOURCE_FORBIDDEN", "일반 Pickup API에는 시뮬레이션 위치를 전송할 수 없습니다");
   return { latitude, longitude, accuracyMeters: accuracy, confidence, observedAt, source: value.source as PickupLocationSource };
 }
 
-export function registerPickupRoutes(app: FastifyInstance, service: PickupService, auth: PickupAuthVerifier): void {
+function afterRevision(request: FastifyRequest): number {
+  const raw = (request.query as Record<string, unknown>).afterRevision;
+  if (raw === undefined) return 0;
+  const value = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
+  if (!Number.isSafeInteger(value) || value < 0) throw new PickupApiError(400, "INVALID_REVISION", "afterRevision은 0 이상의 정수여야 합니다");
+  return value;
+}
+
+function simulatedNow(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new PickupApiError(400, "INVALID_SIMULATED_TIME", "simulatedNow이 올바른 ISO 시각이어야 합니다");
+  return new Date(value).toISOString();
+}
+
+export interface PickupSimulatorRouteOptions { enabled: boolean; token: string | null }
+
+function verifySimulatorToken(request: FastifyRequest, expected: string): void {
+  const provided = request.headers["x-pickup-simulator-token"];
+  if (typeof provided !== "string") throw new PickupApiError(403, "SIMULATOR_ACCESS_DENIED", "Pickup 시뮬레이터 접근이 거부되었습니다");
+  const actualBytes = Buffer.from(provided); const expectedBytes = Buffer.from(expected);
+  if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) throw new PickupApiError(403, "SIMULATOR_ACCESS_DENIED", "Pickup 시뮬레이터 접근이 거부되었습니다");
+}
+
+export function registerPickupRoutes(app: FastifyInstance, service: PickupService, auth: PickupAuthVerifier, simulator: PickupSimulatorRouteOptions = { enabled: false, token: null }): void {
   app.post("/api/v1/pickup/sessions", async (request, reply) => {
     const input = body(request); if (input.locationSharingConsent !== true) throw new PickupApiError(400, "CONSENT_REQUIRED", "차량 위치 공유 동의가 필요합니다");
     const waiting = input.waitingSessionId === null || input.waitingSessionId === undefined ? null : string(input.waitingSessionId, "waitingSessionId")!;
@@ -53,6 +77,7 @@ export function registerPickupRoutes(app: FastifyInstance, service: PickupServic
   app.put<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/vehicle-location", async (request) => service.updateVehicleLocation(await principal(request, auth), request.params.sessionId, location(body(request))));
   app.put<{ Params: { participantId: string } }>("/api/v1/pickup/participants/:participantId/location", async (request) => service.updateParticipantLocation(await principal(request, auth), request.params.participantId, location(body(request))));
   app.get<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/snapshot", async (request) => service.getSnapshot(await principal(request, auth), request.params.sessionId));
+  app.get<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/events", async (request) => service.listEvents(await principal(request, auth), request.params.sessionId, afterRevision(request)));
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/complete", async (request) => service.close(await principal(request, auth), request.params.sessionId, "COMPLETED", idempotency(request), null, false));
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/cancel", async (request) => {
     const reason = string(body(request).reason, "reason")!;
@@ -61,4 +86,19 @@ export function registerPickupRoutes(app: FastifyInstance, service: PickupServic
   });
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/end", async (request) => service.close(await principal(request, auth), request.params.sessionId, "ENDED", idempotency(request), null, true));
   app.post<{ Params: { sessionId: string } }>("/api/v1/pickup/sessions/:sessionId/revoke-invitation", async (request, reply) => { await service.revoke(await principal(request, auth), request.params.sessionId, idempotency(request)); return reply.code(204).send(); });
+
+  if (simulator.enabled) {
+    if (!simulator.token) throw new Error("Pickup simulator token is required");
+    const expectedToken = simulator.token;
+    app.put<{ Params: { sessionId: string } }>("/api/v1/qa/pickup-simulator/sessions/:sessionId/vehicle-location", async (request) => {
+      verifySimulatorToken(request, expectedToken);
+      const input = body(request); const now = simulatedNow(input.simulatedNow); const parsed = location({ ...input, source: "SIMULATED" }, true); const actor = await principal(request, auth);
+      return now === null ? service.updateVehicleLocation(actor, request.params.sessionId, parsed) : service.updateSimulatedVehicleLocation(actor, request.params.sessionId, parsed, now);
+    });
+    app.put<{ Params: { participantId: string } }>("/api/v1/qa/pickup-simulator/participants/:participantId/location", async (request) => {
+      verifySimulatorToken(request, expectedToken);
+      const input = body(request); const now = simulatedNow(input.simulatedNow); const parsed = location({ ...input, source: "SIMULATED" }, true); const actor = await principal(request, auth);
+      return now === null ? service.updateParticipantLocation(actor, request.params.participantId, parsed) : service.updateSimulatedParticipantLocation(actor, request.params.participantId, parsed, now);
+    });
+  }
 }

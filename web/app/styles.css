@@ -12,3 +12,8 @@ input { width:100%; min-height:48px; border:1px solid #aab7c8; border-radius:10p
 .map { height:320px; border-radius:14px; background:#e7eef8; overflow:hidden; }
 .row { display:flex; flex-wrap:wrap; gap:10px; }
 .row > * { flex:1; }
+.simulator-panel { width:min(100% - 32px, 980px); }
+.coordinate-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.simulator-map { height:460px; }
+label > input[type="checkbox"] { width:auto; min-height:auto; margin-right:8px; }
+@media (max-width:640px) { .coordinate-grid { grid-template-columns:1fr; } }

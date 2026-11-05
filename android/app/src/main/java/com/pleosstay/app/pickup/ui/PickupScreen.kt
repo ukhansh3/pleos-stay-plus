@@ -18,6 +18,7 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
         Text("픽업 연결", style = MaterialTheme.typography.headlineMedium)
         Text("Waiting 없이 독립적으로 시작할 수 있습니다.")
         if (state.blocked) Text(state.safetyMessage, color = MaterialTheme.colorScheme.error)
+        state.locationMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         val session = state.session
         if (session == null) {
@@ -25,18 +26,24 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
         } else {
             Text("상태: ${session.status}")
             Text(if (state.sharingLocation) "차량 위치 공유 중 · 약 5초 목표" else "차량 위치 공유 중지")
+            Text(if (state.syncing) "참가자 상태 동기화 중" else "참가자 상태 자동 동기화")
             state.lastLocationAt?.let { Text("마지막 차량 위치: $it") }
+            session.participant?.let { Text("참가자: ${it.displayName} · ${it.status}") }
+            if (state.proximityCandidate) Text("20m 이내 30초 조건 충족 · 화면에서 직접 합류를 확인하세요")
             state.invitation?.let { invite ->
                 val bitmap = remember(invite.shareUrl) { qrBitmap(invite.shareUrl) }
                 Image(bitmap.asImageBitmap(), contentDescription = "Pickup 공유 링크 QR", modifier = Modifier.size(220.dp))
                 Text("참가 유효기한: ${invite.expiresAt}")
                 Text("QR은 공유 안내 링크이며 스캔만으로 차량 위치가 공개되지 않습니다.")
+                OutlinedButton(onClick = viewModel::issueInvitation, enabled = !state.busy && session.status.name == "ACTIVE") {
+                    Text("QR 재발급 · 기존 참가 권한 폐기")
+                }
             } ?: Button(onClick = viewModel::issueInvitation, enabled = !state.busy) { Text("60분 초대 QR 발급") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = viewModel::complete, enabled = !state.busy && session.status.name == "ACTIVE") { Text("합류 완료") }
                 OutlinedButton(onClick = viewModel::cancel, enabled = !state.busy && session.status.name == "ACTIVE") { Text("Pickup 취소") }
             }
-            Text("Pleos TTS는 공식 SDK 검증 전 SDK_VERIFY 상태입니다.", style = MaterialTheme.typography.bodySmall)
+            Text(state.ttsMessage, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

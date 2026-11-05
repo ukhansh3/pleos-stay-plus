@@ -39,6 +39,8 @@ export interface AppConfig {
   pickupInvitationHmacSecret: string | null;
   pickupProximityMaxAccuracyMeters: number | null;
   pickupProximityMaxAgeMs: number | null;
+  pickupSimulatorEnabled: boolean;
+  pickupSimulatorToken: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {
@@ -66,8 +68,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   const optionalPositive = (value: string | undefined, name: string): number | null =>
     value === undefined || value.trim() === "" ? null : positiveNumber(value, 1, name);
 
+  const pickupSimulatorEnabled = env.PICKUP_SIMULATOR_ENABLED?.trim() === "true";
+  const pickupSimulatorToken = env.PICKUP_SIMULATOR_TOKEN?.trim() || null;
+  const host = env.PARKING_API_HOST?.trim() || "127.0.0.1";
+  if (pickupSimulatorEnabled && host !== "127.0.0.1" && host !== "localhost") throw new Error("Pickup simulator is restricted to a loopback host");
+  if (pickupSimulatorEnabled && (!pickupSimulatorToken || pickupSimulatorToken.length < 32)) throw new Error("PICKUP_SIMULATOR_TOKEN must be at least 32 characters when the simulator is enabled");
+
   return {
-    host: env.PARKING_API_HOST?.trim() || "127.0.0.1",
+    host,
     port,
     providerBaseUrl,
     providerApiKey: env.PARKING_PROVIDER_API_KEY?.trim() || null,
@@ -89,5 +97,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     pickupProximityMaxAgeMs: optionalPositive(env.PICKUP_PROXIMITY_MAX_AGE_SECONDS, "PICKUP_PROXIMITY_MAX_AGE_SECONDS") === null
       ? null
       : optionalPositive(env.PICKUP_PROXIMITY_MAX_AGE_SECONDS, "PICKUP_PROXIMITY_MAX_AGE_SECONDS")! * 1_000,
+    pickupSimulatorEnabled,
+    pickupSimulatorToken,
   };
 }

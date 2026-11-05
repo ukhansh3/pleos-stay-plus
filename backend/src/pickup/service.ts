@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import type { PickupLocationUpdate, PickupParticipantStatus, PickupSession, PickupSnapshot } from "./domain.js";
+import type { PickupEventPage, PickupLocationUpdate, PickupParticipantStatus, PickupSession, PickupSnapshot } from "./domain.js";
 import { PickupApiError } from "./domain.js";
 import type { PickupRepository, ProximityPolicy } from "./repository.js";
 
@@ -58,8 +58,20 @@ export class PickupService {
     return this.repository.updateParticipantLocation({ guestUid, participantId, location, now: this.isoNow(), proximity: this.proximityPolicy });
   }
 
+  updateSimulatedVehicleLocation(ownerUid: string, sessionId: string, location: PickupLocationUpdate, simulatedNow: string) {
+    return this.repository.updateVehicleLocation({ ownerUid, sessionId, location, now: simulatedNow, proximity: this.proximityPolicy });
+  }
+
+  updateSimulatedParticipantLocation(guestUid: string, participantId: string, location: PickupLocationUpdate, simulatedNow: string) {
+    return this.repository.updateParticipantLocation({ guestUid, participantId, location, now: simulatedNow, proximity: this.proximityPolicy });
+  }
+
   getSnapshot(actorUid: string, sessionId: string): Promise<PickupSnapshot> {
     return this.repository.getSnapshot({ actorUid, sessionId, now: this.isoNow() });
+  }
+
+  listEvents(actorUid: string, sessionId: string, afterRevision: number): Promise<PickupEventPage> {
+    return this.repository.listEvents({ actorUid, sessionId, afterRevision });
   }
 
   close(actorUid: string, sessionId: string, action: "COMPLETED" | "CANCELLED" | "ENDED", idempotencyKey: string, reason: string | null, driverOnly: boolean) {

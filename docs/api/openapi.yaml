@@ -261,6 +261,22 @@ paths:
         '401': {$ref: '#/components/responses/ApiFailure'}
         '404': {$ref: '#/components/responses/ApiFailure'}
         '410': {$ref: '#/components/responses/ApiFailure'}
+  /pickup/sessions/{sessionId}/events:
+    get:
+      tags: [Pickup]
+      summary: Retrieve durable Pickup events after a known revision
+      description: Used after Realtime disconnects and by the vehicle client to recover missed state independently of location uploads. Owners may read final events after close; revoked or closed participants cannot regain access.
+      parameters:
+        - {$ref: '#/components/parameters/sessionId'}
+        - name: afterRevision
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200': {description: Ordered events and the latest session revision, content: {application/json: {schema: {$ref: '#/components/schemas/PickupEventPage'}}}}
+        '400': {$ref: '#/components/responses/ApiFailure'}
+        '401': {$ref: '#/components/responses/ApiFailure'}
+        '404': {$ref: '#/components/responses/ApiFailure'}
   /pickup/sessions/{sessionId}/complete:
     post:
       tags: [Pickup]
@@ -470,6 +486,26 @@ components:
         proximityCandidate: {type: boolean}
         revision: {type: integer, minimum: 1}
         occurredAt: {type: string, format: date-time}
+    PickupEventType:
+      type: string
+      enum: [PARTICIPANT_STATUS, PROXIMITY_CANDIDATE, SESSION_COMPLETED, SESSION_CANCELLED, SESSION_ENDED]
+    PickupEvent:
+      type: object
+      required: [id, eventType, revision, occurredAt, payload]
+      properties:
+        id: {type: string, format: uuid}
+        eventType: {$ref: '#/components/schemas/PickupEventType'}
+        revision: {type: integer, minimum: 1}
+        occurredAt: {type: string, format: date-time}
+        payload: {type: object, additionalProperties: true}
+    PickupEventPage:
+      type: object
+      required: [events, latestRevision]
+      properties:
+        events:
+          type: array
+          items: {$ref: '#/components/schemas/PickupEvent'}
+        latestRevision: {type: integer, minimum: 1}
     ApiError:
       type: object
       required: [error]

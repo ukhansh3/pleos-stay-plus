@@ -141,7 +141,10 @@ export function buildApp(config: AppConfig, dependencies: AppDependencies = {}):
     pickupAuth = new SupabaseAuthVerifier(config.supabaseUrl, config.supabasePublishableKey, config.requestTimeoutMs);
   }
   if (pickupService && pickupAuth) {
-    registerPickupRoutes(app, pickupService, pickupAuth);
+    registerPickupRoutes(app, pickupService, pickupAuth, {
+      enabled: config.pickupSimulatorEnabled,
+      token: config.pickupSimulatorToken,
+    });
   } else {
     app.all("/api/v1/pickup/*", async () => {
       throw new PickupApiError(503, "PICKUP_BACKEND_NOT_CONFIGURED", "Pickup Supabase migration과 인증 설정이 필요합니다");

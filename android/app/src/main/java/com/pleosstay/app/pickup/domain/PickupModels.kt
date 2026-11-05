@@ -2,6 +2,7 @@ package com.pleosstay.app.pickup.domain
 
 enum class PickupSessionStatus { ACTIVE, COMPLETED, CANCELLED, ENDED, EXPIRED }
 enum class PickupParticipantStatus { JOINED, DEPARTED, NEARBY, ARRIVED, CANCELLED }
+enum class PickupEventType { PARTICIPANT_STATUS, PROXIMITY_CANDIDATE, SESSION_COMPLETED, SESSION_CANCELLED, SESSION_ENDED }
 
 data class PickupParticipant(
     val id: String,
@@ -41,4 +42,17 @@ data class PickupVehicleLocation(
     val longitude: Double,
     val observedAt: String,
     val confidence: Float?,
+)
+
+data class PickupEvent(
+    val id: String,
+    val eventType: PickupEventType,
+    val revision: Int,
+    val occurredAt: String,
+    val status: PickupParticipantStatus? = null,
+)
+
+data class PickupEventPage(
+    val events: List<PickupEvent>,
+    val latestRevision: Int,
 )

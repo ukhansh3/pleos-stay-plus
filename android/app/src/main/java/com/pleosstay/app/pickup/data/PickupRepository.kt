@@ -8,18 +8,19 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.nio.charset.StandardCharsets
-import java.util.UUID
 
 class PickupApiException(message: String, val statusCode: Int) : Exception(message)
 
 interface PickupRepository {
-    suspend fun create(waitingSessionId: String? = null): PickupSession
-    suspend fun issueInvitation(sessionId: String): PickupInvitation
+    suspend fun create(waitingSessionId: String? = null, idempotencyKey: String): PickupSession
+    suspend fun getSession(sessionId: String): PickupSession
+    suspend fun events(sessionId: String, afterRevision: Int): PickupEventPage
+    suspend fun issueInvitation(sessionId: String, idempotencyKey: String): PickupInvitation
     suspend fun sendVehicleLocation(sessionId: String, location: PickupVehicleLocation)
     suspend fun snapshot(sessionId: String): PickupSnapshot
-    suspend fun complete(sessionId: String): PickupSession
-    suspend fun cancel(sessionId: String, reason: String): PickupSession
-    suspend fun endLinkedWaiting(sessionId: String): PickupSession
+    suspend fun complete(sessionId: String, idempotencyKey: String): PickupSession
+    suspend fun cancel(sessionId: String, reason: String, idempotencyKey: String): PickupSession
+    suspend fun endLinkedWaiting(sessionId: String, idempotencyKey: String): PickupSession
 }
 
 class HttpPickupRepository(
@@ -28,14 +29,36 @@ class HttpPickupRepository(
 ) : PickupRepository {
     private val apiBase = baseUrl.trimEnd('/')
 
-    override suspend fun create(waitingSessionId: String?): PickupSession {
+    override suspend fun create(waitingSessionId: String?, idempotencyKey: String): PickupSession {
         val payload = JSONObject().put("locationSharingConsent", true)
         if (waitingSessionId == null) payload.put("waitingSessionId", JSONObject.NULL) else payload.put("waitingSessionId", waitingSessionId)
-        return request("POST", "/pickup/sessions", payload, true).toSession()
+        return request("POST", "/pickup/sessions", payload, idempotencyKey).toSession()
     }
 
-    override suspend fun issueInvitation(sessionId: String): PickupInvitation {
-        val json = request("POST", "/pickup/sessions/$sessionId/invitations", JSONObject(), true)
+    override suspend fun getSession(sessionId: String): PickupSession =
+        request("GET", "/pickup/sessions/$sessionId", JSONObject(), null).toSession()
+
+    override suspend fun events(sessionId: String, afterRevision: Int): PickupEventPage {
+        val json = request("GET", "/pickup/sessions/$sessionId/events?afterRevision=$afterRevision", JSONObject(), null)
+        val items = json.optJSONArray("events") ?: org.json.JSONArray()
+        return PickupEventPage(
+            events = (0 until items.length()).map { index ->
+                val item = items.getJSONObject(index)
+                val payload = item.optJSONObject("payload")
+                PickupEvent(
+                    id = item.getString("id"),
+                    eventType = PickupEventType.valueOf(item.getString("eventType")),
+                    revision = item.getInt("revision"),
+                    occurredAt = item.getString("occurredAt"),
+                    status = payload?.optString("status")?.takeIf(String::isNotBlank)?.let(PickupParticipantStatus::valueOf),
+                )
+            },
+            latestRevision = json.getInt("latestRevision"),
+        )
+    }
+
+    override suspend fun issueInvitation(sessionId: String, idempotencyKey: String): PickupInvitation {
+        val json = request("POST", "/pickup/sessions/$sessionId/invitations", JSONObject(), idempotencyKey)
         return PickupInvitation(json.getString("invitationId"), json.getString("shareUrl"), json.getString("expiresAt"))
     }
 
@@ -46,11 +69,11 @@ class HttpPickupRepository(
             .put("observedAt", location.observedAt)
             .put("source", "REAL")
         location.confidence?.let { payload.put("confidence", it.toDouble()) }
-        request("PUT", "/pickup/sessions/$sessionId/vehicle-location", payload, false)
+        request("PUT", "/pickup/sessions/$sessionId/vehicle-location", payload, null)
     }
 
     override suspend fun snapshot(sessionId: String): PickupSnapshot {
-        val json = request("GET", "/pickup/sessions/$sessionId/snapshot", JSONObject(), false)
+        val json = request("GET", "/pickup/sessions/$sessionId/snapshot", JSONObject(), null)
         val vehicle = json.optJSONObject("vehicleLocation")
         return PickupSnapshot(
             session = json.getJSONObject("session").toSession(),
@@ -61,16 +84,16 @@ class HttpPickupRepository(
         )
     }
 
-    override suspend fun complete(sessionId: String): PickupSession =
-        request("POST", "/pickup/sessions/$sessionId/complete", JSONObject(), true).toSession()
+    override suspend fun complete(sessionId: String, idempotencyKey: String): PickupSession =
+        request("POST", "/pickup/sessions/$sessionId/complete", JSONObject(), idempotencyKey).toSession()
 
-    override suspend fun cancel(sessionId: String, reason: String): PickupSession =
-        request("POST", "/pickup/sessions/$sessionId/cancel", JSONObject().put("reason", reason), true).toSession()
+    override suspend fun cancel(sessionId: String, reason: String, idempotencyKey: String): PickupSession =
+        request("POST", "/pickup/sessions/$sessionId/cancel", JSONObject().put("reason", reason), idempotencyKey).toSession()
 
-    override suspend fun endLinkedWaiting(sessionId: String): PickupSession =
-        request("POST", "/pickup/sessions/$sessionId/end", JSONObject(), true).toSession()
+    override suspend fun endLinkedWaiting(sessionId: String, idempotencyKey: String): PickupSession =
+        request("POST", "/pickup/sessions/$sessionId/end", JSONObject(), idempotencyKey).toSession()
 
-    private suspend fun request(method: String, path: String, payload: JSONObject, idempotent: Boolean): JSONObject = withContext(Dispatchers.IO) {
+    private suspend fun request(method: String, path: String, payload: JSONObject, idempotencyKey: String?): JSONObject = withContext(Dispatchers.IO) {
         val session = identity.validSession()
         val connection = URI("$apiBase$path").toURL().openConnection() as HttpURLConnection
         try {
@@ -80,7 +103,7 @@ class HttpPickupRepository(
             connection.doOutput = method != "GET"
             connection.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
             connection.setRequestProperty("Content-Type", "application/json")
-            if (idempotent) connection.setRequestProperty("Idempotency-Key", UUID.randomUUID().toString())
+            idempotencyKey?.let { connection.setRequestProperty("Idempotency-Key", it) }
             if (method != "GET") connection.outputStream.use { it.write(payload.toString().toByteArray(StandardCharsets.UTF_8)) }
             val status = connection.responseCode
             if (status == 204) return@withContext JSONObject()
