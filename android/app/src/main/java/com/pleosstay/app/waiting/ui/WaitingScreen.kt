@@ -33,6 +33,7 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
             val active = state.active
             if (active == null) {
                 item {
+                    Text("진행 중인 대기 없음")
                     Text(selectedPlace?.name ?: "Parking 장소 선택 없이 대기")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         policy.presets.forEach { value -> TextButton(onClick = { minutes = value.toString() }) { Text("${value}분") } }
@@ -44,13 +45,13 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
             } else {
                 val time = WaitingTime.calculate(active, state.now)
                 item {
-                    Text("대기 중 · ${active.place?.name ?: "선택 장소 없음"}")
+                    Text(active.place?.name ?: "선택 장소 없음")
                     Text("경과 ${time.elapsedMillis.durationLabel()}")
                     when {
-                        time.overtimeMillis > 0 -> Text("예정시간 초과 ${time.overtimeMillis.durationLabel()}", color = MaterialTheme.colorScheme.error)
-                        time.remainingMillis == 0L -> Text("예정 종료시간입니다. 대기는 직접 종료할 때까지 유지됩니다.")
-                        time.remainingMillis <= 300_000 -> Text("예정 종료까지 5분 이내 · 남은 시간 ${time.remainingMillis.durationLabel()}")
-                        else -> Text("남은 예정시간 ${time.remainingMillis.durationLabel()}")
+                        time.overtimeMillis > 0 -> Text("대기 시간 초과 · ${time.overtimeMillis.durationLabel()}", color = MaterialTheme.colorScheme.error)
+                        time.remainingMillis == 0L -> Text("대기 중 · 남은 시간 0분")
+                        time.remainingMillis <= 300_000 -> Text("대기 중 · 예정 종료까지 5분 이내 · 남은 시간 ${time.remainingMillis.durationLabel()}")
+                        else -> Text("대기 중 · 남은 시간 ${time.remainingMillis.durationLabel()}")
                     }
                     OutlinedTextField(extension, { extension = it }, label = { Text("추가할 시간(분)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
@@ -68,7 +69,7 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
                     Column(Modifier.padding(12.dp)) {
                         Text(session.place?.name ?: "장소 선택 없음")
                         Text("시작 ${session.startedAt.dateLabel()}")
-                        Text("종료 ${session.endedAt?.dateLabel()} · ${if (session.endReason == EndReason.DRIVING) "주행 확인" else "직접 종료"}")
+                        Text("대기 종료 ${session.endedAt?.dateLabel()} · ${if (session.endReason == EndReason.DRIVING) "주행 확인" else "직접 종료"}")
                         Text("실제 대기 ${WaitingTime.calculate(session, state.now).elapsedMillis.durationLabel()}")
                     }
                 }

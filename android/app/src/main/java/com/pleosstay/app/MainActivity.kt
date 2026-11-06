@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import android.content.Context
 import com.pleosstay.app.waiting.data.*
 import com.pleosstay.app.waiting.domain.WaitingPlace
+import com.pleosstay.app.waiting.domain.WaitingSession
 import com.pleosstay.app.waiting.domain.WaitingStatus
 import com.pleosstay.app.waiting.safety.PlatformWaitingSafetyGateway
 import com.pleosstay.app.waiting.safety.WaitingDrivingMonitor
@@ -43,7 +44,7 @@ import com.pleosstay.app.pickup.ui.PickupScreen
 import com.pleosstay.app.pickup.ui.PickupViewModel
 
 class MainActivity : ComponentActivity() {
-    private var pendingPickupWaitingSessionId: String? = null
+
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
@@ -87,9 +88,8 @@ class MainActivity : ComponentActivity() {
     ) { granted ->
         if (granted) parkingViewModel.searchNearby() else parkingViewModel.onLocationPermissionDenied()
     }
-    private val pickupLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        pickupViewModel.start(pendingPickupWaitingSessionId)
-        pendingPickupWaitingSessionId = null
+    private val pickupLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        pickupViewModel.start()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
                 val pickupState by pickupViewModel.state.collectAsState()
                 LaunchedEffect(waitingState.sessions, pickupState.session) {
                     val linkedId = pickupState.session?.waitingSessionId
-                    if (linkedId != null && waitingState.sessions.any { it.id == linkedId && it.status == WaitingStatus.ENDED }) {
+                    if (hasEndedLinkedWaiting(linkedId, waitingState.sessions)) {
                         pickupViewModel.endLinkedWaiting()
                     }
                 }
@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
                             val place = parkingState.selected?.let { WaitingPlace(it.id, it.name) }
                             WaitingScreen(waitingModel, place)
                         }
-                        2 -> PickupScreen(pickupViewModel, { requestPickupStart(waitingState.active?.id) })
+                        2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
                         3 -> RealtimeEntry(applicationContext, waitingDependencies.safety)
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
@@ -129,19 +129,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val vehiclePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        // Reconnect after either result; denied permission remains fail-closed.
-        waitingDependencies.safety.stop()
-        waitingDependencies.safety.start()
+    private val vehiclePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            // Reconnect to subscribe to properties newly available after the permission grant.
+            waitingDependencies.safety.stop()
+            waitingDependencies.safety.start()
+        }
     }
 
     private fun requestVehicleInformation() {
         if (packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE) &&
             ContextCompat.checkSelfPermission(this, "android.car.permission.CAR_SPEED") != PackageManager.PERMISSION_GRANTED) {
             vehiclePermissionLauncher.launch("android.car.permission.CAR_SPEED")
-        } else {
-            waitingDependencies.safety.stop()
-            waitingDependencies.safety.start()
         }
     }
     private fun requestNearbySearch() {
@@ -151,16 +150,17 @@ class MainActivity : ComponentActivity() {
             locationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }
     }
-    private fun requestPickupStart(waitingSessionId: String?) {
-        pendingPickupWaitingSessionId = waitingSessionId
+    private fun requestPickupStart() {
         if (ContextCompat.checkSelfPermission(this, FUSED_LOCATION_PERMISSION) == PackageManager.PERMISSION_GRANTED) {
-            pickupViewModel.start(waitingSessionId)
-            pendingPickupWaitingSessionId = null
+            pickupViewModel.start()
         } else {
             pickupLocationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }
     }
 }
+
+internal fun hasEndedLinkedWaiting(linkedId: String?, sessions: List<WaitingSession>): Boolean =
+    linkedId != null && sessions.any { it.id == linkedId && it.status == WaitingStatus.ENDED }
 
 // App-process scoped DB/gateway: activity recreation must not create a second owner.
 private class WaitingDependencies(context: Context) {

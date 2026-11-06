@@ -1,5 +1,6 @@
 package com.pleosstay.app.pickup
 
+import com.pleosstay.app.hasEndedLinkedWaiting
 import com.pleosstay.app.parking.location.CurrentLocationGateway
 import com.pleosstay.app.parking.location.CurrentLocationResult
 import com.pleosstay.app.parking.location.VehicleLocation
@@ -8,6 +9,9 @@ import com.pleosstay.app.pickup.domain.*
 import com.pleosstay.app.pickup.tts.PickupSpeechEvent
 import com.pleosstay.app.pickup.tts.PickupTtsGateway
 import com.pleosstay.app.pickup.ui.PickupViewModel
+import com.pleosstay.app.waiting.domain.EndReason
+import com.pleosstay.app.waiting.domain.WaitingPolicy
+import com.pleosstay.app.waiting.domain.WaitingTime
 import com.pleosstay.app.waiting.safety.DrivingEventBuffer
 import com.pleosstay.app.waiting.safety.VehicleMotion
 import com.pleosstay.app.waiting.safety.WaitingSafety
@@ -79,6 +83,55 @@ class PickupViewModelTest {
         advanceTimeBy(5_001)
         runCurrent()
         assertTrue(repository.snapshotCalls > snapshots)
+        viewModel.releaseResources()
+    }
+
+    @Test fun independentPickupSurvivesWaitingOvertimeAndManualEnd() = runTest(dispatcher) {
+        val repository = FakePickupRepository()
+        val viewModel = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), ParkedSafety(), RecordingTts())
+        val policy = WaitingPolicy()
+        val waiting = policy.start(30, 0)
+        val extended = policy.extend(waiting, 15)
+        val overtime = extended.plannedEndAt + 60_000
+
+        viewModel.start()
+        runCurrent()
+        assertEquals(listOf<String?>(null), repository.createWaitingIds)
+        assertEquals(PickupSessionStatus.ACTIVE, viewModel.state.value.session?.status)
+        val linkedId = viewModel.state.value.session?.waitingSessionId
+
+        assertTrue(WaitingTime.calculate(extended, overtime).overtimeMillis > 0)
+        assertFalse(hasEndedLinkedWaiting(linkedId, listOf(extended)))
+        assertFalse(hasEndedLinkedWaiting(linkedId, listOf(policy.end(extended, overtime, EndReason.MANUAL))))
+        viewModel.endLinkedWaiting()
+        runCurrent()
+        assertEquals(0, repository.linkedEndCalls)
+        assertEquals(PickupSessionStatus.ACTIVE, viewModel.state.value.session?.status)
+
+        viewModel.complete()
+        runCurrent()
+        assertEquals(PickupSessionStatus.COMPLETED, viewModel.state.value.session?.status)
+        viewModel.releaseResources()
+    }
+
+    @Test fun linkedPickupClosesOnlyForItsEndedWaiting() = runTest(dispatcher) {
+        val repository = FakePickupRepository()
+        val viewModel = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), ParkedSafety(), RecordingTts())
+        val policy = WaitingPolicy()
+        val waiting = policy.start(30, 0)
+        val unrelated = policy.end(policy.start(30, 0), 1, EndReason.MANUAL)
+
+        viewModel.start(waiting.id)
+        runCurrent()
+        val linkedId = viewModel.state.value.session?.waitingSessionId
+        assertEquals(waiting.id, linkedId)
+        assertFalse(hasEndedLinkedWaiting(linkedId, listOf(waiting, unrelated)))
+        assertTrue(hasEndedLinkedWaiting(linkedId, listOf(policy.end(waiting, 1, EndReason.MANUAL))))
+
+        viewModel.endLinkedWaiting()
+        runCurrent()
+        assertEquals(1, repository.linkedEndCalls)
+        assertEquals(PickupSessionStatus.ENDED, viewModel.state.value.session?.status)
         viewModel.releaseResources()
     }
 
@@ -161,16 +214,20 @@ class PickupViewModelTest {
 }
 
 private class FakePickupRepository : PickupRepository {
-    private val baseSession = PickupSession("session", null, PickupSessionStatus.ACTIVE, true, null, null, 0, "2026-11-04T00:00:00Z", null)
+    private var baseSession = PickupSession("session", null, PickupSessionStatus.ACTIVE, true, null, null, 0, "2026-11-04T00:00:00Z", null)
     var eventResult = PickupEventPage(emptyList(), 0)
     var snapshotCalls = 0
     var invitationFailures = 0
     var createCalls = 0
     val invitationKeys = mutableListOf<String>()
+    val createWaitingIds = mutableListOf<String?>()
+    var linkedEndCalls = 0
 
     override suspend fun create(waitingSessionId: String?, idempotencyKey: String): PickupSession {
         createCalls++
-        return baseSession.copy(waitingSessionId = waitingSessionId)
+        createWaitingIds += waitingSessionId
+        baseSession = baseSession.copy(waitingSessionId = waitingSessionId)
+        return baseSession
     }
     override suspend fun getSession(sessionId: String) = baseSession
     override suspend fun events(sessionId: String, afterRevision: Int) = eventResult
@@ -186,7 +243,10 @@ private class FakePickupRepository : PickupRepository {
     }
     override suspend fun complete(sessionId: String, idempotencyKey: String) = baseSession.copy(status = PickupSessionStatus.COMPLETED, revision = 1)
     override suspend fun cancel(sessionId: String, reason: String, idempotencyKey: String) = baseSession.copy(status = PickupSessionStatus.CANCELLED, revision = 1)
-    override suspend fun endLinkedWaiting(sessionId: String, idempotencyKey: String) = baseSession.copy(status = PickupSessionStatus.ENDED, revision = 1)
+    override suspend fun endLinkedWaiting(sessionId: String, idempotencyKey: String): PickupSession {
+        linkedEndCalls++
+        return baseSession.copy(status = PickupSessionStatus.ENDED, revision = 1)
+    }
 }
 
 private class SequencedLocationGateway(vararg results: CurrentLocationResult) : CurrentLocationGateway {
