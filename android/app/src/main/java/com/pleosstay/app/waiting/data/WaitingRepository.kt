@@ -13,6 +13,12 @@ import kotlinx.coroutines.withContext
 
 class WaitingRefreshException(cause: Exception) : IllegalStateException("저장 상태 재조회 실패. 변경을 반복하지 말고 복구를 기다려 주세요", cause)
 
+internal class WaitingWriteUncertainException(cause: Exception) :
+    IllegalStateException("대기 저장 결과를 확인하지 못했습니다. 다시 시도하기 전에 기록을 복구해 주세요", cause)
+
+internal class WaitingSafetyException(message: String) : IllegalStateException(message)
+internal class WaitingRecoveryRequiredException(message: String) : IllegalStateException(message)
+
 interface WaitingStore {
     fun all(): List<WaitingSession>
     fun create(session: WaitingSession)
@@ -53,6 +59,7 @@ class LocalWaitingRepository(
 
     private suspend fun <T> locked(action: () -> T): T = withContext(dispatcher) { mutex.withLock { action() } }
     private var refreshRequired = false
+    private var restored = false
     private fun publish() {
         try {
             mutableSessions.value = store.all()
@@ -63,28 +70,77 @@ class LocalWaitingRepository(
         }
     }
     private fun requireUsable() {
-        check(!refreshRequired) { "저장된 상태를 다시 확인한 뒤 조작해 주세요" }
-        check(pending == null && journal.read() == null) { "주행 종료 기록을 복구한 뒤 다시 시도해 주세요" }
-        check(safety().canUse) { "주차 상태 및 플랫폼 사용 허용을 확인할 수 없습니다" }
+        val state = safety()
+        if (!state.canUse) throw WaitingSafetyException(state.message)
+        if (refreshRequired || pending != null || journal.read() != null) {
+            throw WaitingRecoveryRequiredException("대기 기록을 복구한 뒤 다시 시도해 주세요")
+        }
     }
-    override suspend fun restore() = locked {
-        pending = pending ?: journal.read()
-        applyPending()
-        publish()
-    }
+    override suspend fun restore() = recover()
     override suspend fun start(minutes: Int, place: WaitingPlace?) = locked {
         requireUsable()
         check(store.all().none { it.status == WaitingStatus.ACTIVE }) { "이미 대기 중입니다" }
-        val session = policy.start(minutes, clock.now(), place)
-        requireUsable()
-        store.create(session)
-        publish()
+        create(minutes, place)
+        Unit
     }
     override suspend fun extend(id: String, minutes: Int) = locked {
         requireUsable()
         val session = store.all().firstOrNull { it.id == id } ?: error("세션을 찾을 수 없습니다")
-        store.extend(policy.extend(session, minutes), session.revision)
+        extend(session, minutes)
+        Unit
+    }
+
+    internal val modeDurationRange get() = policy.minimumMinutes..policy.maximumMinutes
+
+    // Mode decisions share the same lock as manual starts, extensions and driving-end recovery.
+    internal suspend fun <T> withModeWaiting(action: ModeWaitingScope.() -> T): T = locked {
+        requireUsable()
+        if (!restored) throw WaitingRecoveryRequiredException("대기 기록 복구가 필요합니다")
+        val active = store.all().firstOrNull { it.status == WaitingStatus.ACTIVE }
+        ModeWaitingScope(active).action().also { requireUsable() }
+    }
+
+    internal inner class ModeWaitingScope internal constructor(val active: WaitingSession?) {
+        fun now(): Long = clock.now()
+        fun create(minutes: Int, place: WaitingPlace?): WaitingSession =
+            this@LocalWaitingRepository.create(minutes, place, ::saveModeWrite)
+
+        fun extend(session: WaitingSession, minutes: Int): WaitingSession =
+            this@LocalWaitingRepository.extend(session, minutes, ::saveModeWrite)
+    }
+
+    private fun create(
+        minutes: Int,
+        place: WaitingPlace?,
+        write: (() -> Unit) -> Unit = { it() },
+    ): WaitingSession {
+        val session = policy.start(minutes, clock.now(), place)
+        requireUsable()
+        write { store.create(session) }
         publish()
+        return mutableSessions.value.single { it.id == session.id }
+    }
+
+    private fun extend(
+        session: WaitingSession,
+        minutes: Int,
+        write: (() -> Unit) -> Unit = { it() },
+    ): WaitingSession {
+        val updated = policy.extend(session, minutes)
+        requireUsable()
+        write { store.extend(updated, session.revision) }
+        publish()
+        return mutableSessions.value.single { it.id == session.id }
+    }
+
+    private fun saveModeWrite(write: () -> Unit) {
+        try {
+            write()
+        } catch (error: Exception) {
+            // Reconcile an uncertain outcome before accepting another write.
+            refreshRequired = true
+            throw WaitingWriteUncertainException(error)
+        }
     }
     override suspend fun end(id: String) = locked {
         requireUsable()
@@ -100,10 +156,14 @@ class LocalWaitingRepository(
         applyPending()
         publish()
     }
-    override suspend fun retryPendingEnd() = locked {
+    override suspend fun retryPendingEnd() = recover()
+
+    private suspend fun recover() = locked {
+        restored = false
         pending = pending ?: journal.read()
         applyPending()
         publish()
+        restored = true
     }
     private fun applyPending() {
         val command = pending ?: return

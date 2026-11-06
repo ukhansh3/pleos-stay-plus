@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import android.content.Context
 import com.pleosstay.app.waiting.data.*
+import com.pleosstay.app.modes.ModeStartManager
 import com.pleosstay.app.waiting.domain.WaitingPlace
 import com.pleosstay.app.waiting.domain.WaitingSession
 import com.pleosstay.app.waiting.domain.WaitingStatus
@@ -46,6 +47,7 @@ import com.pleosstay.app.pickup.ui.PickupViewModel
 class MainActivity : ComponentActivity() {
 
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
+    internal val modeStartManager get() = waitingDependencies.modeStartManager
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
     }
@@ -172,6 +174,7 @@ private class WaitingDependencies(context: Context) {
     )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val monitor = WaitingDrivingMonitor(repository, safety.drivingEvents, scope)
+    val modeStartManager = ModeStartManager(repository, safety)
     companion object {
         @Volatile private var instance: WaitingDependencies? = null
         fun get(context: Context): WaitingDependencies = instance ?: synchronized(this) {
