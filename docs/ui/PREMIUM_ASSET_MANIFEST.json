@@ -1,0 +1,88 @@
+{
+  "generated_on": "2026-11-07",
+  "tool": "built-in image_gen",
+  "approval": "User selected the eight new rear-car/sunset and navy card images for application.",
+  "purpose": "Decorative imagery only; contains no live vehicle, parking, navigation, pairing or QR data.",
+  "assets": [
+    {
+      "asset": "hero_sunset_rear.png",
+      "source_generated_filename": "exec-c8e60275-4016-4f96-9690-0ffc3199a6f7.png",
+      "pixels": [
+        2172,
+        724
+      ],
+      "bytes": 1551079,
+      "sha256": "a19cc030a981e4c0d82c38ffe99d1d010dd15c6685a35a052edf4185dccef96d"
+    },
+    {
+      "asset": "rest_pillow.png",
+      "source_generated_filename": "exec-8534d9bd-ee8d-4ea4-b4fd-b8d2d325ec58.png",
+      "pixels": [
+        1448,
+        1086
+      ],
+      "bytes": 2093981,
+      "sha256": "5d2a3b88d983ad8f978070222be4ce692a178a858d5ec055136ab6ac637112c7"
+    },
+    {
+      "asset": "study_book.png",
+      "source_generated_filename": "exec-88e9d842-c083-469c-8a58-90c9048a3be6.png",
+      "pixels": [
+        1448,
+        1086
+      ],
+      "bytes": 1666035,
+      "sha256": "930c745375c31f2cfdbf6a26866b7680ecdc6e0ecd289adb5aa0f505ac11ba4a"
+    },
+    {
+      "asset": "work_laptop.png",
+      "source_generated_filename": "exec-abeb315d-cb6d-4aa5-b9a0-b54e409e1d46.png",
+      "pixels": [
+        1448,
+        1086
+      ],
+      "bytes": 1643227,
+      "sha256": "663e93039e507e76fe5bf5eac813bc2df92a0106c95be64d8322a66ff722eb5f"
+    },
+    {
+      "asset": "entertainment_visual.png",
+      "source_generated_filename": "exec-27917c06-f08a-4191-aa47-75f9be1a70d1.png",
+      "pixels": [
+        1448,
+        1086
+      ],
+      "bytes": 1637688,
+      "sha256": "d6d51d22c0dd35561f47f23f8997ae3453c855f79b43271eba5fbc4be218c13b"
+    },
+    {
+      "asset": "parking_visual.png",
+      "source_generated_filename": "exec-ccfd04fb-28d0-4a21-b2c9-299432fb9036.png",
+      "pixels": [
+        1774,
+        887
+      ],
+      "bytes": 2174243,
+      "sha256": "77a2ef7cb92f77af33cdb27e41202dd87da7366398b32a71bd8cea31ddaa78db"
+    },
+    {
+      "asset": "pickup_visual.png",
+      "source_generated_filename": "exec-95f10c7d-4bb2-4586-b617-37f6ec708f13.png",
+      "pixels": [
+        1774,
+        887
+      ],
+      "bytes": 1587262,
+      "sha256": "d7084a070a86addb0a4ef89736c78a07b62818910e2dfcdea6d4a76d53167fc6"
+    },
+    {
+      "asset": "files_visual.png",
+      "source_generated_filename": "exec-659dca9e-5947-429e-825d-4d7711a9210f.png",
+      "pixels": [
+        1774,
+        887
+      ],
+      "bytes": 1656815,
+      "sha256": "39181ef0f906c26d5b157a6c3653e6acebdef61c930c48a121178ee2dd76105e"
+    }
+  ]
+}

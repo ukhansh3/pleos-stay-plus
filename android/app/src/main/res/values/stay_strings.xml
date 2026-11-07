@@ -1,0 +1,30 @@
+<resources>
+    <string name="stay_home">홈</string>
+    <string name="stay_parking_group">주차·대기</string>
+    <string name="stay_waiting">대기 관리</string>
+    <string name="stay_pickup">픽업 공유</string>
+    <string name="stay_files">파일 작업</string>
+    <string name="stay_modes">대기 모드</string>
+    <string name="stay_back">‹  뒤로</string>
+    <string name="stay_parking_search">주차장 검색</string>
+    <string name="stay_parking_hint">현재 위치 주변 대기 장소 찾기</string>
+    <string name="stay_pickup_hint">QR 초대와 참가자 상태 확인</string>
+    <string name="stay_files_hint">차량 ↔ PC 수동 파일 전송</string>
+    <string name="stay_tagline">잠깐의 대기도, 더 가치 있는 시간으로</string>
+    <string name="stay_no_waiting">대기 세션 없음</string>
+    <string name="stay_waiting_active">대기 중</string>
+    <string name="stay_no_place">선택한 대기 장소 없음</string>
+    <string name="stay_start_waiting">대기 세션 시작  ›</string>
+    <string name="stay_manage_waiting">대기 관리  ›</string>
+    <string name="stay_rest">휴식</string>
+    <string name="stay_rest_hint">편안하게 쉬기</string>
+    <string name="stay_study">공부</string>
+    <string name="stay_study_hint">집중해서 학습하기</string>
+    <string name="stay_work">업무</string>
+    <string name="stay_work_hint">효율적으로 일하기</string>
+    <string name="stay_entertainment">엔터테인먼트</string>
+    <string name="stay_entertainment_hint">영상, 음악 등 즐기기</string>
+    <string name="stay_preparing">준비 중</string>
+    <string name="stay_mode_notice">휴식 타이머, 학습자료 열람·메모, DOCX 문서 작업을 이용할 수 있습니다. 공부·업무는 자료함 인증과 PIN 확인이 필요합니다. 엔터테인먼트는 준비 중입니다.</string>
+    <string name="stay_settings">설정</string>
+</resources>

@@ -1,15 +1,9 @@
 package com.pleosstay.app
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import com.pleosstay.app.rest.RestAlarm
 import com.pleosstay.app.rest.RestAudio
 import com.pleosstay.app.rest.RestController
@@ -53,6 +47,7 @@ import com.pleosstay.app.parking.navigation.PleosNavigationGateway
 import com.pleosstay.app.parking.ui.ParkingScreen
 import com.pleosstay.app.parking.ui.ParkingViewModel
 import com.pleosstay.app.ui.theme.PleosStayPlusTheme
+import com.pleosstay.app.ui.premium.*
 import com.pleosstay.app.pickup.auth.SupabaseRestDriverIdentityProvider
 import com.pleosstay.app.pickup.data.HttpPickupRepository
 import com.pleosstay.app.pickup.tts.PleosPickupTtsGateway
@@ -147,69 +142,85 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PleosStayPlusTheme {
-                var section by rememberSaveable { mutableIntStateOf(0) }
                 var workSaving by remember { mutableStateOf(false) }
                 var workUnexported by remember { mutableStateOf(false) }
-                var nextSection by remember { mutableStateOf<Int?>(null) }
-                fun navigate(target:Int) {
-                    if(section==6&&target!=6&&(workSaving||workUnexported)) nextSection=target
-                    else {section=target;if(target!=0)requestVehicleInformation()}
-                }
+                var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
                 val documentVisible by documentForeground.collectAsState()
-                DisposableEffect(section) {
-                    if (section == 5 || section == 6) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    onDispose {
-                        if (section == 5 || section == 6) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    }
-                }
-                LaunchedEffect(openRest) {
-                    if (openRest) { section = 4; openRest = false }
-                }
                 val parkingState by parkingViewModel.state.collectAsState()
                 val waitingState by waitingModel.state.collectAsState()
                 val pickupState by pickupViewModel.state.collectAsState()
                 LaunchedEffect(waitingState.sessions, pickupState.session) {
                     val linkedId = pickupState.session?.waitingSessionId
-                    if (hasEndedLinkedWaiting(linkedId, waitingState.sessions)) {
-                        pickupViewModel.endLinkedWaiting()
-                    }
+                    if (hasEndedLinkedWaiting(linkedId, waitingState.sessions)) pickupViewModel.endLinkedWaiting()
                 }
-                Column {
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
-                        TextButton(onClick = { navigate(0) }) { Text("장소 검색") }
-                        TextButton(onClick = { navigate(1) }) { Text("대기 관리") }
-                        TextButton(onClick = { navigate(2) }) { Text("픽업") }
-                        TextButton(onClick = { navigate(3) }) { Text("파일 전송") }
-                        TextButton(onClick = { navigate(4) }) { Text("휴식") }
-                        TextButton(onClick = { navigate(5) }) { Text("공부") }
-                        TextButton(onClick = { navigate(6) }) { Text("업무") }
-                    }
-                    when (section) {
-                        1 -> {
-                            val place = parkingState.selected?.let { WaitingPlace(it.id, it.name) }
-                            WaitingScreen(waitingModel, place)
+                StayAppShell(
+                    onEnter = { route -> if (route != StayRoute.HOME) requestVehicleInformation() },
+                    requestedRoute = if (openRest) StayRoute.REST else null,
+                    onRequestedRouteHandled = { openRest = false },
+                    navigationGuard = { from, _, proceed ->
+                        if (from == StayRoute.WORK && (workSaving || workUnexported)) pendingNavigation = proceed
+                        else {
+                            workSaving = false
+                            workUnexported = false
+                            proceed()
                         }
-                        2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
-                        3, 5, 6 -> RealtimeEntry(applicationContext, waitingDependencies.safety, documentVisible,
-                            managedWorkspace = if (section == 6) { model, endpoint ->
-                                rememberProtectedWorkContent(applicationContext,model,endpoint,modeStartManager,
-                                    waitingDependencies.safety,documentVisible,{navigate(3)},{navigate(1)},{navigate(0)},
-                                    {saving,dirty->workSaving=saving;workUnexported=dirty})
-                            } else null) { model, endpoint ->
-                            if (section == 3) com.pleosstay.app.realtime.FileTransferScreen(model)
+                    },
+                ) { route, navigate ->
+                    DisposableEffect(route) {
+                        val document = route == StayRoute.STUDY || route == StayRoute.WORK
+                        if (document) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        onDispose { if (document) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+                    }
+                    when (route) {
+                        StayRoute.HOME -> StayHomeScreen(waitingState, pickupState, navigate)
+                        StayRoute.PARKING -> ParkingScreen(parkingViewModel, ::requestNearbySearch,
+                            onWaiting = { navigate(StayRoute.WAITING) })
+                        StayRoute.WAITING -> WaitingScreen(waitingModel,
+                            parkingState.selected?.let { WaitingPlace(it.id, it.name) },
+                            onRest = { navigate(StayRoute.REST) },
+                            onStudy = { navigate(StayRoute.STUDY) },
+                            onWork = { navigate(StayRoute.WORK) })
+                        StayRoute.PICKUP -> PickupScreen(pickupViewModel, ::requestPickupStart)
+                        StayRoute.FILES, StayRoute.STUDY, StayRoute.WORK -> RealtimeEntry(
+                            applicationContext, waitingDependencies.safety, documentVisible,
+                            managedWorkspace = if (route == StayRoute.WORK) { model, endpoint ->
+                                rememberProtectedWorkContent(applicationContext, model, endpoint, modeStartManager,
+                                    waitingDependencies.safety, documentVisible,
+                                    { navigate(StayRoute.FILES) }, { navigate(StayRoute.WAITING) }, { navigate(StayRoute.HOME) },
+                                    { saving, dirty -> workSaving = saving; workUnexported = dirty })
+                            } else null,
+                        ) { model, endpoint ->
+                            if (route == StayRoute.FILES) com.pleosstay.app.realtime.FileTransferScreen(model)
                             else DocumentWorkspaceEntry(applicationContext, model, endpoint, modeStartManager,
-                                waitingDependencies.safety, section == 5, documentVisible, onOpenFiles = { section = 3 },
-                                onOpenWaiting = { section = 1 }, onHome = { section = 0 })
+                                waitingDependencies.safety, study = true, foreground = documentVisible,
+                                onOpenFiles = { navigate(StayRoute.FILES) },
+                                onOpenWaiting = { navigate(StayRoute.WAITING) },
+                                onHome = { navigate(StayRoute.HOME) })
                         }
-                        4 -> RestScreen(waitingDependencies.rest, onRecoverWaiting = waitingModel::reload) { section = 0 }
-                        else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
+                        StayRoute.REST -> RestScreen(waitingDependencies.rest,
+                            onRecoverWaiting = waitingModel::reload) { navigate(StayRoute.HOME) }
+                        StayRoute.MODES -> StayModeMenuScreen(
+                            onRest = { navigate(StayRoute.REST) },
+                            onStudy = { navigate(StayRoute.STUDY) },
+                            onWork = { navigate(StayRoute.WORK) })
+                        StayRoute.SETTINGS -> StaySettingsScreen()
                     }
                 }
-                if(nextSection!=null&&documentVisible) AlertDialog(onDismissRequest={nextSection=null},
-                    title={Text(if(workSaving)"초안 저장 중" else "외부 파일로 내보내지 않은 변경")},
-                    text={Text("저장이 끝난 암호화 DOCX 초안을 보관하고 이동합니다. Waiting과 파일 연결은 유지됩니다.")},
-                    confirmButton={TextButton(enabled=!workSaving,onClick={nextSection?.let{section=it;if(it!=0)requestVehicleInformation()};nextSection=null;workSaving=false;workUnexported=false}){Text("초안 보관 후 이동")}},
-                    dismissButton={TextButton(onClick={nextSection=null}){Text("계속 편집")}})
+                if (pendingNavigation != null && documentVisible) AlertDialog(
+                    onDismissRequest = { pendingNavigation = null },
+                    title = { Text(if (workSaving) "초안 저장 중" else "외부 파일로 내보내지 않은 변경") },
+                    text = { Text("저장이 끝난 암호화 DOCX 초안을 보관하고 이동합니다. Waiting과 파일 연결은 유지됩니다.") },
+                    confirmButton = {
+                        TextButton(enabled = !workSaving, onClick = {
+                            val proceed = pendingNavigation
+                            pendingNavigation = null
+                            workSaving = false
+                            workUnexported = false
+                            proceed?.invoke()
+                        }) { Text("초안 보관 후 이동") }
+                    },
+                    dismissButton = { TextButton(onClick = { pendingNavigation = null }) { Text("계속 편집") } },
+                )
             }
         }
     }

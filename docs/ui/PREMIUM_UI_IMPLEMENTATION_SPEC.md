@@ -1,5 +1,7 @@
 # Pleos Stay+ Premium UI — 구현 명세서 v1.0
 
+> 2026-11-07 구현 갱신: 사용자가 선택한 차량 후면·석양/네이비 이미지8장을 적용해 보존된 Android UI를 최신 dev 기능에 연결했다. Rest·Study·Work(DOCX)는 실제 기능 진입, Entertainment·일반 설정은 준비 중이다. 최신 범위/검증은 [UI 통합 보고서](../verification/2026-11-07-premium-ui-current-features.md), Work는 [DOCX-only 명세](../features/WORK_DOCX_EDITOR_SPEC.md)가 우선한다. 아래의 과거 예정/엔진 미확정 표는 작성 시점의 기록이다.
+
 - 작성일: 2026-11-05
 - 기준 브랜치: `dev`
 - 목적: 선택된 **A안 프리미엄 차량 홈 시안**의 디자인 시스템을 사용하여 PLEOS 차량용 Compose, Windows Stay+.exe(WPF), Pickup 웹(Next.js)을 단계적으로 구현·연결하고 에뮬레이터/실기에서 검증한다.
