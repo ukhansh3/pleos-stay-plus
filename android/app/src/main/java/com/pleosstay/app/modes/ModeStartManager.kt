@@ -37,6 +37,7 @@ sealed interface ModeStartResult {
         val extensionUnavailable: WaitingChoiceUnavailable?,
         val shortenUnavailable: WaitingChoiceUnavailable?,
         val rejectedChoice: WaitingChoiceUnavailable? = null,
+        internal val requestedEnd: Long? = null,
     ) : ModeStartResult {
         private val handled = AtomicBoolean()
         internal fun claim(): Boolean = handled.compareAndSet(false, true)
@@ -62,10 +63,14 @@ class ModeStartManager(
 ) {
     suspend fun start(request: ModeStartRequest): ModeStartResult = prepare(request)
 
+    /** Re-evaluates a running activity's deadline against its original Waiting. */
+    suspend fun adjustEnd(mode: ActivityMode, waitingId: String, endsAt: Long): ModeStartResult =
+        prepare(ModeStartRequest(mode, waiting.modeDurationRange.first), waitingId, requestedEnd = endsAt)
+
     suspend fun resolve(prompt: ModeStartResult.NeedsChoice, choice: WaitingChoice): ModeStartResult {
         if (!prompt.claim()) return ModeStartResult.DecisionAlreadyHandled(prompt.request)
         return if (choice == WaitingChoice.BACK) ModeStartResult.Cancelled(prompt.request)
-        else prepare(prompt.request, prompt.waitingId, choice)
+        else prepare(prompt.request, prompt.waitingId, choice, prompt.requestedEnd)
     }
 
     /** Call only after explicit confirmation and only for a mode that supports independent operation. */
@@ -78,16 +83,20 @@ class ModeStartManager(
         request: ModeStartRequest,
         expectedId: String? = null,
         choice: WaitingChoice? = null,
+        requestedEnd: Long? = null,
     ): ModeStartResult {
         safetyBlock()?.let { return it }
         val range = waiting.modeDurationRange
         if (request.minutes !in range) return ModeStartResult.InvalidDuration(range)
-        val duration = request.minutes * MINUTE_MILLIS
         return try {
             val result = waiting.withModeWaiting {
                 val session = active
                 val now = now()
-                val targetEnd = Math.addExact(now, duration)
+                val targetEnd = requestedEnd ?: Math.addExact(now, request.minutes * MINUTE_MILLIS)
+                val duration = targetEnd - now
+                if (duration <= 0 || duration > range.last * MINUTE_MILLIS) {
+                    return@withModeWaiting ModeStartResult.InvalidDuration(range)
+                }
                 when {
                     expectedId != null && expectedId != session?.id -> ModeStartResult.WaitingChanged(request)
                     session == null -> {
@@ -116,6 +125,7 @@ class ModeStartManager(
                                     WaitingChoice.SHORTEN -> shortenUnavailable
                                     else -> null
                                 },
+                                requestedEnd,
                             )
                         }
                     }

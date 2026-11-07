@@ -43,7 +43,7 @@ internal class VehicleSafetySignals {
     fun invalidateGear() { park = null; gearCheckedAt = -1 }
     fun invalidateSpeed() { speed = null }
 
-    fun snapshot(now: Long): WaitingSafety {
+    fun snapshot(now: Long, requireForeground: Boolean = true): WaitingSafety {
         val freshSpeed = speed?.takeIf { now >= speedTimestamp && now - speedTimestamp <= MAX_AGE_NS }
         val freshGear = gearCheckedAt >= 0 && now >= gearCheckedAt && now - gearCheckedAt <= MAX_AGE_NS
         val motion = when {
@@ -51,10 +51,10 @@ internal class VehicleSafetySignals {
             freshGear && park == true && freshSpeed == 0f -> VehicleMotion.PARKED
             else -> VehicleMotion.UNKNOWN
         }
-        return WaitingSafety(motion, restricted || !foreground,
+        return WaitingSafety(motion, restricted || (requireForeground && !foreground),
             observedAt = if (motion == VehicleMotion.DRIVING) drivingObservedAt else null,
             message = when {
-                !foreground -> "화면이 비활성 상태입니다"
+                requireForeground && !foreground -> "화면이 비활성 상태입니다"
                 restricted -> "플랫폼 주행 제한 중이거나 제한 상태를 확인 중입니다"
                 motion == VehicleMotion.DRIVING -> "차량 이동 확인: Waiting 사용 불가"
                 motion == VehicleMotion.PARKED -> "P 기어 및 정지 상태 확인"

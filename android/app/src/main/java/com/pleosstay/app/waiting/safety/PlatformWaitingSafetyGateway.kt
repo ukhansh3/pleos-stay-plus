@@ -22,6 +22,8 @@ class PlatformWaitingSafetyGateway(context: Context) : WaitingSafetyGateway {
     private val context = context.applicationContext
     private val mutableState = MutableStateFlow(WaitingSafety())
     override val state = mutableState.asStateFlow()
+    private val mutableRestState = MutableStateFlow(WaitingSafety())
+    override val restState = mutableRestState.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var car: Car? = null
     private var uxManager: CarUxRestrictionsManager? = null
@@ -177,16 +179,21 @@ class PlatformWaitingSafetyGateway(context: Context) : WaitingSafetyGateway {
         publish()
     }
     private fun publish() {
-        val snapshot = signals.snapshot(SystemClock.elapsedRealtimeNanos()).let {
-            if (!it.canUse && failureMessage != null) it.copy(message = failureMessage!!) else it
-        }
-        mutableState.value = if (drivingEvents.state.value.isNotEmpty()) snapshot.copy(uxRestricted = true) else snapshot
+        val now = SystemClock.elapsedRealtimeNanos()
+        val pendingDriving = drivingEvents.state.value.isNotEmpty()
+        fun checked(snapshot: WaitingSafety): WaitingSafety = snapshot.copy(
+            uxRestricted = snapshot.uxRestricted || pendingDriving,
+            message = failureMessage?.takeIf { !snapshot.canUse } ?: snapshot.message,
+        )
+        mutableState.value = checked(signals.snapshot(now))
+        mutableRestState.value = checked(signals.snapshot(now, requireForeground = false))
     }
     private fun fail(message: String) {
         failureMessage = message
         signals.invalidateGear()
         signals.invalidateSpeed()
         mutableState.value = WaitingSafety(message = message)
+        mutableRestState.value = mutableState.value
     }
     override fun stop() {
         started = false
@@ -196,6 +203,7 @@ class PlatformWaitingSafetyGateway(context: Context) : WaitingSafetyGateway {
         watchdog?.cancel()
         signals = VehicleSafetySignals()
         mutableState.value = WaitingSafety()
+        mutableRestState.value = mutableState.value
         runCatching { uxManager?.unregisterListener() }
         uxManager = null
         runCatching { car?.disconnect() }

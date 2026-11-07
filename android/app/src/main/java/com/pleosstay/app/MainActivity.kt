@@ -5,6 +5,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.pleosstay.app.rest.RestAlarm
+import com.pleosstay.app.rest.RestAudio
+import com.pleosstay.app.rest.RestController
+import com.pleosstay.app.rest.RestEvGateway
+import com.pleosstay.app.rest.RestScreen
+import com.pleosstay.app.rest.RestStore
+import android.content.Intent
 import android.content.Context
 import com.pleosstay.app.waiting.data.*
 import com.pleosstay.app.modes.ModeStartManager
@@ -48,6 +56,7 @@ class MainActivity : ComponentActivity() {
 
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     internal val modeStartManager get() = waitingDependencies.modeStartManager
+    private var openRest by mutableStateOf(false)
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
     }
@@ -71,6 +80,28 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         waitingDependencies.safety.setForeground(true)
         waitingDependencies.safety.start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (android.os.Build.VERSION.SDK_INT < 29) waitingDependencies.rest.setForeground(true)
+    }
+
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        // PLEOS multi-window can keep several activities RESUMED after Home/app switches.
+        waitingDependencies.rest.setForeground(isTopResumedActivity)
+        Log.d("RestLifecycle", "topResumed=" + isTopResumedActivity)
+    }
+
+    override fun onPause() {
+        waitingDependencies.rest.setForeground(false)
+        super.onPause()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("openRest", false)) openRest = true
     }
 
     override fun onStop() {
@@ -97,10 +128,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val waitingModel = waitingViewModel
+        openRest = intent.getBooleanExtra("openRest", false)
         enableEdgeToEdge()
         setContent {
             PleosStayPlusTheme {
-                var section by remember { mutableIntStateOf(0) }
+                var section by rememberSaveable { mutableIntStateOf(0) }
+                LaunchedEffect(openRest) {
+                    if (openRest) { section = 4; openRest = false }
+                }
                 val parkingState by parkingViewModel.state.collectAsState()
                 val waitingState by waitingModel.state.collectAsState()
                 val pickupState by pickupViewModel.state.collectAsState()
@@ -116,6 +151,7 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = { section = 1; requestVehicleInformation() }) { Text("대기 관리") }
                         TextButton(onClick = { section = 2; requestVehicleInformation() }) { Text("픽업") }
                         TextButton(onClick = { section = 3; requestVehicleInformation() }) { Text("파일 전송") }
+                        TextButton(onClick = { section = 4; requestVehicleInformation() }) { Text("휴식") }
                     }
                     when (section) {
                         1 -> {
@@ -124,6 +160,7 @@ class MainActivity : ComponentActivity() {
                         }
                         2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
                         3 -> RealtimeEntry(applicationContext, waitingDependencies.safety)
+                        4 -> RestScreen(waitingDependencies.rest, onRecoverWaiting = waitingModel::reload) { section = 0 }
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
                 }
@@ -164,6 +201,8 @@ class MainActivity : ComponentActivity() {
 internal fun hasEndedLinkedWaiting(linkedId: String?, sessions: List<WaitingSession>): Boolean =
     linkedId != null && sessions.any { it.id == linkedId && it.status == WaitingStatus.ENDED }
 
+internal fun restRuntime(context: Context): RestController = WaitingDependencies.get(context).rest
+
 // App-process scoped DB/gateway: activity recreation must not create a second owner.
 private class WaitingDependencies(context: Context) {
     val safety: WaitingSafetyGateway = if (context.packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
@@ -175,6 +214,7 @@ private class WaitingDependencies(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val monitor = WaitingDrivingMonitor(repository, safety.drivingEvents, scope)
     val modeStartManager = ModeStartManager(repository, safety)
+    val rest = RestController(RestStore(context), RestAlarm(context), RestAudio(context), RestEvGateway(context), modeStartManager, safety, scope)
     companion object {
         @Volatile private var instance: WaitingDependencies? = null
         fun get(context: Context): WaitingDependencies = instance ?: synchronized(this) {

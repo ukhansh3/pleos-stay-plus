@@ -16,6 +16,8 @@ data class WaitingSafety(
 interface WaitingSafetyGateway : AutoCloseable {
     val drivingEvents: DrivingEventBuffer
     val state: StateFlow<WaitingSafety>
+    // Rest may retain its timer when the app is hidden, while vehicle checks still apply.
+    val restState: StateFlow<WaitingSafety> get() = state
     fun setForeground(foreground: Boolean) = Unit
     fun start()
     fun stop()
