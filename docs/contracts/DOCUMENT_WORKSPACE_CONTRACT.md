@@ -1,6 +1,8 @@
 # Document Workspace Contract v1.0 — 2026-11-07
 
 Status: **approved user goals, proposed local interfaces, implementation NOT COMPLETE**.
+
+2026-11-07 DOCX follow-up: [Work DOCX editor](../features/WORK_DOCX_EDITOR_SPEC.md) adds local/new DOCX drafts under the same authenticated Work profile, separate from server DocumentRef identities. Exact remote source identity is preserved when present. User approved only explicit-confirmation public `Download/StayPlus` export as fallback for the observed DocumentsUI stub; private encrypted retention remains default. No Realtime uploads or PDF editing in this phase.
 Applies to **Study and Work** only. Reuses existing Windows Stay+.exe ↔ Realtime Fastify ↔ Supabase ↔ Android data path. AirDesk is deferred.
 
 ## 1. Current sources and non-negotiable boundaries

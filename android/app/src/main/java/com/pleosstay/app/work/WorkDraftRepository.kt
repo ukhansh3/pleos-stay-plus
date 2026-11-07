@@ -24,6 +24,45 @@ class WorkDraftRepository(
 ) {
     private val mutex = Mutex()
 
+    private fun docxPrefix(owner:String,connection:String) = "docx:" + digest((owner.length.toString()+":"+owner+connection).toByteArray()) + ":"
+    private fun docxKey(info:DocxDraftInfo) = docxPrefix(info.owner,info.connection)+info.id
+    private suspend fun checkDocxProfile(info:DocxDraftInfo?=null) {
+        val a=documents.refreshAccess();check(a.allowed&&a.userScope!=null&&a.connectionId!=null){"WORK_ACCESS_BLOCKED"}
+        if(info!=null){check(info.owner==a.userScope&&info.connection==a.connectionId);info.source?.let{authorize(it)}}
+    }
+    suspend fun createDocx(name:String,bytes:ByteArray,source:DocumentRef?=null):DocxDraft = mutex.withLock {
+        checkDocxProfile();source?.let{authorize(it)}
+        val a=documents.access.value
+        val id=source?.let{"remote-"+id(it)} ?: java.util.UUID.randomUUID().toString()
+        val info=DocxDraftInfo(id,checkNotNull(a.userScope),checkNotNull(a.connectionId),safeDocxName(name),now(),source)
+        val old=records.read(docxKey(info))
+        if(old!=null){try{return@withLock DocxDraftCodec.decode(old).also{check(it.info.id==info.id&&it.info.owner==info.owner&&it.info.connection==info.connection&&it.info.source==source);checkDocxProfile(it.info)}}finally{old.fill(0)}}
+        val draft=DocxDraft(info,bytes.copyOf());writeDocx(draft);draft
+    }
+    suspend fun listDocx():List<DocxDraftInfo> = mutex.withLock {
+        checkDocxProfile();val a=documents.access.value;val prefix=docxPrefix(a.userScope!!,a.connectionId!!)
+        val result=mutableListOf<DocxDraftInfo>()
+        for(key in records.keys().filter{it.startsWith(prefix)}){val raw=records.read(key)?:continue;try{val d=DocxDraftCodec.decode(raw);try{checkDocxProfile(d.info);result+=d.info}finally{d.bytes.fill(0)}}finally{raw.fill(0)}}
+        result.sortedByDescending{it.updatedAt}
+    }
+    suspend fun loadDocx(info:DocxDraftInfo):DocxDraft = mutex.withLock {
+        checkDocxProfile(info);val bytes=records.read(docxKey(info))?:error("DOCX_DRAFT_MISSING")
+        try{DocxDraftCodec.decode(bytes).also{check(it.info.id==info.id&&it.info.owner==info.owner&&it.info.connection==info.connection&&it.info.source==info.source);checkDocxProfile(it.info)}}finally{bytes.fill(0)}
+    }
+    /** Retains an already-authorized edit after a local lock; never grants read access or creates a new identity. */
+    internal suspend fun retainDocx(draft:DocxDraft) = mutex.withLock {
+        val old=records.read(docxKey(draft.info))?:error("DOCX_DRAFT_MISSING")
+        try{val existing=DocxDraftCodec.decode(old);try{check(existing.info.id==draft.info.id&&existing.info.owner==draft.info.owner&&existing.info.connection==draft.info.connection&&existing.info.source==draft.info.source)}finally{existing.bytes.fill(0)}}finally{old.fill(0)}
+        writeDocx(draft)
+    }
+    suspend fun deleteDocx(info:DocxDraftInfo) = mutex.withLock {checkDocxProfile(info);records.delete(docxKey(info))}
+    suspend fun sourceForDocx(ref:DocumentRef):ByteArray = mutex.withLock {
+        authorize(ref);val r=readRecord(id(ref))?:error("WORK_SOURCE_MISSING")
+        try{check(r.summary.source==ref&&r.original.size.toLong()==ref.sizeBytes&&digest(r.original)==ref.sha256);check(r.engineSnapshot==null){"이전 편집 엔진의 초안은 별도 호환 검토가 필요합니다."};r.original.copyOf()}finally{r.clearBuffers()}
+    }
+    private suspend fun writeDocx(d:DocxDraft){val encoded=DocxDraftCodec.encode(d);try{records.write(docxKey(d.info),encoded)}finally{encoded.fill(0)}}
+    private fun safeDocxName(name:String):String {val safe=name.substringAfterLast('/').substringAfterLast('\\').filterNot{it.isISOControl()}.take(160).ifBlank{"문서.docx"};return if(safe.endsWith(".docx",true))safe else "$safe.docx"}
+
     suspend fun retainSource(ref: DocumentRef, file: File): WorkDraftSummary = mutex.withLock {
         authorize(ref)
         require(WorkFormat.of(ref) != null) { "WORK_FORMAT_UNSUPPORTED" }
@@ -62,7 +101,7 @@ class WorkDraftRepository(
         val access = documents.refreshAccess()
         check(access.allowed) { "WORK_ACCESS_BLOCKED" }
         val result = mutableListOf<WorkDraftSummary>()
-        for (id in records.keys()) {
+        for (id in records.keys().filter { it.matches(Regex("[a-f0-9]{64}")) }) {
             currentCoroutineContext().ensureActive()
             val record = readRecord(id) ?: continue
             try {

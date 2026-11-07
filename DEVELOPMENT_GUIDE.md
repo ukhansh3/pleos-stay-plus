@@ -829,3 +829,10 @@ interface WaitingRepository {
 - Not a first-MVP target: AirDesk, Work spreadsheets/PPT/browser/calendar/coding; Study AI/flashcards; new server Study/Work APIs or independent Supabase file buckets. Realtime transfer, pairing, Auth, PIN and server-side version controls remain canonical.
 - Current detailed source: `docs/contracts/DOCUMENT_WORKSPACE_CONTRACT.md`, `docs/features/STUDY_MVP_SPEC.md`, `docs/features/WORK_DOCUMENT_MVP_SPEC.md`, `docs/api/MODE_API_MATRIX.md`, each new package `AGENTS.md`.
 - Scope is approved as a product goal; code execution/SDK selection/editor fidelity **not** verified by this documentation commit. Do not mark implemented until device E2E and editor acceptance tests pass.
+
+## 23. Work DOCX-only follow-up — 2026-11-07
+
+- Latest task implements a custom DOCX editor after isolated API34 probes, while excluding PDF editing and Realtime uploads. [Current scope](docs/features/WORK_DOCX_EDITOR_SPEC.md) records supported formats/operations and limits.
+- User approved native Kotlin/Java OOXML with no new production SDK dependency; preserve untouched package content and restrict unsupported structures. No Aspose verifier workaround.
+- Local/new DOCX use the existing authenticated Work profile and PIN/safety gates. User approved public `Download/StayPlus` DOCX copies **only after explicit in-app confirmation** when the actual system picker is unavailable. Private encrypted drafts remain default and retained after lock.
+- The observed Pleos API34 image has a DocumentsUI stub, so SAF UI is BLOCKED there. Do not claim that resolving an ACTION_CREATE_DOCUMENT intent proves a functional picker. Native/provider/Compose/independent-parser results are recorded separately in verification.

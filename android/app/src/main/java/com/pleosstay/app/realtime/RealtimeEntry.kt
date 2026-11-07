@@ -17,6 +17,7 @@ import org.json.JSONObject
 
 @Composable fun RealtimeEntry(context: Context, safety: WaitingSafetyGateway,
  foreground: Boolean = true,
+ managedWorkspace: (@Composable (FileTransferViewModel, String) -> (@Composable () -> Unit))? = null,
  workspace: (@Composable (FileTransferViewModel, String) -> Unit)? = null) {
  val app=context.applicationContext
  val configStore=remember { RealtimeTokenStore(app,"realtime-local-config.bin") }
@@ -58,9 +59,12 @@ import org.json.JSONObject
   @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T=FileTransferViewModel(RealtimeApi(url){provider?.validToken() ?: credential},safety,LocalFileStore(app),File(app.noBackupFilesDir,"realtime/downloads")){provider?.resetAfterRevocation();withContext(Dispatchers.IO){RealtimePinStore(app).clearAfterUserVerification()}} as T
  }})
  DisposableEffect(model){onDispose{model.lock()}}
+ // Construct state/ActivityResult registrations, never render workspace content here.
+ val protectedContent = managedWorkspace?.invoke(model,url)
  LaunchedEffect(foreground,model) { if(!foreground) model.lock() }
  if(!foreground){Text("앱으로 돌아온 후 PIN을 다시 확인해 주세요.");return}
  RealtimeLockedScreen(model,remember{RealtimePinStore(app)}) {
-  if(workspace==null) FileTransferScreen(model) else workspace(model,url)
+  // Every content path remains inside the original verified PIN gate.
+  if(protectedContent!=null) protectedContent() else if(workspace==null) FileTransferScreen(model) else workspace(model,url)
  }
 }

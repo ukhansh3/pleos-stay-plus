@@ -25,17 +25,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pleosstay.app.documents.DocumentRef
 import com.pleosstay.app.modes.WaitingChoice
+import com.pleosstay.app.work.docx.*
 
 /** UI contains no HTTP, file I/O, authentication, SQL or vehicle SDK calls. */
 @Composable
-fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: () -> Unit, onHome: () -> Unit) {
+fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: () -> Unit, onHome: () -> Unit,
+ onDocxPicker:(DocxPickerKind,Int?)->Unit = {_,_->}) {
     val state by model.state.collectAsState()
+    val editor by model.docx.state.collectAsState()
     var deleting by remember { mutableStateOf<DocumentRef?>(null) }
     BackHandler { if (state.choice != null) model.resolve(WaitingChoice.BACK) else if (state.session != null) model.requestExit() else onHome() }
+    if(state.allowed && editor.view!=null){DocxEditorPanel(model.docx,onDocxPicker,model.docx::mask);return}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("업무 · 문서 작업", style = MaterialTheme.typography.headlineMedium)
-        Text(state.engine.reason, color = MaterialTheme.colorScheme.error)
-        Text("고급 편집 엔진의 검증 전에는 편집·새 문서·내보내기·업로드를 제공하지 않습니다. AirDesk는 이번 범위에서 제외됩니다.")
+        Text("DOCX 작성·본문·서식·표·이미지 편집 · PDF 편집과 Realtime 업로드는 이번 범위에서 제외됩니다.")
         if (!state.allowed) {
             Text("업무 문서 잠김", style = MaterialTheme.typography.titleLarge)
             Text(state.message)
@@ -45,6 +48,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
             return@Column
         }
         Text(state.message)
+        Text(editor.message)
         if (state.busy) Text("확인 중…")
         if (state.session == null) {
             OutlinedTextField(value = state.minutes, onValueChange = model::setMinutes, label = { Text("업무 시간 (분)") }, enabled = !state.busy)
@@ -75,10 +79,11 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
             Text(if (draft.dirty) "보관된 엔진 초안이 있습니다. 해당 엔진 검증 후 복원할 수 있습니다." else "해시가 확인된 원본을 보관했습니다. 편집한 문서가 아닙니다.")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = {}, enabled = false) { Text("새 PDF / DOCX · BLOCKED") }
-            OutlinedButton(onClick = {}, enabled = false) { Text("편집 / 내보내기 · BLOCKED") }
+            OutlinedButton(onClick = model.docx::newDocument, enabled = state.session!=null&&!state.busy&&!editor.busy) { Text("새 DOCX") }
+            OutlinedButton(onClick = {onDocxPicker(DocxPickerKind.OPEN,null)}, enabled=state.session!=null&&!state.busy&&!editor.busy) { Text("로컬 DOCX 열기") }
+            OutlinedButton(onClick=model.docx::listDrafts,enabled=!state.busy&&!editor.busy){Text("DOCX 초안·마지막 작업")}
         }
-        OutlinedButton(onClick = {}, enabled = false) { Text("새 버전 업로드 · 편집 결과 검증 필요") }
+        editor.drafts.forEach{draft->Row{TextButton(onClick={model.docx.restore(draft)},enabled=state.session!=null&&!editor.busy){Text("${draft.name} · 복원")};TextButton(onClick={model.docx.delete(draft)},enabled=!editor.busy){Text("초안 삭제")}}}
         Text("로컬 보관본", style = MaterialTheme.typography.titleLarge)
         Text("연결 철회·사용자 전환 시 잠금 후 보관하며 자동 삭제하지 않습니다. 같은 사용자·연결·버전의 서버 권한을 다시 확인해야 접근할 수 있습니다.")
         state.drafts.forEach { draft ->
@@ -103,12 +108,12 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
     }
     deleting?.takeIf { state.allowed }?.let { ref ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("로컬 보관본 삭제") },
-            text = { Text("이 버전의 원본 보관본과 미업로드 초안을 삭제합니다. 서버 원본은 변경하지 않습니다.") },
+            text = { Text("이 버전의 원본 보관본과 이전 엔진 초안을 삭제합니다. DOCX 편집 초안은 위 DOCX 목록에서 따로 삭제합니다. 서버 원본은 변경하지 않습니다.") },
             confirmButton = { TextButton(onClick = { model.deleteDraft(ref); deleting = null }) { Text("삭제") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } })
     }
     if (state.exitConfirmation && state.allowed) AlertDialog(onDismissRequest = model::dismissExit,
-        title = { Text("업로드하지 않은 초안이 있습니다") }, text = { Text("암호화 초안은 보관합니다. Waiting과 Realtime 연결은 종료하지 않습니다.") },
+        title = { Text("외부 파일로 내보내지 않은 초안이 있습니다") }, text = { Text("암호화 초안은 보관합니다. Waiting과 Realtime 연결은 종료하지 않습니다.") },
         confirmButton = { TextButton(onClick = model::finishKeepingDrafts) { Text("초안 보관 후 업무 종료") } },
         dismissButton = { TextButton(onClick = model::dismissExit) { Text("계속 업무") } })
 }

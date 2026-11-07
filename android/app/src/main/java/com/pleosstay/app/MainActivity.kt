@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +34,7 @@ import com.pleosstay.app.waiting.ui.WaitingViewModel
 import com.pleosstay.app.waiting.ui.WaitingScreen
 import com.pleosstay.app.realtime.RealtimeEntry
 import com.pleosstay.app.workspace.DocumentWorkspaceEntry
+import com.pleosstay.app.workspace.rememberProtectedWorkContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import android.view.WindowManager
 import android.os.Bundle
@@ -146,6 +148,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             PleosStayPlusTheme {
                 var section by rememberSaveable { mutableIntStateOf(0) }
+                var workSaving by remember { mutableStateOf(false) }
+                var workUnexported by remember { mutableStateOf(false) }
+                var nextSection by remember { mutableStateOf<Int?>(null) }
+                fun navigate(target:Int) {
+                    if(section==6&&target!=6&&(workSaving||workUnexported)) nextSection=target
+                    else {section=target;if(target!=0)requestVehicleInformation()}
+                }
                 val documentVisible by documentForeground.collectAsState()
                 DisposableEffect(section) {
                     if (section == 5 || section == 6) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -167,13 +176,13 @@ class MainActivity : ComponentActivity() {
                 }
                 Column {
                     Row(Modifier.horizontalScroll(rememberScrollState())) {
-                        TextButton(onClick = { section = 0 }) { Text("장소 검색") }
-                        TextButton(onClick = { section = 1; requestVehicleInformation() }) { Text("대기 관리") }
-                        TextButton(onClick = { section = 2; requestVehicleInformation() }) { Text("픽업") }
-                        TextButton(onClick = { section = 3; requestVehicleInformation() }) { Text("파일 전송") }
-                        TextButton(onClick = { section = 4; requestVehicleInformation() }) { Text("휴식") }
-                        TextButton(onClick = { section = 5; requestVehicleInformation() }) { Text("공부") }
-                        TextButton(onClick = { section = 6; requestVehicleInformation() }) { Text("업무") }
+                        TextButton(onClick = { navigate(0) }) { Text("장소 검색") }
+                        TextButton(onClick = { navigate(1) }) { Text("대기 관리") }
+                        TextButton(onClick = { navigate(2) }) { Text("픽업") }
+                        TextButton(onClick = { navigate(3) }) { Text("파일 전송") }
+                        TextButton(onClick = { navigate(4) }) { Text("휴식") }
+                        TextButton(onClick = { navigate(5) }) { Text("공부") }
+                        TextButton(onClick = { navigate(6) }) { Text("업무") }
                     }
                     when (section) {
                         1 -> {
@@ -181,7 +190,12 @@ class MainActivity : ComponentActivity() {
                             WaitingScreen(waitingModel, place)
                         }
                         2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
-                        3, 5, 6 -> RealtimeEntry(applicationContext, waitingDependencies.safety, documentVisible) { model, endpoint ->
+                        3, 5, 6 -> RealtimeEntry(applicationContext, waitingDependencies.safety, documentVisible,
+                            managedWorkspace = if (section == 6) { model, endpoint ->
+                                rememberProtectedWorkContent(applicationContext,model,endpoint,modeStartManager,
+                                    waitingDependencies.safety,documentVisible,{navigate(3)},{navigate(1)},{navigate(0)},
+                                    {saving,dirty->workSaving=saving;workUnexported=dirty})
+                            } else null) { model, endpoint ->
                             if (section == 3) com.pleosstay.app.realtime.FileTransferScreen(model)
                             else DocumentWorkspaceEntry(applicationContext, model, endpoint, modeStartManager,
                                 waitingDependencies.safety, section == 5, documentVisible, onOpenFiles = { section = 3 },
@@ -191,6 +205,11 @@ class MainActivity : ComponentActivity() {
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }
                 }
+                if(nextSection!=null&&documentVisible) AlertDialog(onDismissRequest={nextSection=null},
+                    title={Text(if(workSaving)"초안 저장 중" else "외부 파일로 내보내지 않은 변경")},
+                    text={Text("저장이 끝난 암호화 DOCX 초안을 보관하고 이동합니다. Waiting과 파일 연결은 유지됩니다.")},
+                    confirmButton={TextButton(enabled=!workSaving,onClick={nextSection?.let{section=it;if(it!=0)requestVehicleInformation()};nextSection=null;workSaving=false;workUnexported=false}){Text("초안 보관 후 이동")}},
+                    dismissButton={TextButton(onClick={nextSection=null}){Text("계속 편집")}})
             }
         }
     }

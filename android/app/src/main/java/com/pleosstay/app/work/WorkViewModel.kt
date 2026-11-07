@@ -11,6 +11,7 @@ import com.pleosstay.app.modes.ModeStartRequest
 import com.pleosstay.app.modes.ModeStartResult
 import com.pleosstay.app.modes.WaitingChoice
 import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
+import com.pleosstay.app.work.docx.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -27,6 +28,7 @@ class WorkViewModel(
     private val drafts: WorkDraftRepository,
     private val manager: ModeStartManager,
     private val safety: WaitingSafetyGateway,
+    docxFiles: DocxFileGateway? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(WorkState())
@@ -35,6 +37,10 @@ class WorkViewModel(
     private var operation: Job? = null
     private var generation = 0L
     private var scopeIdentity: Pair<String?, String?>? = null
+    val docx = DocxEditorController(drafts, documents, docxFiles, viewModelScope) {
+        foreground.value && safety.state.value.canUse && documents.access.value.allowed &&
+            state.value.session?.remaining(now())?.let { it > 0 } == true
+    }
 
     init {
         viewModelScope.launch {
@@ -49,6 +55,7 @@ class WorkViewModel(
                 if (identified) scopeIdentity = identity
                 val allowed = visible && vehicle.canUse && access.allowed
                 if (!allowed || changed) {
+                    docx.mask()
                     generation++
                     operation?.cancel()
                     mutable.update { previous -> WorkState(
@@ -69,6 +76,7 @@ class WorkViewModel(
                 val session = state.value.session ?: continue
                 val remaining = session.remaining(now())
                 if (remaining == 0L) {
+                    docx.mask()
                     operation?.cancel()
                     generation++
                     mutable.update { it.copy(session = null, remainingMillis = 0, busy = false, choice = null,
@@ -83,6 +91,7 @@ class WorkViewModel(
     fun setForeground(value: Boolean) {
         foreground.value = value
         if (!value) {
+            docx.mask()
             generation++; operation?.cancel()
             mutable.update { it.copy(allowed = false, busy = false, files = emptyList(), versions = emptyList(),
                 drafts = emptyList(), selected = null, choice = null, exitConfirmation = false) }
@@ -118,7 +127,7 @@ class WorkViewModel(
                 val session = WorkSession(result.waiting?.id, result.endsAt ?: Math.addExact(now(), result.durationMillis))
                 check(session.remaining(now()) > 0) { "WORK_DURATION_EXPIRED" }
                 mutable.update { it.copy(session = session, remainingMillis = session.remaining(now()), choice = null,
-                    storageError = false, message = "업무 타이머를 시작했습니다. 문서 고급 편집은 엔진 검증 전까지 차단됩니다.") }
+                    storageError = false, message = "업무 타이머를 시작했습니다. DOCX를 열거나 새 문서를 작성하세요. PDF 편집·업로드는 제외됩니다.") }
             }
             is ModeStartResult.NeedsChoice -> mutable.update { it.copy(choice = result, message = "Waiting 잔여시간이 부족합니다. 연장 또는 단축을 선택해 주세요.") }
             is ModeStartResult.SafetyBlocked -> mutable.update { it.copy(message = result.message) }
@@ -158,8 +167,10 @@ class WorkViewModel(
         checkVisible()
         requireSession()
         mutable.update { it.copy(selected = summary, drafts = (it.drafts.filterNot { draft -> draft.id == summary.id } + summary),
-            message = if (summary.dirty) "암호화 초안을 찾았습니다. 동일 엔진 검증 후 편집을 복원할 수 있습니다."
-                else "원본 바이트와 해시를 확인해 암호화 보관했습니다. 편집·내보내기는 엔진 검증 전까지 차단됩니다.") }
+            message = if (ref.mimeType == DOCX_MIME) "DOCX 원본을 검증·보관했습니다. 기존 편집 초안이 있으면 이어서 엽니다."
+                else if (summary.dirty) "기존 엔진 초안이 있습니다. PDF 편집은 이번 범위에서 제외됩니다."
+                else "원본 바이트와 해시를 확인해 암호화 보관했습니다. PDF 편집은 이번 범위에서 제외됩니다.") }
+        if (ref.mimeType == DOCX_MIME) docx.openRemote(ref)
     }
 
     fun deleteDraft(ref: DocumentRef) = command {
@@ -170,11 +181,12 @@ class WorkViewModel(
     }
 
     fun requestExit() {
-        if (state.value.selected?.dirty == true) mutable.update { it.copy(exitConfirmation = true) }
+        if (state.value.selected?.dirty == true || docx.state.value.dirty) mutable.update { it.copy(exitConfirmation = true) }
         else finishKeepingDrafts()
     }
     fun dismissExit() { mutable.update { it.copy(exitConfirmation = false) } }
     fun finishKeepingDrafts() {
+        docx.mask()
         generation++; operation?.cancel()
         mutable.update { it.copy(session = null, remainingMillis = 0, busy = false, selected = null, versions = emptyList(),
             choice = null, exitConfirmation = false, message = "업무를 종료했습니다. 로컬 보관본·Waiting·Realtime 연결은 유지됩니다.") }

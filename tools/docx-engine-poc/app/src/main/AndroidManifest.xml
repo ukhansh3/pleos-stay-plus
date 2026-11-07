@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <application android:label="DOCX PoC only" android:allowBackup="false" />
+ <instrumentation android:name=".PoiProbe" android:targetPackage="com.pleosstay.docxprobe" />
+ <instrumentation android:name=".OoxmlProbe" android:targetPackage="com.pleosstay.docxprobe" />
+</manifest>

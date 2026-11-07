@@ -10,7 +10,7 @@ enum class WorkFormat(val mimeType: String) {
 }
 
 /** No edit-command schema is invented before an approved engine proves real capabilities. */
-data class WorkEngineReadiness(val approved: Boolean = false, val reason: String = ENGINE_BLOCKED) {
+data class WorkEngineReadiness(val approved: Boolean = false, val reason: String = "DOCX 자체 OOXML 편집 지원 · PDF 편집/업로드 제외",val docxAvailable:Boolean=true,val pdfAvailable:Boolean=false) {
     companion object {
         const val ENGINE_BLOCKED = "BLOCKED · PDF 본문·이미지·페이지 및 DOCX 고급 편집 엔진의 승인과 실파일 검증이 필요합니다."
     }

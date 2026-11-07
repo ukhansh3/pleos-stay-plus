@@ -22,6 +22,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PleosStayPlus">
         <uses-library android:name="android.car" android:required="false" />
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.work.docx.exports"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/work_docx_paths" />
+        </provider>
         <receiver android:name=".rest.RestAlarmReceiver" android:exported="false" />
         <activity
             android:name=".MainActivity"

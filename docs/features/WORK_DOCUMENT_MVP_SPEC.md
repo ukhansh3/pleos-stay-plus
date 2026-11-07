@@ -1,5 +1,7 @@
 # Work Document MVP — Advanced PDF/DOCX Editing v1.0
 
+> Latest 2026-11-07 task: DOCX-only custom editor; PDF editing and Realtime uploads are explicitly excluded. See [current DOCX scope](WORK_DOCX_EDITOR_SPEC.md). Historic full-MVP goals below remain future scope, not this task's completion claim.
+
 **2026-11-07 · PRODUCT SCOPE CONFIRMED · editor engine selection/implementation NOT COMPLETE.**
 [Notion Work](https://app.notion.com/p/40cb74b2b905810c9093ee9f243c678c) · [Shared contract](../contracts/DOCUMENT_WORKSPACE_CONTRACT.md) · [Mode retrospective](https://app.notion.com/p/3edb74b2b905833c8e258157332a17bb)
 
