@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Deliberately no INTERNET, storage, vehicle, or location permission. Fixtures only. -->
+    <application android:label="Work engine evaluation only" android:allowBackup="false" android:debuggable="true" />
+    <instrumentation android:name=".EngineProbe" android:targetPackage="com.pleosstay.workenginepoc" android:functionalTest="true" />
+</manifest>
