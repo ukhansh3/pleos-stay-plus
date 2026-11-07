@@ -2,6 +2,9 @@ package com.pleosstay.app
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,6 +32,9 @@ import com.pleosstay.app.waiting.safety.UnavailableWaitingSafetyGateway
 import com.pleosstay.app.waiting.ui.WaitingViewModel
 import com.pleosstay.app.waiting.ui.WaitingScreen
 import com.pleosstay.app.realtime.RealtimeEntry
+import com.pleosstay.app.workspace.DocumentWorkspaceEntry
+import kotlinx.coroutines.flow.MutableStateFlow
+import android.view.WindowManager
 import android.os.Bundle
 import android.util.Log
 import android.content.pm.PackageManager
@@ -57,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     internal val modeStartManager get() = waitingDependencies.modeStartManager
     private var openRest by mutableStateOf(false)
+    private val documentForeground = MutableStateFlow(false)
     private val waitingViewModel: WaitingViewModel by viewModels {
         WaitingViewModel.Factory(waitingDependencies.repository, waitingDependencies.safety, waitingDependencies.monitor)
     }
@@ -84,17 +91,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (android.os.Build.VERSION.SDK_INT < 29) waitingDependencies.rest.setForeground(true)
+        if (android.os.Build.VERSION.SDK_INT < 29) {
+            waitingDependencies.rest.setForeground(true)
+            documentForeground.value = true
+        }
     }
 
     override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
         super.onTopResumedActivityChanged(isTopResumedActivity)
         // PLEOS multi-window can keep several activities RESUMED after Home/app switches.
         waitingDependencies.rest.setForeground(isTopResumedActivity)
+        documentForeground.value = isTopResumedActivity
         Log.d("RestLifecycle", "topResumed=" + isTopResumedActivity)
     }
 
     override fun onPause() {
+        documentForeground.value = false
         waitingDependencies.rest.setForeground(false)
         super.onPause()
     }
@@ -105,6 +117,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        documentForeground.value = false
         waitingDependencies.safety.setForeground(false)
         super.onStop()
     }
@@ -133,6 +146,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             PleosStayPlusTheme {
                 var section by rememberSaveable { mutableIntStateOf(0) }
+                val documentVisible by documentForeground.collectAsState()
+                DisposableEffect(section) {
+                    if (section == 5 || section == 6) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    onDispose {
+                        if (section == 5 || section == 6) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
                 LaunchedEffect(openRest) {
                     if (openRest) { section = 4; openRest = false }
                 }
@@ -146,12 +166,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Column {
-                    Row {
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
                         TextButton(onClick = { section = 0 }) { Text("장소 검색") }
                         TextButton(onClick = { section = 1; requestVehicleInformation() }) { Text("대기 관리") }
                         TextButton(onClick = { section = 2; requestVehicleInformation() }) { Text("픽업") }
                         TextButton(onClick = { section = 3; requestVehicleInformation() }) { Text("파일 전송") }
                         TextButton(onClick = { section = 4; requestVehicleInformation() }) { Text("휴식") }
+                        TextButton(onClick = { section = 5; requestVehicleInformation() }) { Text("공부") }
+                        TextButton(onClick = { section = 6; requestVehicleInformation() }) { Text("업무") }
                     }
                     when (section) {
                         1 -> {
@@ -159,7 +181,12 @@ class MainActivity : ComponentActivity() {
                             WaitingScreen(waitingModel, place)
                         }
                         2 -> PickupScreen(pickupViewModel, ::requestPickupStart)
-                        3 -> RealtimeEntry(applicationContext, waitingDependencies.safety)
+                        3, 5, 6 -> RealtimeEntry(applicationContext, waitingDependencies.safety, documentVisible) { model, endpoint ->
+                            if (section == 3) com.pleosstay.app.realtime.FileTransferScreen(model)
+                            else DocumentWorkspaceEntry(applicationContext, model, endpoint, modeStartManager,
+                                waitingDependencies.safety, section == 5, documentVisible, onOpenFiles = { section = 3 },
+                                onOpenWaiting = { section = 1 }, onHome = { section = 0 })
+                        }
                         4 -> RestScreen(waitingDependencies.rest, onRecoverWaiting = waitingModel::reload) { section = 0 }
                         else -> ParkingScreen(viewModel = parkingViewModel, onNearbySearch = ::requestNearbySearch)
                     }

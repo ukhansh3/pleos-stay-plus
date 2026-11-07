@@ -43,7 +43,9 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
             } }; response(c)
         } finally { c.disconnect() }
     }
-    suspend fun download(version: JSONObject, directory: File, progress: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
+    suspend fun download(version: JSONObject, directory: File, progress: (Long, Long) -> Unit): File {
+      var completed: File? = null
+      return try { withContext(Dispatchers.IO) {
         val connectionBefore=call("GET","connections/current").optJSONObject("connection")?.getString("id") ?: error("NO_CONNECTION")
         directory.mkdirs(); val part = File.createTempFile("transfer-", ".part", directory)
         val c = connection("GET", "versions/${version.getString("id")}/content")
@@ -58,7 +60,8 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
             check(call("GET","connections/current").optJSONObject("connection")?.getString("id")==connectionBefore) { "CONNECTION_REVOKED" }
             currentCoroutineContext().ensureActive(); progress(total,expected)
             val target = File(directory, java.util.UUID.randomUUID().toString() + "." + version.getString("fileName").substringAfterLast('.', "bin").lowercase().let { if(it in listOf("txt","pdf","docx")) it else "bin" })
-            check(part.renameTo(target)) { "LOCAL_SAVE_FAILED" }; target
+            check(part.renameTo(target)) { "LOCAL_SAVE_FAILED" }; completed=target; target
         } finally { c.disconnect(); part.delete() }
+      } } catch (error: Throwable) { completed?.delete(); throw error }
     }
 }

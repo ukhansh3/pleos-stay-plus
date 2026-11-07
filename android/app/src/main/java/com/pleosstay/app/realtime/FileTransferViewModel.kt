@@ -11,13 +11,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 data class FileTransferState(val allowed: Boolean = false, val unlocked: Boolean = false, val busy: Boolean = false, val message: String = "잠김", val pairingId: String? = null, val code: String = "", val connectionId: String? = null, val files: List<JSONObject> = emptyList(), val versions: List<JSONObject> = emptyList(), val progress: Float = 0f)
 /** Host owns the existing safety gateway lifecycle. This ViewModel never starts a second monitor. */
 class FileTransferViewModel(private val api: RealtimeApi, safety: WaitingSafetyGateway, private val store: RevisionStore, private val downloadDirectory: File, private val resetIdentity: suspend () -> Unit = {}) : ViewModel(), RealtimeWorkBridge {
+    // Workspace adapters share this exact authenticated client; never create a second refresh owner.
+    internal val workspaceApi: RealtimeApi get() = api
+    internal suspend fun refreshWorkspaceConnection() { checkAccess(); restore(); checkAccess() }
     private val mutable = MutableStateFlow(FileTransferState()); val state: StateFlow<FileTransferState> = mutable.asStateFlow()
     private var operation: Job? = null
+    private val bridgeMutex = Mutex()
     init { viewModelScope.launch { safety.state.collect { value ->
         if (!value.canUse) { operation?.cancel(); mutable.update { it.copy(allowed=false, unlocked=false, files=emptyList(), versions=emptyList(), message=value.message) } }
         else mutable.update { it.copy(allowed=true) }
@@ -58,14 +64,35 @@ class FileTransferViewModel(private val api: RealtimeApi, safety: WaitingSafetyG
         mutable.update { FileTransferState(allowed=it.allowed,message="이전 연결·파일·인증정보를 지웠습니다. 새 PIN 설정 후 등록하세요") }
     }
     fun cancel() { operation?.cancel() }
-    override suspend fun stageRevision(request: WorkRevisionRequest): StagedRevision { checkAccess(); val connection=state.value.connectionId ?: error("NO_CONNECTION"); check(store.pending(connection)==null) { "RETRY_OR_CLEAR_PENDING_FIRST" }; val staged=store.stage(request); try { checkAccess(); store.save(staged,connection); return staged } catch(e:Throwable){staged.file.delete();throw e} }
-    override suspend fun uploadRevision(staged: StagedRevision, progress: (Long,Long)->Unit): JSONObject {
-        checkAccess(); val r=staged.request
+    override suspend fun stageRevision(request: WorkRevisionRequest): StagedRevision = bridgeMutex.withLock {
+        refreshWorkspaceConnection()
+        val connection=state.value.connectionId ?: error("NO_CONNECTION")
+        val pending=store.pending(connection)
+        if(pending!=null) check(pending.request.idempotencyKey==request.idempotencyKey &&
+            pending.request.originalFileId==request.originalFileId && pending.request.baseVersionId==request.baseVersionId &&
+            pending.request.fileName==request.fileName && pending.request.mimeType==request.mimeType) { "RETRY_OR_CLEAR_PENDING_FIRST" }
+        val staged=store.stage(request)
+        try {
+            checkAccess()
+            if(pending!=null) {
+                check(staged.size==pending.size && staged.sha256==pending.sha256) { "IDEMPOTENCY_CONTENT_CHANGED" }
+                staged.file.delete()
+                return@withLock pending
+            }
+            store.save(staged,connection)
+            staged
+        } catch(e:Throwable){staged.file.delete();throw e}
+    }
+    override suspend fun uploadRevision(staged: StagedRevision, progress: (Long,Long)->Unit): JSONObject = bridgeMutex.withLock {
+        refreshWorkspaceConnection()
+        val connection=state.value.connectionId ?: error("NO_CONNECTION")
+        check(store.pending(connection)?.transferId==staged.transferId) { "STAGED_CONNECTION_CHANGED" }
+        val r=staged.request
         val prepared=api.call("POST","uploads",JSONObject().put("connectionId",state.value.connectionId ?: error("NO_CONNECTION")).put("fileId",r.originalFileId).put("baseVersionId",r.baseVersionId).put("fileName",r.fileName).put("mimeType",r.mimeType).put("size",staged.size).put("sha256",staged.sha256).put("idempotencyKey",r.idempotencyKey))
         val id=prepared.getString("id")
-        if(prepared.getString("state") == "READY") { store.finish(staged); return prepared }
+        if(prepared.getString("state") == "READY") { store.finish(staged); return@withLock prepared }
         if(prepared.getString("state") != "VERIFYING") api.upload(id,staged.file) { done,total -> checkAccess(); progress(done,total) }
-        checkAccess(); return api.call("POST","uploads/$id/complete").also { store.finish(staged) }
+        checkAccess(); api.call("POST","uploads/$id/complete").also { store.finish(staged) }
     }
 }
 

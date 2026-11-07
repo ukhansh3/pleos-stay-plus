@@ -7,10 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 /** Integrating host provides the existing Waiting safety-backed model and this local profile lock. */
-@Composable fun RealtimeLockedScreen(model: FileTransferViewModel, pins: RealtimePinStore) {
+@Composable fun RealtimeLockedScreen(model: FileTransferViewModel, pins: RealtimePinStore,
+ content: @Composable () -> Unit = { FileTransferScreen(model) }) {
  val state by model.state.collectAsState();var pin by remember { mutableStateOf("") };var confirm by remember { mutableStateOf("") };var message by remember { mutableStateOf("") };var busy by remember { mutableStateOf(false) };val scope=rememberCoroutineScope()
  if(!state.allowed){Text("정차 상태가 확인되지 않아 파일 화면이 잠겼습니다.");return}
- if(state.unlocked){FileTransferScreen(model);return}
+ if(state.unlocked){content();return}
  Column {
   Text(if(pins.isConfigured())"파일 화면 PIN 잠금" else "공유 차량 파일 보호 PIN 설정 (6~12자리)")
   OutlinedTextField(pin,{pin=it},visualTransformation=PasswordVisualTransformation(),label={Text("PIN")})

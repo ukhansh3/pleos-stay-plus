@@ -83,6 +83,7 @@ Common `ModeStartResult` handling: `Ready` starts only requested mode after safe
 - Do not log document text, filenames with sensitive details, annotations, access tokens, file content, or clipboard contents. No secret in APK.
 - User-switch/revocation: clear display, editor buffers, temporary previews and drafts as per approved retention rules; preserve recoverable failed upload only within same authorized user and connection.
 - Drafts and study notes are not new Supabase tables. Local persistence security, key binding, delete/retention and backup exclusion require implementation review.
+- **2026-11-07 user-approved retention:** app-private, no-backup encrypted notes/progress/drafts are locked and retained after revocation or user switch until explicit user deletion. Clear display/editor buffers and temporary previews immediately; retained bytes never grant offline access. Reading requires fresh authorization for the same endpoint/user/connection/file/version.
 - Different versions must not overwrite existing notes/drafts. Never silently flatten DOCX or destroy PDF editability. Explicit error if engine lacks features.
 - Ensure no screen previews/recents leaks, clipboard leaks, unsupported file intent exports, or unauthorized SAF grant persistence; test PLEOS runtime, not build-only.
 

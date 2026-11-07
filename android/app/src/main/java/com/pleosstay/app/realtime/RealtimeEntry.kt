@@ -15,7 +15,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-@Composable fun RealtimeEntry(context: Context, safety: WaitingSafetyGateway) {
+@Composable fun RealtimeEntry(context: Context, safety: WaitingSafetyGateway,
+ foreground: Boolean = true,
+ workspace: (@Composable (FileTransferViewModel, String) -> Unit)? = null) {
  val app=context.applicationContext
  val configStore=remember { RealtimeTokenStore(app,"realtime-local-config.bin") }
  var url by remember { mutableStateOf(if(BuildConfig.DEBUG) "http://10.0.2.2:3010/api/v1/realtime/" else "") }
@@ -56,5 +58,9 @@ import org.json.JSONObject
   @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T=FileTransferViewModel(RealtimeApi(url){provider?.validToken() ?: credential},safety,LocalFileStore(app),File(app.noBackupFilesDir,"realtime/downloads")){provider?.resetAfterRevocation();withContext(Dispatchers.IO){RealtimePinStore(app).clearAfterUserVerification()}} as T
  }})
  DisposableEffect(model){onDispose{model.lock()}}
- RealtimeLockedScreen(model,remember{RealtimePinStore(app)})
+ LaunchedEffect(foreground,model) { if(!foreground) model.lock() }
+ if(!foreground){Text("앱으로 돌아온 후 PIN을 다시 확인해 주세요.");return}
+ RealtimeLockedScreen(model,remember{RealtimePinStore(app)}) {
+  if(workspace==null) FileTransferScreen(model) else workspace(model,url)
+ }
 }
