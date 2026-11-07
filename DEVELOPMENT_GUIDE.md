@@ -818,3 +818,14 @@ interface WaitingRepository {
 - Android QR은 승인된 Apache-2.0 ZXing Core를 사용한다. TTS는 공식 Pleos TextToSpeech Maven 좌표·클래스·권한 및 에뮬레이터 동작 확인 전 Gateway의 `UNSUPPORTED/SDK_VERIFY` 상태로만 제공한다.
 - TTS가 공식 검증되면 출발·근접·합류 완료만 중복 없이 1회 안내한다. `/dev/pickup-simulator`는 명시적 개발 자격증명과 비운영 환경으로 제한하고, 외부 터널에서는 차단한다. 임시 HTTPS 터널은 실제 폰 연결 검증 전용이며 정식 배포로 간주하지 않는다.
 - API 전체 요청·응답·오류 계약은 `docs/api/openapi.yaml` v0.3을 따른다. 기존 `/waiting-sessions/{id}/invitations` Pickup 초안은 폐기하며 별칭으로 유지하지 않는다.
+
+## 22. Study / Work document MVP contract — 2026-11-07
+
+**Latest user decision supersedes earlier §14.2 Work remote-stream and §14.3 general Study backlog FOR THE 1st MVP only.** Historic text is retained for audit, not as an instruction to implement AirDesk now.
+
+- Work 1st MVP: use **the existing Realtime** PC→vehicle file library for source PDF/DOCX, **actually create and edit PDF/DOCX including existing PDF body text and images**, then upload new version via current Realtime. PDF overlay-only is insufficient; engine selection/Android compatibility/licensing and output fidelity remain hard technical gates. New original upload VEHICLE permission must be verified.
+- Study 1st MVP: the **same Realtime** source TXT/PDF/DOCX, real viewer, **side-panel text notes (not direct PDF writing)**, reading position/progress per exact file version, local persistence and ModeStartManager timer.
+- Existing `ModeStartManager` and Rest are shared/team-owned and **already implemented**; only invoke existing `ActivityMode.STUDY`/`WORK` contracts. Do not rewrite shared module or create new Waiting HTTP server.
+- Not a first-MVP target: AirDesk, Work spreadsheets/PPT/browser/calendar/coding; Study AI/flashcards; new server Study/Work APIs or independent Supabase file buckets. Realtime transfer, pairing, Auth, PIN and server-side version controls remain canonical.
+- Current detailed source: `docs/contracts/DOCUMENT_WORKSPACE_CONTRACT.md`, `docs/features/STUDY_MVP_SPEC.md`, `docs/features/WORK_DOCUMENT_MVP_SPEC.md`, `docs/api/MODE_API_MATRIX.md`, each new package `AGENTS.md`.
+- Scope is approved as a product goal; code execution/SDK selection/editor fidelity **not** verified by this documentation commit. Do not mark implemented until device E2E and editor acceptance tests pass.
