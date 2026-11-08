@@ -45,10 +45,10 @@ class ParkingPremiumTest {
         compose.waitUntil(10_000) { model.state.value.places.isNotEmpty() }
         compose.onNodeWithText("테스트 전용 장소").performScrollTo().performClick()
         compose.waitUntil(10_000) { model.state.value.selected != null }
-        compose.onNodeWithText("80m").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("순정 내비게이션으로 길 안내").performScrollTo().performClick()
+        compose.onAllNodesWithText("80m", substring = true).onFirst().assertExists()
+        compose.onNodeWithText("길 안내").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(37.0, navigation.destination?.latitude); assertEquals(127.0, navigation.destination?.longitude) }
-        compose.onNodeWithText("이 장소에서 대기 관리").performScrollTo().performClick()
+        compose.onNodeWithText("이 장소에서 대기").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(waitingOpened) }
         compose.onNodeWithTag("back").performClick()
         compose.onNodeWithTag("nav_PARKING").assertIsSelected()

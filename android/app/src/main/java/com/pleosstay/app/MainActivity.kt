@@ -208,8 +208,8 @@ class MainActivity : ComponentActivity() {
                 }
                 if (pendingNavigation != null && documentVisible) AlertDialog(
                     onDismissRequest = { pendingNavigation = null },
-                    title = { Text(if (workSaving) "초안 저장 중" else "외부 파일로 내보내지 않은 변경") },
-                    text = { Text("저장이 끝난 암호화 DOCX 초안을 보관하고 이동합니다. Waiting과 파일 연결은 유지됩니다.") },
+                    title = { Text(if (workSaving) "초안 저장 중" else "변경 사항이 있습니다") },
+                    text = { Text("초안을 보관하고 이동할까요?") },
                     confirmButton = {
                         TextButton(enabled = !workSaving, onClick = {
                             val proceed = pendingNavigation

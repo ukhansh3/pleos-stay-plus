@@ -44,9 +44,9 @@ class DocxEditorDeviceTest {
    ui.runOnIdle{ctl.newDocument()};ready(ctl)
    ui.onNodeWithTag("docx-body").performTextInput("한글 업무 문서");ready(ctl)
    ui.onNodeWithTag("docx-body").performTextInputSelection(TextRange(0,2))
-   ui.onNodeWithText("글꼴·서식").performClick();ui.onNodeWithText("굵게").performClick();ready(ctl)
+   ui.onNodeWithText("B").performScrollTo().performClick();ready(ctl)
    assertTrue(ctl.state.value.view!!.paragraphs.first().runs.any{it.text.contains("한글")&&it.bold})
-   ui.onNodeWithTag("docx-body").performTextInputSelection(TextRange(3,5));ui.onNodeWithText("글꼴·서식").performClick();ui.onNodeWithText("굵게").performClick();ready(ctl)
+   ui.onNodeWithTag("docx-body").performTextInputSelection(TextRange(3,5));ui.onNodeWithText("B").performScrollTo().performClick();ready(ctl)
    assertTrue(ctl.state.value.view!!.paragraphs.first().runs.any{it.text.contains("업무")&&it.bold})
    ui.runOnIdle{ctl.edit{it.addTable(2,2);val cell=it.view().tables.first().rows.first().first().first();it.replaceText(cell,0,0,"표 수정");it.shadeCell(0,0,0,"AAFFAA")}};ready(ctl)
    ui.runOnIdle{ctl.undo()};ready(ctl);assertTrue(ctl.state.value.view!!.tables.isEmpty())
@@ -54,12 +54,12 @@ class DocxEditorDeviceTest {
    fun image(color:Int):ByteArray {val bitmap=android.graphics.Bitmap.createBitmap(20,20,android.graphics.Bitmap.Config.ARGB_8888);bitmap.eraseColor(color);return java.io.ByteArrayOutputStream().also{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it);bitmap.recycle()}.toByteArray()}
    val red=image(android.graphics.Color.RED);val green=image(android.graphics.Color.GREEN);val blue=image(android.graphics.Color.BLUE)
    ui.runOnIdle{ctl.edit{it.addImage(red,"image/png",120,80);it.addImage(green,"image/png",140,90);it.replaceImage(0,blue,"image/png");it.resizeImage(0,240,160);it.format(0,0,2,DocxStyle(font="Noto Serif CJK KR",size=22f,color="1234AB"));it.align(0,"center")}};ready(ctl)
-   ui.onNodeWithText("저장").performClick();ready(ctl);info=ctl.state.value.draft!!
+   ui.onNodeWithText("초안 저장").performScrollTo().performClick();ready(ctl);info=ctl.state.value.draft!!
    val bytes=runBlocking{repo.loadDocx(info!!).bytes}
    File(context.cacheDir,"docx-verification").apply{mkdirs()}.resolve("edited.docx").writeBytes(bytes)
-   ui.onNodeWithText("다른 이름으로 저장").performClick();assertNull(ctl.state.value.exportUri)
+   ui.onNodeWithText("DOCX 내보내기").performScrollTo().performClick();assertNull(ctl.state.value.exportUri)
    ui.onNodeWithText("취소").performClick();assertNull(ctl.state.value.exportUri)
-   ui.onNodeWithText("다른 이름으로 저장").performClick()
+   ui.onNodeWithText("DOCX 내보내기").performScrollTo().performClick()
    ui.onNodeWithText("DOCX 파일 이름").performTextReplacement("stay-docx-test-${UUID.randomUUID()}.docx")
    ui.onNodeWithText("공개 저장 위치 확인·내보내기").performClick();ready(ctl)
    val uri=ctl.state.value.exportUri!!;exported=uri
@@ -67,7 +67,7 @@ class DocxEditorDeviceTest {
    val doc=OoxmlDocxEngine.open(reopened).view();assertEquals("한글 업무 문서",doc.paragraphs.first().text);assertEquals(1,doc.tables.size);assertEquals(2,doc.images.size);assertEquals(240,doc.images.first().width);bytes.fill(0);reopened.fill(0)
    ui.runOnIdle{ctl.exportPrivate()};ready(ctl);assertNotNull(ctl.state.value.exportUri)
    val temporary=ctl.state.value.exportUri!!;val privateBytes=runBlocking{AndroidDocxFileGateway(context).read(temporary)};assertEquals("한글 업무 문서",OoxmlDocxEngine.open(privateBytes).view().paragraphs.first().text);privateBytes.fill(0)
-   ui.onNodeWithText("내보낸 DOCX 재열기").performClick();ready(ctl);assertEquals("한글 업무 문서",ctl.state.value.view!!.paragraphs.first().text)
+   ui.onNodeWithText("저장 파일 열기").performScrollTo().performClick();ready(ctl);assertEquals("한글 업무 문서",ctl.state.value.view!!.paragraphs.first().text)
    ui.runOnIdle{allowed.set(false);ctl.mask();visible=false};ui.onNodeWithTag("docx-body").assertDoesNotExist();ui.onNodeWithText("LOCKED").assertExists()
    ui.runOnIdle{ctl.setText(0,"DENIED")};ui.waitUntil(10000){!ctl.state.value.busy};assertNull(ctl.state.value.view)
    ui.runOnIdle{allowed.set(true);visible=true;ctl.restore(info!!)};ready(ctl);assertEquals("한글 업무 문서",ctl.state.value.view!!.paragraphs.first().text)

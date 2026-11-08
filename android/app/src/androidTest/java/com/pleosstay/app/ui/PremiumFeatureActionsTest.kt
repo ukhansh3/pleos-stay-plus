@@ -59,6 +59,7 @@ class PremiumFeatureActionsTest {
             ui.runOnIdle { safety.state.value = WaitingSafety(VehicleMotion.PARKED, false) }
             ui.waitUntil(10000) { model.state.value.canUse }
             ui.onNodeWithText("대기 종료").performScrollTo().performClick()
+            ui.onNodeWithText("종료", useUnmergedTree = true).performClick()
             ui.waitUntil(15000) { model.state.value.active == null && !model.state.value.busy }
             assertEquals(EndReason.MANUAL, model.state.value.sessions.single().endReason)
             assertEquals("테스트 전용 장소", model.state.value.sessions.single().place?.name)
@@ -86,18 +87,21 @@ class PremiumFeatureActionsTest {
             ui.waitUntil(15000) { model.state.value.session != null && !model.state.value.busy }
             assertNull(repository.waitingId)
             assertNotNull(model.state.value.locationMessage)
-            ui.onNodeWithText("60분 초대 QR 발급").performScrollTo().performClick()
+            ui.onNodeWithText("QR 발급").performScrollTo().performClick()
             ui.waitUntil(15000) { model.state.value.invitation != null && !model.state.value.busy }
             ui.onNodeWithContentDescription("Pickup 공유 링크 QR").performScrollTo().assertIsDisplayed()
             val first = model.state.value.invitation!!.shareUrl
-            ui.onNodeWithText("QR 재발급 · 기존 참가 권한 폐기").performScrollTo().performClick()
+            ui.onNodeWithText("QR 재발급").performScrollTo().performClick()
+            ui.onNodeWithText("재발급", useUnmergedTree = true).performClick()
             ui.waitUntil(15000) { repository.invites == 2 && !model.state.value.busy }
             assertNotEquals(first, model.state.value.invitation!!.shareUrl)
             repository.failInvite = true
-            ui.onNodeWithText("QR 재발급 · 기존 참가 권한 폐기").performScrollTo().performClick()
+            ui.onNodeWithText("QR 재발급").performScrollTo().performClick()
+            ui.onNodeWithText("재발급", useUnmergedTree = true).performClick()
             ui.waitUntil(15000) { model.state.value.error != null && !model.state.value.busy }
             ui.onNodeWithText("테스트 전용 네트워크 오류").performScrollTo().assertIsDisplayed()
             ui.onNodeWithText("합류 완료").performScrollTo().performClick()
+            ui.onNodeWithText("완료", useUnmergedTree = true).performClick()
             ui.waitUntil(15000) { model.state.value.session?.status == PickupSessionStatus.COMPLETED && !model.state.value.busy }
             assertEquals(1, repository.completions)
             assertNull(model.state.value.invitation)

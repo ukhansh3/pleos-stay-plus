@@ -108,9 +108,6 @@ fun StayNavigationRail(selected:NavigationGroup,navigate:(StayRoute)->Unit,width
 fun StaySettingsScreen() {
     Column(Modifier.fillMaxSize().padding(32.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
         Text(stringResource(R.string.stay_settings),style=MaterialTheme.typography.headlineLarge)
-        GlassPanel(Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.stay_preparing),color=StayColors.Warning)
-            Text("앱 설정 기능은 준비 중입니다. 차량 설정은 PLEOS 시스템에서 관리합니다.",color=StayColors.Secondary)
-        }
+        Text("설정할 항목이 없습니다.", color = StayColors.Secondary)
     }
 }

@@ -28,7 +28,8 @@ class WorkPinGateDeviceTest {
   var observed:FileTransferViewModel?=null
   try{
    ui.setContent{MaterialTheme{RealtimeEntry(isolated,safety,foreground,managedWorkspace={m,_-> SideEffect{observed=m};{Text("SENSITIVE_TEST_DOCUMENT")}})}}
-   ui.onNodeWithText("설정 저장 / 파일 화면 진입").performClick()
+   ui.waitUntil(10000){ui.onAllNodesWithText("http://127.0.0.1:49201/api/v1/realtime/",substring=true).fetchSemanticsNodes().isNotEmpty()}
+   ui.onNodeWithText("연결").performClick()
    ui.onNodeWithText("SENSITIVE_TEST_DOCUMENT").assertDoesNotExist()
    ui.onNodeWithText("PIN").performTextInput("654321");ui.onNodeWithText("PIN 확인").performTextInput("654321");ui.onNodeWithText("잠금 해제").performClick()
    try{ui.waitUntil(30000){ui.onAllNodesWithText("SENSITIVE_TEST_DOCUMENT").fetchSemanticsNodes().isNotEmpty()}}catch(t:Exception){

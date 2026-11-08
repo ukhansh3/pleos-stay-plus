@@ -1,5 +1,23 @@
 package com.pleosstay.app.rest
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.pleosstay.app.R
+import com.pleosstay.app.ui.premium.StayColors
+import com.pleosstay.app.ui.premium.PremiumAction
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -72,120 +90,159 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     }
 
     val colors = if (active == null) MaterialTheme.colorScheme else when (active.preset.display) {
-        RestDisplay.DARK -> darkColorScheme(background = Color(0xff101114), onBackground = Color(0xffe5e5e9))
-        RestDisplay.MINIMAL -> darkColorScheme(background = Color.Black, onBackground = Color(0xffdddddd))
+        RestDisplay.DARK -> darkColorScheme(background = StayColors.Background, onBackground = StayColors.Text)
+        RestDisplay.MINIMAL -> darkColorScheme(background = Color.Black, onBackground = StayColors.Text)
         RestDisplay.CALM -> darkColorScheme(background = Color(0xff142c2b), onBackground = Color(0xffdef4e9))
+    }
+    val selected = active?.preset ?: editor ?: RestPreset.defaults.first()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(active?.alarmToken) {
+        while (active != null) { now = System.currentTimeMillis(); delay(500) }
     }
     MaterialTheme(colorScheme = colors) {
         Surface(color = colors.background, modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("휴식", style = MaterialTheme.typography.headlineMedium)
-                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                state.alarmLimitation?.let { Text(it) }
-                when {
-                    !state.ready -> {
-                        Text("휴식 기록을 불러오는 중입니다.")
-                        TextButton(onClick = { controller.restore() }, enabled = !state.busy) { Text("다시 불러오기") }
+            BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
+                val wide = maxWidth >= 920.dp
+                val panelHeight = (maxHeight - 80.dp).coerceAtLeast(600.dp)
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("휴식", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onHome, modifier = Modifier.heightIn(min = 56.dp)) { Text("홈으로 이동") }
                     }
-                    active != null -> {
-                        Text(active.preset.name, style = MaterialTheme.typography.titleLarge)
-                        if (safety.canUse) {
-                            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                            LaunchedEffect(active.alarmToken) {
-                                while (true) { now = System.currentTimeMillis(); delay(500) }
-                            }
-                            Text(duration(active.remaining(now)), style = MaterialTheme.typography.displaySmall)
-                            Text("종료 예정 ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(active.endsAt))}")
-                            if (active.preset.display != RestDisplay.MINIMAL) {
-                                Text("${active.preset.display.label} · ${active.preset.sound.label}")
-                            }
-                            if (active.waitingId == null) Text("독립 휴식 · 대기 종료 예정 시각을 관리하지 않아요.")
-                            if (active.preset.ev) {
-                                Text(evText(state.ev, active.preset.target))
-                                if (state.ev.percent == null) TextButton(onClick = controller::retryEv) { Text("배터리 정보 다시 확인") }
-                            }
-                            if (active.targetPrompt) {
-                                Text("목표 충전율에 도달했어요.")
-                                Row {
-                                    TextButton(onClick = { controller.answerTarget(false) }, enabled = !state.busy) { Text("휴식 종료") }
-                                    TextButton(onClick = { controller.answerTarget(true) }, enabled = !state.busy) { Text("계속 휴식") }
+                    val timer: @Composable (Modifier) -> Unit = { modifier ->
+                        RestTimerPanel(modifier.height(panelHeight), selected,
+                            remaining = active?.remaining(now) ?: selected.minutes * REST_MINUTE,
+                            active = active != null, canUse = safety.canUse, safetyMessage = safety.message,
+                            ended = session?.end?.takeIf { active == null && !showPresets && editor == null }?.label,
+                            endsAt = active?.endsAt,
+                            onAgain = { showPresets = true },
+                            actions = {
+                                if (active != null) {
+                                    if (safety.canUse) {
+                                        if (active.preset.sound != RestSound.SILENT && !active.targetPrompt) {
+                                            OutlinedButton(onClick = { controller.pauseSound(!active.soundPaused) },
+                                                enabled = !state.busy, modifier = Modifier.heightIn(min = 60.dp)) {
+                                                Text(if (active.soundPaused) "사운드 재개" else "사운드 일시정지")
+                                            }
+                                        }
+                                        OutlinedButton(onClick = { extend = true }, enabled = !state.busy,
+                                            modifier = Modifier.heightIn(min = 60.dp)) { Text("휴식 시간 연장") }
+                                    }
+                                    PremiumAction("휴식 종료", controller::end, enabled = !state.busy)
+                                }
+                            })
+                    }
+                    val settings: @Composable (Modifier) -> Unit = { modifier ->
+                        RestPanel(modifier.height(panelHeight)) {
+                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                Text("휴식 설정", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                when {
+                                    !state.ready -> {
+                                        Text("휴식 기록을 불러오는 중입니다.", color = StayColors.Secondary)
+                                        TextButton(onClick = { controller.restore() }, enabled = !state.busy) { Text("다시 불러오기") }
+                                    }
+                                    !safety.canUse -> Text(safety.message, color = StayColors.Warning, fontSize = 22.sp)
+                                    active != null -> {
+                                        if (safety.canUse) {
+                                            Text(active.preset.name, fontSize = 22.sp)
+                                            if (active.preset.display != RestDisplay.MINIMAL) {
+                                                RestSettingLine("화면", active.preset.display.label)
+                                                RestSettingLine("배경음", active.preset.sound.label)
+                                            }
+                                            RestSettingLine("종료 알람", active.preset.alert.label)
+                                            if (active.preset.ev) {
+                                                HorizontalDivider(color = StayColors.Border)
+                                                Text("EV 배터리", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(evText(state.ev, active.preset.target), fontSize = 20.sp)
+                                                if (state.ev.percent == null) TextButton(onClick = controller::retryEv) { Text("배터리 정보 다시 확인") }
+                                            }
+                                            if (active.targetPrompt) {
+                                                Text("목표 충전율에 도달했어요.", color = StayColors.Success)
+                                                PremiumAction("휴식 종료", { controller.answerTarget(false) }, enabled = !state.busy)
+                                                PremiumAction("계속 휴식", { controller.answerTarget(true) }, enabled = !state.busy, secondary = true)
+                                            }
+                                        } else Text(safety.message, color = StayColors.Warning)
+                                    }
+                                    session?.end != null && !showPresets && editor == null -> {
+                                        Text(session.end.label, color = StayColors.Secondary, fontSize = 22.sp)
+                                    }
+                                    else -> {
+                                        Text("기본 프리셋", color = StayColors.Secondary, fontSize = 18.sp)
+                                        RestPreset.defaults.forEach { preset ->
+                                            val chosen = editor?.id == preset.id
+                                            OutlinedButton(onClick = { editingId = null; editor = preset },
+                                                modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp,
+                                                    if (chosen) StayColors.Purple else StayColors.Border)) {
+                                                Text("${preset.name} · ${preset.minutes}분", color = if (chosen) StayColors.Text else StayColors.Secondary)
+                                            }
+                                        }
+                                        HorizontalDivider(color = StayColors.Border)
+                                        if (state.presets.isNotEmpty()) Text("내 프리셋", color = StayColors.Secondary, fontSize = 18.sp)
+                                        state.presets.forEach { preset ->
+                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                TextButton(onClick = { editingId = preset.id; editor = preset },
+                                                    modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Text(preset.name) }
+                                                TextButton(onClick = { deleting = preset }, enabled = !state.busy) { Text("삭제") }
+                                            }
+                                        }
+                                        OutlinedButton(onClick = { editingId = null; editor = RestPreset() },
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) { Text("새 프리셋 만들기") }
+                                        editor?.let { preset ->
+                                            HorizontalDivider(color = StayColors.Border)
+                                            RestEditor(preset, { editor = it })
+                                            if (preset.ev) {
+                                                Text(evText(state.ev, preset.target))
+                                                TextButton(onClick = controller::retryEv, enabled = safety.canUse) { Text("배터리 정보 다시 확인") }
+                                            }
+                                            if (!safety.canUse) Text(safety.message, color = StayColors.Warning)
+                                            PremiumAction("휴식 시작", { controller.start(preset) },
+                                                modifier = Modifier.fillMaxWidth().testTag("rest_start"),
+                                                enabled = !state.busy && safety.canUse && preset.valid &&
+                                                    (!preset.ev || state.ev.percent?.let { it < preset.target } == true))
+                                            TextButton(onClick = { controller.savePreset(preset, editingId) }, enabled = !state.busy && preset.valid) {
+                                                Text(if (editingId == null) "내 프리셋으로 저장" else "프리셋 수정 저장")
+                                            }
+                                            TextButton(onClick = { editor = null }) { Text("프리셋 목록") }
+                                        }
+                                    }
+                                }
+                                state.alarmLimitation?.let {
+                                    HorizontalDivider(color = StayColors.Border)
+                                    Text(it, color = StayColors.Warning, fontSize = 17.sp)
+                                }
+                                if (state.ringing) PremiumAction("알람 정지", controller::stopAlarm)
+                                if (editor != null || state.message?.let { "알람" in it || "알림" in it } == true) {
+                                    TextButton(onClick = {
+                                        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        else openRestSettings(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    }, modifier = Modifier.heightIn(min = 56.dp)) { Text("휴식 알림 설정") }
+                                    if (exactSettingsAvailable) TextButton(onClick = {
+                                        if (!openRestSettings(context, Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)) controller.alarmSettingsUnavailable()
+                                    }) { Text("정확한 알람 권한 설정") }
+                                }
+                                if (state.fallback != null || state.message?.contains("대기") == true) {
+                                    TextButton(onClick = onRecoverWaiting, enabled = !state.busy) { Text("대기 기록 다시 확인") }
                                 }
                             }
-                            if (active.preset.sound != RestSound.SILENT && !active.targetPrompt) {
-                                TextButton(onClick = { controller.pauseSound(!active.soundPaused) }, enabled = !state.busy) {
-                                    Text(if (active.soundPaused) "사운드 재개" else "사운드 일시정지")
-                                }
-                            }
-                            TextButton(onClick = { extend = true }, enabled = !state.busy) { Text("휴식 시간 연장") }
-                        } else Text(safety.message)
-                        if (state.message?.let { "알람" in it || "알림" in it } == true) {
-                            TextButton(onClick = { openRestSettings(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS) }) { Text("휴식 알림 설정") }
-                            if (exactSettingsAvailable) TextButton(onClick = {
-                                if (!openRestSettings(context, Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)) {
-                                    controller.alarmSettingsUnavailable()
-                                }
-                            }) { Text("정확한 알람 권한 설정") }
                         }
-                        Button(onClick = controller::end, enabled = !state.busy) { Text("휴식 종료") }
                     }
-                    editor != null -> {
-                        val preset = checkNotNull(editor)
-                        RestEditor(preset, { editor = it })
-                        if (preset.ev) {
-                            Text(evText(state.ev, preset.target))
-                            TextButton(onClick = controller::retryEv, enabled = safety.canUse) { Text("배터리 정보 다시 확인") }
-                        }
-                        if (!safety.canUse) Text(safety.message)
-                        TextButton(onClick = onRecoverWaiting, enabled = !state.busy) { Text("대기 기록 다시 확인") }
-                        Button(onClick = { controller.start(preset) }, enabled = !state.busy && safety.canUse &&
-                            preset.valid && (!preset.ev || state.ev.percent?.let { it < preset.target } == true)) { Text("휴식 시작") }
-                        TextButton(onClick = { controller.savePreset(preset, editingId) }, enabled = !state.busy && preset.valid) {
-                            Text(if (editingId == null) "내 프리셋으로 저장" else "프리셋 수정 저장")
-                        }
-                        TextButton(onClick = { editor = null }) { Text("프리셋 목록") }
-                        TextButton(onClick = {
-                            if (Build.VERSION.SDK_INT >= 33 &&
-                                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else openRestSettings(context, Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        }) { Text("휴식 알림 설정") }
-                        if (exactSettingsAvailable) TextButton(onClick = {
-                            if (!openRestSettings(context, Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)) {
-                                    controller.alarmSettingsUnavailable()
-                                }
-                        }) { Text("정확한 알람 권한 설정") }
-                    }
-                    session?.end != null && !showPresets -> {
-                        Text(session.end.label, style = MaterialTheme.typography.headlineSmall)
-                        Button(onClick = { showPresets = true }) { Text("다시 휴식 시작") }
-                    }
-                    else -> {
-                        Text("기본 프리셋")
-                        RestPreset.defaults.forEach { preset ->
-                            TextButton(onClick = { editingId = null; editor = preset }) {
-                                Text("${preset.name} · ${preset.minutes}분" + if (preset.ev) " · EV 지원 확인 필요" else "")
-                            }
-                        }
-                        Text("내 프리셋")
-                        state.presets.forEach { preset ->
-                            Row {
-                                TextButton(onClick = { editingId = preset.id; editor = preset }) { Text(preset.name) }
-                                TextButton(onClick = { deleting = preset }, enabled = !state.busy) { Text("삭제") }
-                            }
-                        }
-                        Button(onClick = { editingId = null; editor = RestPreset() }) { Text("새 프리셋 만들기") }
+                    if (wide) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        timer(Modifier.weight(1.3f)); settings(Modifier.weight(1f))
+                    } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        timer(Modifier.fillMaxWidth().heightIn(min = 440.dp)); settings(Modifier.fillMaxWidth())
                     }
                 }
-                if (state.ringing) TextButton(onClick = controller::stopAlarm) { Text("알람 정지") }
-                TextButton(onClick = onHome) { Text("홈으로 이동") }
             }
         }
     }
 
-    if (state.alarmConsent != null) AlertDialog(
+    if (state.alarmConsent != null && safety.canUse) AlertDialog(
         onDismissRequest = controller::dismissAlarmConsent,
         title = { Text("현재는 앱 실행 중 알람을 사용할 수 있어요") },
-        text = { Text("현재 차량 환경에서는 시스템 알람을 사용할 수 없어요.\n\nStay+를 화면에 유지하는 동안에는 설정한 시간이 지나면 휴식 종료 알람이 울리도록 사용할 수 있어요.\n\n다른 앱으로 이동하거나 화면이 꺼지고 차량이 절전 상태로 전환되면 알람이 울리지 않을 수 있어요.") },
+        text = { Text("Stay+를 화면에 유지하는 동안에만 종료 알람이 울립니다. 다른 앱으로 이동하거나 화면이 꺼지면 알람이 울리지 않을 수 있어요.") },
         confirmButton = {
             TextButton(onClick = controller::acceptForegroundAlarm, enabled = !state.busy && safety.canUse) {
                 Text("앱 실행 중 알람으로 휴식 시작")
@@ -195,7 +252,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     )
 
     val decision = state.decision
-    if (decision != null) {
+    if (decision != null && safety.canUse) {
         val prompt = decision.prompt
         AlertDialog(
             onDismissRequest = { controller.resolve(WaitingChoice.BACK) },
@@ -218,19 +275,19 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
             dismissButton = { TextButton(onClick = { controller.resolve(WaitingChoice.BACK) }) { Text("뒤로가기") } },
         )
     }
-    if (state.fallback != null) AlertDialog(
+    if (state.fallback != null && safety.canUse) AlertDialog(
         onDismissRequest = controller::dismissFallback,
         title = { Text("대기 관리 없이 휴식할까요?") },
         text = { Text("대기 상태와 종료 예정 시각은 관리되지 않아요. 휴식 알람은 예약됩니다.") },
         confirmButton = { TextButton(onClick = { controller.independent() }, enabled = safety.canUse && !state.busy) { Text("독립 휴식 시작") } },
         dismissButton = { TextButton(onClick = controller::dismissFallback) { Text("취소") } },
     )
-    deleting?.let { preset ->
+    deleting?.takeIf { safety.canUse }?.let { preset ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("${preset.name} 삭제") },
             confirmButton = { TextButton(onClick = { controller.deletePreset(preset.id); deleting = null }) { Text("삭제") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } })
     }
-    if (extend && active != null) AlertDialog(
+    if (extend && active != null && safety.canUse) AlertDialog(
         onDismissRequest = { extend = false }, title = { Text("휴식 연장") },
         text = { OutlinedTextField(extension, { extension = it }, label = { Text("추가 시간(분)") }, singleLine = true) },
         confirmButton = {
@@ -239,6 +296,67 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
         },
         dismissButton = { TextButton(onClick = { extend = false }) { Text("취소") } },
     )
+}
+
+@Composable
+private fun RestPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(24.dp)
+    Column(modifier.clip(shape).background(Brush.verticalGradient(listOf(StayColors.Surface, StayColors.Background)))
+        .border(1.dp, StayColors.Border, shape).padding(26.dp), verticalArrangement = Arrangement.spacedBy(18.dp), content = content)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RestTimerPanel(modifier: Modifier, preset: RestPreset, remaining: Long, active: Boolean,
+    canUse: Boolean, safetyMessage: String, ended: String?, endsAt: Long?, onAgain: () -> Unit,
+    actions: @Composable FlowRowScope.() -> Unit) {
+    val shape = RoundedCornerShape(24.dp)
+    Box(modifier.clip(shape).background(if (preset.display == RestDisplay.MINIMAL && active) Color.Black else StayColors.Surface)
+        .border(1.dp, StayColors.Border, shape)) {
+        if (canUse && (preset.display != RestDisplay.MINIMAL || !active)) {
+            Image(painterResource(R.drawable.rest_pillow), null, Modifier.matchParentSize(),
+                contentScale = ContentScale.Crop, alignment = Alignment.Center, alpha = .52f)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
+                StayColors.Background.copy(alpha = .82f), StayColors.Background.copy(alpha = .34f), StayColors.Background.copy(alpha = .86f)))))
+        }
+        Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(if (active) "편안한 휴식" else "휴식 준비", Modifier.align(Alignment.Start), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            if (!canUse) {
+                Text(safetyMessage, fontSize = 24.sp, color = StayColors.Warning)
+            } else if (ended != null) {
+                Text(ended, fontSize = 30.sp, color = StayColors.Text)
+                Spacer(Modifier.height(24.dp))
+                PremiumAction("다시 휴식 시작", onAgain)
+            } else {
+                Text(preset.name.ifBlank { "나만의 휴식" }, fontSize = 24.sp, color = StayColors.Secondary)
+                Spacer(Modifier.height(24.dp))
+                BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val timerSize = if (maxWidth >= 480.dp) 82.sp else 58.sp
+                    Text(clockDuration(remaining), fontSize = timerSize, fontWeight = FontWeight.SemiBold,
+                        color = StayColors.Text, maxLines = 1, modifier = Modifier.testTag("rest_timer"))
+                }
+                Spacer(Modifier.height(20.dp))
+                Text(if (endsAt != null) "종료 예정 ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))}" else "${preset.minutes}분", color = StayColors.Secondary, fontSize = 20.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(12.dp), content = actions)
+        }
+    }
+}
+
+@Composable
+private fun RestSettingLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(label, Modifier.weight(1f), color = StayColors.Secondary, fontSize = 19.sp)
+        Text(value, fontSize = 20.sp)
+    }
+}
+
+private fun clockDuration(millis: Long): String {
+    val seconds = (millis + 999) / 1_000
+    return "%02d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
 }
 
 @Composable
@@ -259,9 +377,10 @@ private fun RestEditor(preset: RestPreset, onChange: (RestPreset) -> Unit) {
         label = { Text("목표 충전율(1~100%)") }, singleLine = true)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> RestOptions(values: List<T>, selected: T, label: (T) -> String, select: (T) -> Unit) {
-    Row { values.forEach { value -> TextButton(onClick = { select(value) }) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { values.forEach { value -> TextButton(onClick = { select(value) }, modifier = Modifier.heightIn(min = 56.dp)) {
         Text((if (value == selected) "✓ " else "") + label(value))
     } } }
 }

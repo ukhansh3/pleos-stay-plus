@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.res.painterResource
@@ -63,5 +64,17 @@ fun NoticePanel(title:String,message:String,error:Boolean=false) {
     GlassPanel(Modifier.fillMaxWidth()) {
         Text(title,fontSize=23.sp,fontWeight=FontWeight.SemiBold,color=if(error) MaterialTheme.colorScheme.error else StayColors.Blue)
         Text(message,fontSize=19.sp,lineHeight=28.sp,color=StayColors.Secondary)
+    }
+}
+
+/** Quiet feature surfaces. The approved home retains its original GlassPanel rendering. */
+@Composable
+fun FeaturePanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(24.dp)
+    Column(modifier.clip(shape)
+        .background(Brush.verticalGradient(listOf(Color(0xFF172B43), Color(0xFF0D1D30))))
+        .border(1.dp, StayColors.Border.copy(alpha = .75f), shape).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides StayColors.Text) { content() }
     }
 }

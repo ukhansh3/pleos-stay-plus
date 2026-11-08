@@ -1,5 +1,7 @@
 # Pleos Stay+ Premium UI — 구현 명세서 v1.0
 
+> 2026-11-08: 확정 홈을 보호하고 최신 8개 기능 시안의 Compose 화면을 기존 기능에 연결했다. Entertainment production admission은 미연결이며 기기 시각 검증은 사용자 중지로 미완료다. [최종 구현·검증 보고서](../verification/2026-11-08-premium-ui-final-integration.md)를 우선한다.
+
 > 2026-11-07 구현 갱신: 사용자가 선택한 차량 후면·석양/네이비 이미지8장을 적용해 보존된 Android UI를 최신 dev 기능에 연결했다. Rest·Study·Work(DOCX)는 실제 기능 진입, Entertainment·일반 설정은 준비 중이다. 최신 범위/검증은 [UI 통합 보고서](../verification/2026-11-07-premium-ui-current-features.md), Work는 [DOCX-only 명세](../features/WORK_DOCX_EDITOR_SPEC.md)가 우선한다. 아래의 과거 예정/엔진 미확정 표는 작성 시점의 기록이다.
 
 - 작성일: 2026-11-05

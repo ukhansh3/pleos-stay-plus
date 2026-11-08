@@ -1,27 +1,25 @@
 package com.pleosstay.app.waiting.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pleosstay.app.R
 import com.pleosstay.app.ui.premium.*
 import com.pleosstay.app.waiting.domain.*
 import java.text.DateFormat
@@ -33,90 +31,116 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
     val state by viewModel.state.collectAsState()
     var minutes by remember { mutableStateOf("30") }
     var extension by remember { mutableStateOf("15") }
+    var endConfirm by remember { mutableStateOf(false) }
+    var historyOpen by remember { mutableStateOf(false) }
     val policy = remember { WaitingPolicy() }
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp),
-        contentPadding = PaddingValues(bottom = 32.dp)) {
-        item { FeatureHeader("나만의 대기 시간", "머무는 동안에도, 안심하고 여유롭게") }
-        (state.drivingRecovery.error ?: state.error)?.let { error -> item { NoticePanel("요청을 처리하지 못했습니다", error, true) } }
-        if (!state.canUse) {
-            item { NoticePanel("정차 확인이 필요합니다",
-                (if(!state.ready) "기록 복구 중 / 사용 제한" else state.safety.message) +
-                "\n주차 확인 전에는 대기 조작과 기록 화면을 사용할 수 없습니다.\n기존 세션은 백그라운드 진입이나 사용 제한만으로 종료되지 않습니다.\n차량 정보 권한을 허용한 뒤 P 기어에서 다시 열어 주세요.", true) }
-        } else {
-            val active = state.active
-            item {
-                if (active == null) GlassPanel(Modifier.fillMaxWidth()) {
-                    Text("새 대기 세션", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    Text("진행 중인 대기 없음", color = StayColors.Secondary, fontSize = 19.sp)
-                    Text(selectedPlace?.name ?: "Parking 장소 선택 없이 대기", fontSize = 24.sp, color = StayColors.Blue)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        policy.presets.forEach { value -> FilterChip(minutes == value.toString(), { minutes = value.toString() }, label = { Text("${value}분", fontSize = 20.sp) }) }
+    val active = state.active
+    val history = state.sessions.filter { it.status == WaitingStatus.ENDED }
+    if (endConfirm && state.canUse && active != null) AlertDialog(
+        onDismissRequest = { endConfirm = false }, title = { Text("대기를 종료할까요?") },
+        confirmButton = { TextButton(onClick = { endConfirm = false; viewModel.end(active.id) }) { Text("종료") } },
+        dismissButton = { TextButton(onClick = { endConfirm = false }) { Text("계속 대기") } })
+    if (historyOpen && state.canUse) AlertDialog(onDismissRequest = { historyOpen = false }, title = { Text("지난 대기 기록") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                if (history.isEmpty()) item { Text("대기 기록이 없습니다.") }
+                items(history, key = { it.id }) { session ->
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(session.place?.name ?: "직접 대기", fontWeight = FontWeight.SemiBold)
+                        Text(session.startedAt.dateLabel(), color = StayColors.Secondary)
+                        Text(WaitingTime.calculate(session, state.now).elapsedMillis.durationLabel(), color = StayColors.Blue)
+                        Text(if (session.endReason == EndReason.DRIVING) "주행 확인으로 종료" else "직접 종료", color = StayColors.Secondary)
+                        HorizontalDivider(color = StayColors.Border)
                     }
-                    OutlinedTextField(minutes, { minutes = it }, label = { Text("대기시간 (${policy.minimumMinutes}~${policy.maximumMinutes}분)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                    PremiumAction("대기 시작", { viewModel.start(minutes.toIntOrNull() ?: 0, selectedPlace) }, enabled = !state.busy)
-                } else {
-                    val time = WaitingTime.calculate(active, state.now)
-                    val total = (active.plannedEndAt - active.startedAt).coerceAtLeast(1L)
-                    ResponsivePanels(left = {
-                        GlassPanel(Modifier.fillMaxWidth()) {
-                            Text("현재 대기 중", color = StayColors.Blue, fontSize = 24.sp)
-                            Box(Modifier.fillMaxWidth().height(330.dp), contentAlignment = Alignment.Center) {
-                                Canvas(Modifier.size(290.dp)) {
-                                    val inset = 14.dp.toPx()
-                                    val ring = Size(size.width-inset*2, size.height-inset*2)
-                                    drawArc(StayColors.Border, 0f, 360f, false, Offset(inset,inset), ring, style = Stroke(10.dp.toPx()))
-                                    drawArc(StayColors.Blue, -90f, 360f*(time.remainingMillis.toFloat()/total).coerceIn(0f,1f), false,
-                                        Offset(inset,inset), ring, style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("남은 예정시간", color = StayColors.Secondary, fontSize = 22.sp)
-                                    Text(time.remainingMillis.durationLabel(), fontSize = 44.sp, fontWeight = FontWeight.Bold)
-                                    Text("경과 ${time.elapsedMillis.durationLabel()}", fontSize = 21.sp, color = StayColors.Blue)
-                                }
-                            }
-                            when {
-                                time.overtimeMillis > 0 -> Text("대기 시간 초과 · ${time.overtimeMillis.durationLabel()}", color = MaterialTheme.colorScheme.error, fontSize = 21.sp)
-                                time.remainingMillis == 0L -> Text("대기 중 · 남은 시간 0분", color = StayColors.Blue, fontSize = 21.sp)
-                                time.remainingMillis <= 300_000 -> Text("대기 중 · 예정 종료까지 5분 이내 · 남은 시간 ${time.remainingMillis.durationLabel()}", color = StayColors.Blue, fontSize = 21.sp)
-                                else -> Text("대기 중 · 남은 시간 ${time.remainingMillis.durationLabel()}", color = StayColors.Blue, fontSize = 21.sp)
-                            }
-                            Text("대기는 직접 종료하거나 주행이 확인될 때까지 유지됩니다.", color = StayColors.Secondary, fontSize = 18.sp)
+                }
+            }
+        }, confirmButton = { TextButton(onClick = { historyOpen = false }) { Text("닫기") } })
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Text("대기 관리", fontSize = 38.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
+        (state.drivingRecovery.error ?: state.error)?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 20.sp) }
+        if (!state.canUse) {
+            FeaturePanel(Modifier.fillMaxWidth()) {
+                Text("정차 확인이 필요합니다", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                Text(if (!state.ready) "대기 기록을 확인하고 있습니다." else state.safety.message, color = StayColors.Secondary, fontSize = 21.sp)
+            }
+        } else {
+            ResponsivePanels(leftWeight = 1.18f, left = {
+                FeaturePanel(Modifier.fillMaxWidth().heightIn(min = 540.dp)) {
+                    Text(if (active == null) "새 대기" else "대기 세션 진행 중", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                    val time = active?.let { WaitingTime.calculate(it, state.now) }
+                    val total = active?.let { (it.plannedEndAt - it.startedAt).coerceAtLeast(1L) } ?: 1L
+                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).heightIn(min = 380.dp), contentAlignment = Alignment.Center) {
+                        val ringSize = minOf(maxWidth - 24.dp, 360.dp).coerceAtLeast(160.dp)
+                        Canvas(Modifier.size(ringSize)) {
+                            val inset = 12.dp.toPx()
+                            val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
+                            drawArc(StayColors.Border, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(12.dp.toPx()))
+                            val remaining = if (time == null) 1f else (time.remainingMillis.toFloat() / total).coerceIn(0f, 1f)
+                            drawArc(StayColors.Purple, -90f, 360f * remaining, false, Offset(inset, inset), arcSize,
+                                style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
                         }
-                    }, right = {
-                        GlassPanel(Modifier.fillMaxWidth()) {
-                            Text(active.place?.name ?: "선택 장소 없음", fontSize = 29.sp, fontWeight = FontWeight.Bold)
-                            InfoLine("시작", active.startedAt.dateLabel())
-                            InfoLine("예정 종료", active.plannedEndAt.dateLabel())
-                            Text(state.safety.message, color = StayColors.Blue, fontSize = 20.sp)
-                            OutlinedTextField(extension, { extension = it }, label = { Text("추가할 시간(분)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                            PremiumAction("대기시간 연장", { viewModel.extend(active.id, extension.toIntOrNull() ?: 0) }, Modifier.fillMaxWidth(), !state.busy, true)
-                            PremiumAction("대기 종료", { viewModel.end(active.id) }, Modifier.fillMaxWidth(), !state.busy)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(if (time == null) "대기 예정 시간" else "남은 예정 시간", color = StayColors.Secondary, fontSize = 21.sp)
+                            Text(time?.remainingMillis?.durationLabel() ?: "${minutes.toIntOrNull() ?: 0}분", fontSize = 46.sp, fontWeight = FontWeight.Bold)
+                            if (time != null) Text("경과 ${time.elapsedMillis.durationLabel()}", color = StayColors.Secondary, fontSize = 20.sp)
                         }
-                    })
+                    }
+                    if (time != null && time.overtimeMillis > 0) Text("예정 시간 초과 ${time.overtimeMillis.durationLabel()}", color = StayColors.Warning, fontSize = 21.sp)
                 }
-            }
-            item {
-                BoxWithConstraints {
-                    ModeCards(wide=maxWidth>=1000.dp, onRest=onRest, onStudy=onStudy, onWork=onWork)
+            }, right = {
+                FeaturePanel(Modifier.fillMaxWidth().heightIn(min = 540.dp)) {
+                    Text("현재 대기 정보", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                    InfoLine("장소", active?.place?.name ?: selectedPlace?.name ?: "직접 대기")
+                    if (active == null) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            policy.presets.forEach { value -> FilterChip(minutes == value.toString(), { minutes = value.toString() }, label = { Text("${value}분") }) }
+                        }
+                        OutlinedTextField(minutes, { minutes = it }, label = { Text("대기 시간(분)") },
+                            supportingText = { Text("${policy.minimumMinutes}~${policy.maximumMinutes}분") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+                        PremiumAction("대기 시작", { viewModel.start(minutes.toIntOrNull() ?: 0, selectedPlace) }, Modifier.fillMaxWidth(), !state.busy)
+                    } else {
+                        InfoLine("시작", active.startedAt.dateLabel())
+                        InfoLine("예정 종료", active.plannedEndAt.dateLabel())
+                        OutlinedTextField(extension, { extension = it }, label = { Text("추가 대기 시간(분)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+                        PremiumAction("대기시간 연장", { viewModel.extend(active.id, extension.toIntOrNull() ?: 0) }, Modifier.fillMaxWidth(), !state.busy, true)
+                        PremiumAction("대기 종료", { endConfirm = true }, Modifier.fillMaxWidth(), !state.busy)
+                    }
                 }
-            }
-            item { Text("지난 대기 기록", fontSize = 28.sp, fontWeight = FontWeight.Bold) }
-            val history = state.sessions.filter { it.status == WaitingStatus.ENDED }
-            if(history.isEmpty()) item { NoticePanel("대기 기록이 없습니다", "종료한 세션의 실제 대기시간이 여기에 표시됩니다.") }
-            items(history, key = { it.id }) { session ->
-                GlassPanel(Modifier.fillMaxWidth()) {
-                    Text(session.place?.name ?: "장소 선택 없음", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                    Text("시작 ${session.startedAt.dateLabel()}\n대기 종료 ${session.endedAt?.dateLabel()} · ${if(session.endReason == EndReason.DRIVING) "주행 확인" else "직접 종료"}", color = StayColors.Secondary, fontSize = 19.sp)
-                    Text("실제 대기 ${WaitingTime.calculate(session,state.now).elapsedMillis.durationLabel()}", color = StayColors.Blue, fontSize = 22.sp)
+            })
+            ResponsivePanels(leftWeight = 2.2f, left = {
+                FeaturePanel(Modifier.fillMaxWidth()) {
+                    Text("대기 시간을 활용하기", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WaitingMode("공부", "STUDY", onStudy, Modifier.weight(1f))
+                        WaitingMode("업무", "WORK", onWork, Modifier.weight(1f))
+                        WaitingMode("휴식", "REST", onRest, Modifier.weight(1f))
+                    }
                 }
-            }
+            }, right = {
+                FeaturePanel(Modifier.fillMaxWidth()) {
+                    Text("지난 대기 기록", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${history.size}건", color = StayColors.Secondary, fontSize = 20.sp)
+                    PremiumAction("기록 보기", { historyOpen = true }, Modifier.fillMaxWidth(), secondary = true)
+                }
+            })
+        }
+    }
+}
+
+@Composable
+private fun WaitingMode(label: String, icon: String, action: (() -> Unit)?, modifier: Modifier) {
+    OutlinedButton(onClick = { action?.invoke() }, modifier = modifier.heightIn(min = 86.dp).testTag("waiting_mode_$icon"), enabled = action != null) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            StayIcon(icon, Modifier.size(28.dp))
+            Text(label, fontSize = 19.sp)
         }
     }
 }
 private fun Long.durationLabel(): String {
     val seconds = this / 1000
-    return "%02d:%02d:%02d".format(seconds/3600, seconds/60%60, seconds%60)
+    return "%02d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
 }
-private fun Long.dateLabel(): String = DateFormat.getDateTimeInstance().format(Date(this))
+private fun Long.dateLabel(): String = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(this))

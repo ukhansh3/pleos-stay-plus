@@ -42,28 +42,27 @@ import org.json.JSONObject
  };if(saved!=null){val j=JSONObject(saved);url=j.getString("url");credential=j.optString("token");authUrl=j.optString("authUrl");publicKey=j.optString("publicKey");local=BuildConfig.DEBUG && j.optBoolean("local",true)}}catch(e:Exception){error="연결 설정 복원 실패"}}
  val safetyState by safety.state.collectAsState()
  if(!safetyState.canUse){Column(Modifier.fillMaxSize().padding(28.dp)){
-  FeatureHeader("공유 자료함", "문서와 파일을 위한 기존 PC 연결")
-  NoticePanel("정차 확인이 필요합니다", "정차 상태 확인 전에는 파일 전송 설정을 조작할 수 없습니다.",true)
+  Text("자료함 연결",fontSize=38.sp)
+  NoticePanel("정차 확인 필요", "정차 상태 확인 후 연결할 수 있습니다.",true)
  };return}
  if(!ready){Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),verticalArrangement=Arrangement.spacedBy(22.dp)){
-  FeatureHeader("공유 자료함 연결", "파일 전송·공부·업무에서 같은 연결을 사용합니다")
-  GlassPanel(Modifier.fillMaxWidth()) {
+  Text("자료함 연결",fontSize=38.sp)
+  FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth()) {
   Text("PC 연결 설정",fontSize=28.sp)
-  Text("수동 파일 전송 · TXT / PDF / DOCX. 자동 동기화·원격 데스크톱은 제공하지 않습니다.",color=StayColors.Secondary)
-  if(BuildConfig.DEBUG){Checkbox(local,{local=it});Text("LOCAL FAKE 테스트 모드")}
-  OutlinedTextField(url,{url=it},label={Text("Realtime 서버 주소")})
-  if(local) OutlinedTextField(credential,{credential=it},label={Text("차량 테스트 토큰")},visualTransformation=PasswordVisualTransformation())
+  if(BuildConfig.DEBUG){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(local,{local=it});Text("로컬 서버 연결")}}
+  OutlinedTextField(url,{url=it},label={Text("서버 주소")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+  if(local) OutlinedTextField(credential,{credential=it},label={Text("로컬 연결 토큰")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
   else {
-   OutlinedTextField(authUrl,{authUrl=it},label={Text("Supabase HTTPS 주소")})
-   OutlinedTextField(publicKey,{publicKey=it},label={Text("Supabase 공개 키")})
+   OutlinedTextField(authUrl,{authUrl=it},label={Text("인증 서버 주소")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+   OutlinedTextField(publicKey,{publicKey=it},label={Text("인증 공개 키")},modifier=Modifier.fillMaxWidth(),singleLine=true)
   }
-  Text(error)
+  if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
   Button(onClick={scope.launch{try{
    if(local){require(BuildConfig.DEBUG && credential.length>=32);require(java.net.URI(url).host in listOf("10.0.2.2","127.0.0.1","localhost"))}
    else {require(java.net.URI(url).scheme=="https" && java.net.URI(authUrl).scheme=="https");require(publicKey.isNotBlank())}
    RealtimeApi(url){credential}
    withContext(Dispatchers.IO){configStore.write(JSONObject().put("url",url).put("token",if(local)credential else "").put("local",local).put("authUrl",authUrl).put("publicKey",publicKey).toString())};ready=true
-  }catch(e:Exception){error="설정 확인 필요: HTTPS 주소 또는 로컬 테스트 토큰을 확인하세요"}}}){Text("설정 저장 / 파일 화면 진입")}
+  }catch(e:Exception){error="서버 주소와 연결 정보를 확인해 주세요."}}}){Text("연결")}
  }};return}
  val provider=remember(authUrl,publicKey,local){if(local)null else RealtimeIdentityProvider(authUrl,publicKey,RealtimeTokenStore(app,"realtime-auth-"+java.security.MessageDigest.getInstance("SHA-256").digest(authUrl.toByteArray()).joinToString(""){"%02x".format(it)}+".bin"))}
  val modelKey=remember(url,authUrl,local,credential){java.security.MessageDigest.getInstance("SHA-256").digest((url+authUrl+local+credential).toByteArray()).joinToString(""){"%02x".format(it)}}
@@ -74,7 +73,7 @@ import org.json.JSONObject
  // Construct state/ActivityResult registrations, never render workspace content here.
  val protectedContent = managedWorkspace?.invoke(model,url)
  LaunchedEffect(foreground,model) { if(!foreground) model.lock() }
- if(!foreground){NoticePanel("문서 화면 잠김","앱으로 돌아온 후 PIN을 다시 확인해 주세요.");return}
+ if(!foreground){NoticePanel("문서 화면 잠김","PIN을 다시 확인해 주세요.");return}
  RealtimeLockedScreen(model,remember{RealtimePinStore(app)}) {
   // Every content path remains inside the original verified PIN gate.
   if(protectedContent!=null) protectedContent() else if(workspace==null) FileTransferScreen(model) else workspace(model,url)
