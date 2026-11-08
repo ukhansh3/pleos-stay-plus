@@ -26,7 +26,7 @@ data class EntertainmentActionResult(val success:Boolean,val state:Entertainment
 /** Only serializes Entertainment contents; does not pretend to enforce global Rest/Study/Work exclusivity. */
 class EntertainmentController(private val admission:EntertainmentActivityAdmission,
     private val safety:WaitingSafetyGateway,private val sessions:Map<EntertainmentContent,EntertainmentContentSession>,
-    private val store:EntertainmentStore,private val scope:CoroutineScope) {
+    private val store:EntertainmentStore,private val scope:CoroutineScope,private val onEnded:()->Unit={}) {
     private val mutex=Mutex()
     private val mutable=MutableStateFlow(EntertainmentState())
     val state=mutable.asStateFlow()
@@ -74,6 +74,12 @@ class EntertainmentController(private val admission:EntertainmentActivityAdmissi
         mutable.value=state.value.copy(phase=if(content==EntertainmentContent.YOUTUBE || content==EntertainmentContent.NETFLIX)EntertainmentPhase.EXTERNAL else EntertainmentPhase.ACTIVE)
         persist()
     }
+    suspend fun catalogue():EntertainmentActionResult=command {
+        checkReady()
+        state.value.content?.let { sessions.getValue(it).pause() }
+        mutable.value=state.value.copy(content=null,phase=EntertainmentPhase.ACTIVE,message="")
+        persist()
+    }
     /** Internal Home keeps the activity. External/OS Home additionally has host foreground=false. */
     suspend fun onInternalHome():EntertainmentActionResult { return hide("내부 홈으로 이동했습니다. 콘텐츠는 직접 재개해 주세요.") }
     suspend fun onHostForeground(value:Boolean):EntertainmentActionResult {
@@ -93,7 +99,7 @@ class EntertainmentController(private val admission:EntertainmentActivityAdmissi
         state.value.content?.let{sessions.getValue(it).stop()}
         // Release succeeds before active=false is reported. Waiting is never touched here.
         permit?.let{admission.release(it)};permit=null
-        mutable.value=EntertainmentState();persist()
+        onEnded();mutable.value=EntertainmentState();persist()
     }
     suspend fun restore():EntertainmentActionResult=command {
         if(restored || state.value.active)return@command

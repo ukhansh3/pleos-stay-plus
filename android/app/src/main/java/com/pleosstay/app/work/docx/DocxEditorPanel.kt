@@ -64,9 +64,9 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
         Surface(shape = RoundedCornerShape(20.dp), color = StayColors.Surface.copy(alpha = .72f), border = BorderStroke(1.dp, StayColors.Border)) {
             Row(Modifier.fillMaxWidth().padding(16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(state.draft?.name ?: "DOCX", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.widthIn(min = 180.dp, max = 350.dp))
-                OutlinedButton(onClick = controller::undo, enabled = !state.busy && state.canUndo && editable, modifier = Modifier.heightIn(min = 56.dp)) { Text("실행 취소") }
-                OutlinedButton(onClick = controller::redo, enabled = !state.busy && state.canRedo && editable, modifier = Modifier.heightIn(min = 56.dp)) { Text("다시 실행") }
-                OutlinedButton(onClick = controller::save, enabled = !state.busy, modifier = Modifier.heightIn(min = 56.dp)) { Text("초안 저장") }
+                OutlinedButton(onClick = controller::undo, enabled = !state.busy && state.canUndo && editable, modifier = Modifier.heightIn(min = 64.dp)) { Text("실행 취소", fontSize = 20.sp) }
+                OutlinedButton(onClick = controller::redo, enabled = !state.busy && state.canRedo && editable, modifier = Modifier.heightIn(min = 64.dp)) { Text("다시 실행", fontSize = 20.sp) }
+                OutlinedButton(onClick = controller::save, enabled = !state.busy, modifier = Modifier.heightIn(min = 64.dp)) { Text("초안 저장", fontSize = 20.sp) }
                 PremiumAction("DOCX 내보내기", { onPicker(DocxPickerKind.EXPORT, null) }, enabled = !state.busy)
                 if (state.exportUri != null) TextButton(onClick = controller::reopenExport, enabled = !state.busy) { Text("저장 파일 열기") }
                 TextButton(onClick = onClose, enabled = !state.busy) { Text("문서 목록") }
@@ -155,17 +155,17 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
                         OutlinedTextField(font, { font = it.take(100) }, label = { Text("글꼴") }, enabled = formatEnabled, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(size, { size = it.take(4) }, label = { Text("크기 · pt") }, enabled = formatEnabled, modifier = Modifier.weight(1f), singleLine = true)
-                            OutlinedButton(onClick = { format(DocxStyle(font = font, size = size.toFloatOrNull() ?: 16f, color = color)) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 56.dp)) { Text("적용") }
+                            OutlinedButton(onClick = { format(DocxStyle(font = font, size = size.toFloatOrNull() ?: 16f, color = color)) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp)) { Text("적용") }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.bold }, onClick = { format(DocxStyle(bold = selectedRuns.isEmpty() || !selectedRuns.all { it.bold })) }, enabled = formatEnabled, label = { Text("B", fontWeight = FontWeight.Bold) })
-                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.italic }, onClick = { format(DocxStyle(italic = selectedRuns.isEmpty() || !selectedRuns.all { it.italic })) }, enabled = formatEnabled, label = { Text("I", fontStyle = FontStyle.Italic) })
-                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.underline }, onClick = { format(DocxStyle(underline = selectedRuns.isEmpty() || !selectedRuns.all { it.underline })) }, enabled = formatEnabled, label = { Text("U", textDecoration = TextDecoration.Underline) })
+                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.bold }, onClick = { format(DocxStyle(bold = selectedRuns.isEmpty() || !selectedRuns.all { it.bold })) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text("B", fontSize = 20.sp, fontWeight = FontWeight.Bold) })
+                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.italic }, onClick = { format(DocxStyle(italic = selectedRuns.isEmpty() || !selectedRuns.all { it.italic })) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text("I", fontSize = 20.sp, fontStyle = FontStyle.Italic) })
+                            FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.underline }, onClick = { format(DocxStyle(underline = selectedRuns.isEmpty() || !selectedRuns.all { it.underline })) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text("U", fontSize = 20.sp, textDecoration = TextDecoration.Underline) })
                         }
                         Text("문단 정렬", color = StayColors.Secondary)
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("left" to "왼쪽", "center" to "가운데", "right" to "오른쪽").forEach { (value, label) ->
-                                FilterChip(selected = paragraph?.alignment == value, onClick = { paragraph?.let { p -> controller.edit { it.align(p.id, value) } } }, enabled = formatEnabled, label = { Text(label) })
+                                FilterChip(selected = paragraph?.alignment == value, onClick = { paragraph?.let { p -> controller.edit { it.align(p.id, value) } } }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text(label, fontSize = 20.sp) })
                             }
                         }
                         OutlinedTextField(color, { color = it.take(6) }, label = { Text("글자 색상 · RGB") }, enabled = formatEnabled, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -202,7 +202,7 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
             }
         }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        Text(if (state.busy) "저장 중…" else editorStatus(state.message), Modifier.testTag("docx-status"), color = StayColors.Secondary, fontSize = 16.sp)
+        Text(if (state.busy) "저장 중…" else editorStatus(state.message), Modifier.testTag("docx-status"), color = StayColors.Secondary, fontSize = 18.sp)
     }
  if(tableDialog)AlertDialog(onDismissRequest={tableDialog=false},title={Text("표 삽입")},text={Column{OutlinedTextField(rows,{rows=it.take(2)},label={Text("행 1~20")});OutlinedTextField(columns,{columns=it.take(2)},label={Text("열 1~10")})}},confirmButton={TextButton(onClick={controller.edit{it.addTable(rows.toIntOrNull() ?: 2,columns.toIntOrNull() ?: 2)};tableDialog=false}){Text("삽입")}},dismissButton={TextButton(onClick={tableDialog=false}){Text("취소")}})
  if(state.confirmDownloads)AlertDialog(onDismissRequest=controller::dismissDownloads,title={Text("다운로드 폴더에 DOCX 내보내기")},text={Column{

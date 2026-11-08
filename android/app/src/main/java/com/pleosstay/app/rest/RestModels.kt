@@ -20,8 +20,10 @@ internal data class RestPreset(
     val alert: RestAlert = RestAlert.SOFT,
     val ev: Boolean = false,
     val target: Int = 80,
+    val volume: Int = 100,
+    val muted: Boolean = false,
 ) {
-    val valid get() = name.isNotBlank() && name.length <= 40 && minutes in 5..720 && target in 1..100
+    val valid get() = name.isNotBlank() && name.length <= 40 && minutes in 5..720 && target in 1..100 && volume in 0..100
 
     companion object {
         val defaults = listOf(
@@ -54,3 +56,8 @@ internal data class RestSession(
 }
 
 internal data class EvReading(val percent: Int? = null, val message: String = "배터리 정보를 확인 중입니다")
+
+/** Shared eligibility for initial playback and focus gain; no timer or Waiting mutation. */
+internal fun restSoundAllowed(session: RestSession?, foreground: Boolean, safe: Boolean, now: Long, ringing: Boolean): Boolean =
+    session != null && session.end == null && session.remaining(now) > 0 && foreground && safe && !ringing &&
+        !session.targetPrompt && !session.soundPaused && !session.preset.muted && session.preset.volume > 0 && session.preset.sound != RestSound.SILENT

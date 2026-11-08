@@ -64,6 +64,8 @@ internal class RestController(
     private var visibilityGeneration = 0
 
     init {
+        audio.setResumeAllowed { restSoundAllowed(state.value.session, foreground, safety.restState.value.canUse, now(), state.value.ringing) }
+        audio.onPermanentLoss { pauseAfterFocusLoss() }
         alarm.playback?.let { playback ->
             scope.launch {
                 playback.collect { result ->
@@ -299,11 +301,52 @@ internal class RestController(
         }
     }
 
+    private fun pauseAfterFocusLoss() {
+        val token = active()?.alarmToken ?: return
+        // A focus event must not be dropped by the user-command busy guard.
+        scope.launch {
+            mutex.withLock {
+                runSafely {
+                    val current = active()?.takeIf { it.alarmToken == token } ?: return@runSafely
+                    val paused = current.copy(soundPaused = true)
+                    mutable.update { it.copy(session = paused) }
+                    updateAudio(paused)
+                    withContext(io) { store.saveSession(paused) }
+                }
+            }
+        }
+    }
+
     fun pauseSound(paused: Boolean) = command {
         val current = active() ?: return@command
         val updated = current.copy(soundPaused = paused)
         persist(updated)
         updateAudio(updated)
+    }
+
+    /** Changes only the active session. Presets are persisted explicitly via saveCurrentSoundPreset. */
+    fun changeSound(sound: RestSound? = null, volume: Int? = null, muted: Boolean? = null) {
+        scope.launch {
+            mutex.withLock {
+                runSafely {
+                    val current = active() ?: return@runSafely
+                    check(safety.restState.value.canUse && foreground)
+                    require(volume == null || volume in 0..100)
+                    val preset = current.preset.copy(sound = sound ?: current.preset.sound,
+                        volume = volume ?: current.preset.volume, muted = muted ?: current.preset.muted)
+                    val updated = current.copy(preset = preset)
+                    // Apply session changes immediately; persistence failure is reported honestly.
+                    mutable.update { it.copy(session = updated) }
+                    updateAudio(updated)
+                    withContext(io) { store.saveSession(updated) }
+                }
+            }
+        }
+    }
+
+    fun saveCurrentSoundPreset() {
+        val current = active() ?: return
+        savePreset(current.preset, current.preset.id)
     }
 
     fun stopAlarm() {
@@ -501,8 +544,8 @@ internal class RestController(
         session.alarmMode == RestAlarmMode.SYSTEM_EXACT || (session.alarmMode == RestAlarmMode.FOREGROUND_ONLY && foreground && alarmReady)
 
     private fun updateAudio(session: RestSession) {
-        if (!foreground || !safety.restState.value.canUse || session.targetPrompt || session.soundPaused ||
-            session.preset.sound == RestSound.SILENT) audio.stop()
+        audio.setVolume(session.preset.volume / 100f)
+        if (!restSoundAllowed(session, foreground, safety.restState.value.canUse, now(), state.value.ringing)) audio.stop()
         else if (!audio.play()) message("오디오 사용 권한을 확보하지 못했어요. 사운드 재개를 다시 시도해 주세요.")
     }
 

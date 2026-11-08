@@ -104,7 +104,7 @@ class WaitingRecommendationTest {
         assertEquals(2,at(1).contents.size); assertEquals(2,at(300_000).contents.size)
         assertEquals(3,at(300_001).contents.size);assertTrue(at(900_000).contents.contains(EntertainmentContent.QUIZ))
         assertFalse(at(900_001).contents.contains(EntertainmentContent.QUIZ));assertEquals(3,at(1_800_000).contents.size)
-        assertEquals(5,at(1_800_001).contents.size)
+        assertEquals(6,at(1_800_001).contents.size);assertTrue(at(1_800_001).contents.contains(EntertainmentContent.QUIZ_MATCH))
     }
     @Test fun absentExpiredEndedAndUnsafeAreDistinct() {
         assertEquals(WaitingRecommendationStatus.NO_WAITING,engine.recommend(emptyList(),0,safe,all).status)

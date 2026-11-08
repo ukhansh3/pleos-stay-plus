@@ -49,7 +49,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             TextButton(onClick = onOpenFiles) { Text("자료함 연결") }
         }
         if (!state.allowed) {
-            NoticePanel("학습자료 잠김", "정차 상태와 자료함 PIN을 확인해 주세요.", true)
+            NoticePanel("학습자료 잠김", state.message, true)
             return@Column
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -63,8 +63,8 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
         }
         studyMessage(state.message)?.let { Text(it, color = StayColors.Secondary, fontSize = 18.sp) }
         LaunchedEffect(state.busy,state.noteSaveFailed){if(state.noteSaveFailed && !state.busy)recoveryDismissed=false}
-        if(state.noteSaveFailed && !recoveryDismissed)ActivityRecoveryPanel("메모 입력을 유지하고 있습니다. 저장을 다시 시도해 주세요.",state.busy,
-            {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true})
+        if(state.noteSaveFailed && !recoveryDismissed)ActivityModal("메모를 저장하지 못했어요",state.busy,{recoveryDismissed=true}) { ActivityRecoveryPanel("메모 입력을 유지하고 있습니다. 저장을 다시 시도해 주세요.",state.busy,
+            {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true}) }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val library: @Composable (Modifier) -> Unit = { modifier ->

@@ -31,7 +31,7 @@ import com.pleosstay.app.ui.theme.PleosStayPlusTheme
 
 /** Design/Split rendering only. Do not deploy with Run Preview or use as an app route. */
 @Composable
-internal fun PreviewFeature(screen: PreviewScreen) {
+internal fun PreviewFeature(screen: PreviewScreen, sampleOverride: FeatureInspectionState? = null) {
     if (!LocalInspectionMode.current) {
         Text("Android Studio의 Design/Split 미리보기에서 열어 주세요.")
         return
@@ -39,7 +39,7 @@ internal fun PreviewFeature(screen: PreviewScreen) {
     val models = remember { PreviewModels() }
     val owners = remember { PreviewOwners() }
     val resources = LocalContext.current.resources
-    val sample = remember(screen) { previewSample(screen, resources) }
+    val sample = sampleOverride ?: remember(screen) { previewSample(screen, resources) }
     DisposableEffect(models, owners) { onDispose { models.close(); owners.lifecycle.currentState = Lifecycle.State.DESTROYED } }
     val route = when (screen) {
         PreviewScreen.PARKING -> StayRoute.PARKING
@@ -80,5 +80,21 @@ private class PreviewOwners : OnBackPressedDispatcherOwner, ActivityResultRegist
     override val onBackPressedDispatcher = OnBackPressedDispatcher()
     override val activityResultRegistry = object : ActivityResultRegistry() {
         override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>, input: I, options: ActivityOptionsCompat?) = Unit
+    }
+}
+
+/** Actual inactive EntertainmentScreen, with operation-denying inspection ports. */
+@Composable internal fun PreviewEntertainmentEntry() {
+    if(!LocalInspectionMode.current){Text("Compose Preview 전용");return}
+    val models=remember{PreviewModels()};val owners=remember{PreviewOwners()}
+    DisposableEffect(models,owners){onDispose{models.close();owners.lifecycle.currentState=Lifecycle.State.DESTROYED}}
+    CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides owners,LocalActivityResultRegistryOwner provides owners) {
+        PleosStayPlusTheme {Row(Modifier.fillMaxSize().background(StayColors.Background)) {
+            StayNavigationRail(NavigationGroup.MODES,{},180.dp)
+            Column(Modifier.weight(1f).fillMaxHeight()){StayBackBar({});Box(Modifier.weight(1f)) {
+                com.pleosstay.app.entertainment.EntertainmentScreen(models.entertainment,
+                    com.pleosstay.app.waiting.safety.WaitingSafety(com.pleosstay.app.waiting.safety.VehicleMotion.PARKED,false),{},true)
+            }}
+        }}
     }
 }

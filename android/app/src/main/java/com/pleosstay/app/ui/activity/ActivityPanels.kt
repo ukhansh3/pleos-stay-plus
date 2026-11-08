@@ -6,6 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -15,24 +17,26 @@ import com.pleosstay.app.modes.*
 import com.pleosstay.app.ui.premium.*
 
 @Composable internal fun ActivityModal(title:String,busy:Boolean=false,onBack:()->Unit,content:@Composable ColumnScope.()->Unit) {
+ val windowHeight=LocalWindowInfo.current.containerSize.height
+ val modalMaxHeight=with(LocalDensity.current){windowHeight.toDp()*.86f}
  Dialog(onDismissRequest={if(!busy)onBack()},properties=DialogProperties(usePlatformDefaultWidth=false,dismissOnClickOutside=false)) {
-  FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth(.94f).fillMaxHeight(.9f).verticalScroll(rememberScrollState()).testTag("activity_modal")) {
+  FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth(.94f).heightIn(max = modalMaxHeight).verticalScroll(rememberScrollState()).testTag("activity_modal")) {
    Text(title,fontSize=28.sp,color=StayColors.Text)
    if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-   content()
+   CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyLarge.copy(fontSize=20.sp,lineHeight=28.sp)) { content() }
   }
  }
 }
 @Composable internal fun ActivityRecoveryPanel(message:String,busy:Boolean,retry:()->Unit,back:()->Unit) {
  FeaturePanel(Modifier.fillMaxWidth().testTag("activity_recovery")) {
   Text("저장을 완료하지 못했습니다",fontSize=25.sp,color=StayColors.Warning)
-  Text(message,color=StayColors.Secondary)
+  Text(message,color=StayColors.Secondary,fontSize=20.sp)
   PremiumAction("저장 재시도",retry,enabled=!busy)
   PremiumAction("작업으로 돌아가기",back,enabled=!busy,secondary=true)
  }
 }
 @Composable internal fun ActivitySwitchPanel(source:ActivityMode,target:ActivityMode,busy:Boolean,cancel:()->Unit,confirm:()->Unit) {
- Text("현재 ${source.label()} 활동이 진행 중입니다. ${target.label()}로 전환하면 기존 활동이 종료되며, Waiting은 계속 유지됩니다.",color=StayColors.Secondary)
+ Text(if(busy) "작성한 내용과 활동을 정리하고 있어요." else "진행 중인 활동을 종료한 뒤 ${target.label()} 활동을 시작합니다. 대기는 계속 유지됩니다.",color=StayColors.Secondary)
  PremiumAction("취소",cancel,enabled=!busy,secondary=true)
  PremiumAction("종료 후 전환",confirm,enabled=!busy)
 }
@@ -42,7 +46,7 @@ import com.pleosstay.app.ui.premium.*
  val study=host.studyOwner?.study?.state?.collectAsState()?.value
  val work=host.workOwner?.work?.state?.collectAsState()?.value
  if(!visible || state.preparing)return
- if(state.confirmation!=null)ActivityModal("${state.source?.label()}을 종료하시겠습니까?",state.busy,{host.ui.confirmSwitch(false)}) {
+ if(state.confirmation!=null)ActivityModal(if(state.busy) "활동을 정리하고 있어요" else "${state.source?.label()} 종료 후 ${state.target?.label()} 전환",state.busy,{host.ui.confirmSwitch(false)}) {
   ActivitySwitchPanel(checkNotNull(state.source),checkNotNull(state.target),state.busy,{host.ui.confirmSwitch(false)},{host.ui.confirmSwitch(true)})
  }
  else if(state.error!=null)ActivityModal("활동을 처리하지 못했습니다",state.busy,host.ui::dismissError) {
@@ -51,12 +55,12 @@ import com.pleosstay.app.ui.premium.*
   PremiumAction("작업으로 돌아가기",host.ui::returnToWork,enabled=!state.busy,secondary=true)
  }
  else if(state.leavePrompt!=null)ActivityModal("초안을 보관하고 이동할까요?",state.busy,{host.ui.confirmLeaving(false)}) {
-  Text("암호화 초안을 보관한 뒤 이동합니다. Work 타이머와 Waiting은 계속 유지됩니다.",color=StayColors.Secondary)
+  Text("암호화 초안을 보관한 뒤 이동합니다. Work 타이머와 대기는 계속 유지됩니다.",color=StayColors.Secondary)
   PremiumAction("초안 보관 후 이동",{host.ui.confirmLeaving(true)},enabled=!state.busy)
   PremiumAction("작업으로 돌아가기",{host.ui.confirmLeaving(false)},enabled=!state.busy,secondary=true)
  }
  else if(state.endPrompt!=null)ActivityModal("${state.endPrompt?.label()} 종료",state.busy,{host.ui.confirmFinish(false)}) {
-  Text("작성한 내용을 안전하게 보관한 뒤 종료합니다. Waiting은 계속 유지됩니다.",color=StayColors.Secondary)
+  Text("작성한 내용을 안전하게 보관한 뒤 종료합니다. 대기는 계속 유지됩니다.",color=StayColors.Secondary)
   PremiumAction("저장 후 종료",{host.ui.confirmFinish(true)},enabled=!state.busy)
   PremiumAction("작업으로 돌아가기",{host.ui.confirmFinish(false)},enabled=!state.busy,secondary=true)
  }
@@ -80,4 +84,8 @@ import com.pleosstay.app.ui.premium.*
   }
   PremiumAction("취소",{host.ui.choose(WaitingChoice.BACK)},enabled=!state.busy,secondary=true)
  }
+ else if(state.busy) ActivityModal("활동을 처리하고 있어요",true,{}) {
+  Text("저장과 활동 상태를 확인하고 있습니다. 잠시만 기다려 주세요.",color=StayColors.Secondary)
+ }
+
 }

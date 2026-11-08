@@ -8,7 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.*
 
-enum class EntertainmentContent { GAME_2048, QUIZ, KARAOKE, YOUTUBE, NETFLIX }
+enum class EntertainmentContent { GAME_2048, QUIZ, KARAOKE, YOUTUBE, NETFLIX, QUIZ_MATCH }
 enum class Availability { AVAILABLE, UNAVAILABLE, UNVERIFIED }
 data class ContentAvailability(val status: Availability, val reason: String = "")
 enum class WaitingRecommendationStatus { NO_WAITING, TIME_REMAINING, OVERTIME, SAFETY_BLOCKED }

@@ -447,6 +447,50 @@ class RestControllerTest {
         assertTrue(f.waiting.sessions.value.isEmpty())
     }
 
+    @Test fun sessionVolumeMuteAndExplicitPresetSavePreserveWaiting() = runTest {
+        val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent()
+        val waitingId=f.store.saved!!.waitingId
+        assertEquals(100,f.store.saved!!.preset.volume)
+        f.rest.changeSound(volume=35);runCurrent()
+        assertEquals(35,f.rest.state.value.session!!.preset.volume)
+        assertTrue(f.store.savedPresets.isEmpty())
+        f.rest.changeSound(muted=true);runCurrent();assertFalse(f.player.playing)
+        f.rest.changeSound(muted=false);runCurrent();assertTrue(f.player.playing)
+        assertEquals(35,f.rest.state.value.session!!.preset.volume)
+        f.rest.saveCurrentSoundPreset();runCurrent();assertEquals(35,f.store.savedPresets.single().volume)
+        f.rest.changeSound(sound=RestSound.SILENT);runCurrent();assertFalse(f.player.playing)
+        assertEquals(waitingId,f.waiting.sessions.value.single().id)
+    }
+
+    @Test fun focusResumeGateRejectsUnsafeHiddenPausedExpiredOrMutedSessions() {
+        val session=RestSession(rain,100,1000,null)
+        assertTrue(restSoundAllowed(session,true,true,200,false))
+        assertFalse(restSoundAllowed(session,false,true,200,false))
+        assertFalse(restSoundAllowed(session,true,false,200,false))
+        assertFalse(restSoundAllowed(session,true,true,1000,false))
+        assertFalse(restSoundAllowed(session,true,true,200,true))
+        assertFalse(restSoundAllowed(session.copy(soundPaused=true),true,true,200,false))
+        assertFalse(restSoundAllowed(session.copy(preset=rain.copy(muted=true)),true,true,200,false))
+        assertFalse(restSoundAllowed(session.copy(preset=rain.copy(volume=0)),true,true,200,false))
+    }
+
+    @Test fun soundPersistenceFailureDoesNotReportPresetSuccessOrEndSession() = runTest {
+        val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent();f.store.failSave=true
+        f.rest.changeSound(volume=20);runCurrent()
+        assertNull(f.rest.state.value.session!!.end)
+        assertNotNull(f.rest.state.value.message)
+        assertTrue(f.store.savedPresets.isEmpty())
+        assertEquals(WaitingStatus.ACTIVE,f.waiting.sessions.value.single().status)
+    }
+
+    @Test fun permanentFocusLossIsNotDroppedWhileSavingPreset() = runTest {
+        val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent()
+        f.rest.savePreset(rain,null);assertTrue(f.rest.state.value.busy)
+        f.player.focusLost?.invoke();runCurrent()
+        assertTrue(f.rest.state.value.session!!.soundPaused)
+        assertFalse(f.player.playing)
+    }
+
     private class Fixture(private val scope: TestScope) {
         var now = 100_000L
         val waitingStore = MemoryWaitingStore()
@@ -537,6 +581,8 @@ class RestControllerTest {
 
     private class FakePlayer : RestSoundPlayer {
         var playing = false
+        var focusLost: (() -> Unit)? = null
+        override fun onPermanentLoss(action: () -> Unit) { focusLost = action }
         override fun play(): Boolean { playing = true; return true }
         override fun stop() { playing = false }
     }

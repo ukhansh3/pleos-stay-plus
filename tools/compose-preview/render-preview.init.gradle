@@ -1,0 +1,19 @@
+// Temporary verification-only configuration. No repository Gradle file is modified.
+gradle.beforeProject { p ->
+    p.pluginManager.withPlugin('com.android.application') {
+        def android = p.extensions.getByName('android')
+        android.testOptions.unitTests.includeAndroidResources = true
+        android.testOptions.screenshotTests.create('visualPreview') { suite ->
+            suite.engineVersion = '0.0.1-alpha16'
+            suite.targetVariants.add('debug')
+            suite.dependencies({ deps ->
+                deps.implementation('androidx.compose.ui:ui-tooling:1.10.4')
+                deps.implementation('com.android.tools.screenshot:screenshot-validation-api:0.0.1-alpha16')
+                kotlin.Unit.INSTANCE
+            } as kotlin.jvm.functions.Function1)
+        }
+        p.tasks.register('listVisualPreviewTasks') {
+            doLast { p.tasks.names.findAll { it.toLowerCase().contains('visualpreview') || it.toLowerCase().contains('screenshot') }.sort().each { println(it) } }
+        }
+    }
+}

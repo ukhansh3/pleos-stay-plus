@@ -33,7 +33,7 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
         val wide = maxWidth >= 1000.dp
         val largeType = LocalDensity.current.fontScale > 1.3f
         val available = (maxHeight - 104.dp).coerceAtLeast(660.dp)
-        val heroHeight = if (wide) (available * .44f).coerceAtLeast(310.dp) else 480.dp
+        val heroHeight = if (wide) (available * .44f).coerceAtLeast(310.dp) else 300.dp
         val modesHeight = if (wide) (available * .34f).coerceAtLeast(if (largeType) 340.dp else 280.dp) else 300.dp
         val shortcutsHeight = if (wide) (available * .22f).coerceAtLeast(if (largeType) 250.dp else 190.dp) else 190.dp
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -98,7 +98,7 @@ private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigat
             }
         } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { BrandHeading() }
-            Spacer(Modifier.height(100.dp))
+            Spacer(Modifier.height(32.dp))
             HomeStatus(waiting, navigate)
         }
     }

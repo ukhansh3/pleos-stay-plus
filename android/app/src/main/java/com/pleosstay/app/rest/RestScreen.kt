@@ -61,7 +61,8 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     val state = featureInspection()?.rest ?: liveState
     val liveSafety by controller.safetyState.collectAsState()
     val safety = featureInspection()?.safety ?: liveSafety
-    var editor by remember { mutableStateOf<RestPreset?>(null) }
+    val inspection = featureInspection()
+    var editor by remember { mutableStateOf<RestPreset?>(inspection?.restEditor) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<RestPreset?>(null) }
     var showPresets by remember { mutableStateOf(false) }
@@ -98,7 +99,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     val colors = if (active == null) MaterialTheme.colorScheme else when (active.preset.display) {
         RestDisplay.DARK -> darkColorScheme(background = StayColors.Background, onBackground = StayColors.Text)
         RestDisplay.MINIMAL -> darkColorScheme(background = Color.Black, onBackground = StayColors.Text)
-        RestDisplay.CALM -> darkColorScheme(background = Color(0xff142c2b), onBackground = Color(0xffdef4e9))
+        RestDisplay.CALM -> darkColorScheme(background = StayColors.Background, onBackground = StayColors.Text)
     }
     val selected = active?.preset ?: editor ?: RestPreset.defaults.first()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -109,7 +110,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
         Surface(color = colors.background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
                 val wide = maxWidth >= 920.dp
-                val panelHeight = (maxHeight - 80.dp).coerceAtLeast(600.dp)
+                val panelHeight = (maxHeight - 100.dp).coerceIn(340.dp, 1000.dp)
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("휴식", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -117,7 +118,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                     }
                     val timer: @Composable (Modifier) -> Unit = { modifier ->
                         RestTimerPanel(modifier.height(panelHeight), selected,
-                            remaining = active?.remaining(now) ?: selected.minutes * REST_MINUTE,
+                            remaining = active?.remaining(inspection?.nowMillis ?: now) ?: selected.minutes * REST_MINUTE,
                             active = active != null, canUse = safety.canUse, safetyMessage = safety.message,
                             ended = session?.end?.takeIf { active == null && !showPresets && editor == null }?.label,
                             endsAt = active?.endsAt,
@@ -128,18 +129,18 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                         if (active.preset.sound != RestSound.SILENT && !active.targetPrompt) {
                                             OutlinedButton(onClick = { controller.pauseSound(!active.soundPaused) },
                                                 enabled = !state.busy, modifier = Modifier.heightIn(min = 60.dp)) {
-                                                Text(if (active.soundPaused) "사운드 재개" else "사운드 일시정지")
+                                                Text(if (active.soundPaused) "사운드 재개" else "사운드 일시정지",fontSize=20.sp)
                                             }
                                         }
                                         OutlinedButton(onClick = { extend = true }, enabled = !state.busy,
-                                            modifier = Modifier.heightIn(min = 60.dp)) { Text("휴식 시간 연장") }
+                                            modifier = Modifier.heightIn(min = 60.dp)) { Text("휴식 시간 연장",fontSize=20.sp) }
                                     }
                                     PremiumAction("휴식 종료", { if(actions!=null)actions.finish(ActivityMode.REST) else controller.end() }, enabled = !state.busy)
                                 }
                             })
                     }
                     val settings: @Composable (Modifier) -> Unit = { modifier ->
-                        RestPanel(modifier.height(panelHeight)) {
+                        RestPanel(modifier.height(if (wide) panelHeight else 620.dp)) {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                                 Text("휴식 설정", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
                                 state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -154,8 +155,12 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                             Text(active.preset.name, fontSize = 22.sp)
                                             if (active.preset.display != RestDisplay.MINIMAL) {
                                                 RestSettingLine("화면", active.preset.display.label)
-                                                RestSettingLine("배경음", active.preset.sound.label)
                                             }
+                                                RestSoundControls(active.preset, !state.busy,
+                                                    { controller.changeSound(sound = it) },
+                                                    { controller.changeSound(volume = it) },
+                                                    { controller.changeSound(muted = it) })
+                                                PremiumAction("프리셋에 저장", controller::saveCurrentSoundPreset, enabled = !state.busy, secondary = true)
                                             RestSettingLine("종료 알람", active.preset.alert.label)
                                             if (active.preset.ev) {
                                                 HorizontalDivider(color = StayColors.Border)
@@ -174,6 +179,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                         Text(session.end.label, color = StayColors.Secondary, fontSize = 22.sp)
                                     }
                                     else -> {
+                                        if(editor == null) {
                                         Text("기본 프리셋", color = StayColors.Secondary, fontSize = 18.sp)
                                         RestPreset.defaults.forEach { preset ->
                                             val chosen = editor?.id == preset.id
@@ -195,6 +201,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                         }
                                         OutlinedButton(onClick = { editingId = null; editor = RestPreset() },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) { Text("새 프리셋 만들기") }
+                                        }
                                         editor?.let { preset ->
                                             HorizontalDivider(color = StayColors.Border)
                                             RestEditor(preset, { editor = it })
@@ -238,7 +245,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                     if (wide) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                         timer(Modifier.weight(1.3f)); settings(Modifier.weight(1f))
                     } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        timer(Modifier.fillMaxWidth().heightIn(min = 440.dp)); settings(Modifier.fillMaxWidth())
+                        timer(Modifier.fillMaxWidth()); settings(Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -373,7 +380,8 @@ private fun RestEditor(preset: RestPreset, onChange: (RestPreset) -> Unit) {
     OutlinedTextField(minutes, { minutes = it; onChange(preset.copy(minutes = it.toIntOrNull() ?: 0)) },
         label = { Text(if (preset.ev) "최대 휴식 시간(5~720분)" else "휴식 시간(5~720분)") }, singleLine = true)
     RestOptions(RestDisplay.entries, preset.display, { it.label }) { onChange(preset.copy(display = it)) }
-    RestOptions(RestSound.entries, preset.sound, { it.label }) { onChange(preset.copy(sound = it)) }
+    RestSoundControls(preset, true, { onChange(preset.copy(sound = it)) },
+        { onChange(preset.copy(volume = it)) }, { onChange(preset.copy(muted = it)) })
     RestOptions(RestAlert.entries, preset.alert, { it.label }) { onChange(preset.copy(alert = it)) }
     Row {
         TextButton(onClick = { onChange(preset.copy(ev = false, target = target.toIntOrNull()?.takeIf { it in 1..100 } ?: 80)) }) { Text("일반 휴식") }
@@ -385,9 +393,9 @@ private fun RestEditor(preset: RestPreset, onChange: (RestPreset) -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> RestOptions(values: List<T>, selected: T, label: (T) -> String, select: (T) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { values.forEach { value -> TextButton(onClick = { select(value) }, modifier = Modifier.heightIn(min = 56.dp)) {
-        Text((if (value == selected) "✓ " else "") + label(value))
+private fun <T> RestOptions(values: List<T>, selected: T, label: (T) -> String, enabled: Boolean = true, select: (T) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { values.forEach { value -> TextButton(onClick = { select(value) }, enabled = enabled, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = Color(0xFFAACAE6)), modifier = Modifier.heightIn(min = 64.dp)) {
+        Text((if (value == selected) "✓ " else "") + label(value),fontSize=20.sp)
     } } }
 }
 
@@ -410,4 +418,21 @@ private fun openRestSettings(context: android.content.Context, action: String): 
     return runCatching { context.startActivity(intent) }.recoverCatching {
         context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
     }.isSuccess
+}
+
+@Composable
+internal fun RestSoundControls(preset: RestPreset, enabled: Boolean, sound: (RestSound) -> Unit,
+    volume: (Int) -> Unit, mute: (Boolean) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("배경음", fontSize = 24.sp)
+        RestOptions(RestSound.entries, preset.sound, { it.label }, enabled) { sound(it) }
+        Text("배경음 볼륨 ${preset.volume}%", fontSize = 22.sp)
+        androidx.compose.material3.Slider(value = preset.volume.toFloat(), onValueChange = { volume(it.toInt()) },
+            valueRange = 0f..100f, enabled = enabled && preset.sound != RestSound.SILENT,
+            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color(0xFFAACAE6), activeTrackColor = Color(0xFFAACAE6), inactiveTrackColor = StayColors.Border),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("rest_sound_volume"))
+        OutlinedButton(onClick = { mute(!preset.muted) }, enabled = enabled && preset.sound != RestSound.SILENT,
+            modifier = Modifier.heightIn(min = 64.dp)) { Text(if (preset.muted) "음소거 해제" else "음소거", fontSize = 20.sp) }
+        Text("배경음에만 적용됩니다.", color = StayColors.Secondary, fontSize = 18.sp)
+    }
 }

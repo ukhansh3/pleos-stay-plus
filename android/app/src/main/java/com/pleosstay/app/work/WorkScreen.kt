@@ -40,9 +40,9 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
     var tab by remember { mutableIntStateOf(0) }
     BackHandler { if(actions!=null)actions.home() else if (state.choice != null) model.resolve(WaitingChoice.BACK) else if (state.session != null) model.requestExit() else onHome() }
     LaunchedEffect(editor.busy,editor.message){if(model.docx.requiresRetentionRecovery && !editor.busy)recoveryDismissed=false}
-    val recovery:@Composable ()->Unit={if(model.docx.requiresRetentionRecovery && !editor.busy && !recoveryDismissed)ActivityRecoveryPanel(
+    val recovery:@Composable ()->Unit={if(model.docx.requiresRetentionRecovery && !editor.busy && !recoveryDismissed)ActivityModal("초안을 저장하지 못했어요",editor.busy,{recoveryDismissed=true}) { ActivityRecoveryPanel(
         "암호화 초안을 보관하지 못했습니다. 현재 작업은 유지되며 외부 DOCX를 덮어쓰지 않습니다.",editor.busy,
-        {actions?.retry(ActivityMode.WORK)},{recoveryDismissed=true})}
+        {actions?.retry(ActivityMode.WORK)},{recoveryDismissed=true}) }}
     if (state.allowed && editor.view != null) { Column { recovery();Box(Modifier.weight(1f)){DocxEditorPanel(model.docx, onDocxPicker, model.docx::mask)} }; return }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

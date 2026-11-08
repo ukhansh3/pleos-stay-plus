@@ -36,6 +36,16 @@ internal class Content:EntertainmentContentSession {
 }
 @OptIn(ExperimentalCoroutinesApi::class)
 class EntertainmentControllerTest {
+    @Test fun catalogueKeepsMatchButExplicitEndDiscardsNames()=runTest {
+        val match=com.pleosstay.app.entertainment.quiz.QuizMatchService();match.enter()
+        val original=match.start(com.pleosstay.app.entertainment.quiz.MatchConfig(listOf("A","B")))
+        val content=Content()
+        val controller=EntertainmentController(Admission(),EntertainmentSafety(),mapOf(EntertainmentContent.QUIZ_MATCH to content),MemoryEntertainmentStore(),backgroundScope,onEnded=match::stop)
+        controller.onHostForeground(true);assertTrue(controller.start().success)
+        assertTrue(controller.select(EntertainmentContent.QUIZ_MATCH).success)
+        assertTrue(controller.catalogue().success);assertEquals(original,match.state.value)
+        assertTrue(controller.end().success);assertNull(match.state.value)
+    }
     @Test fun admissionRequiredAndSameContentIsIdempotent()=runTest {
         val admission=Admission();val c=Content();val controller=EntertainmentController(admission,EntertainmentSafety(),mapOf(EntertainmentContent.GAME_2048 to c),MemoryEntertainmentStore(),backgroundScope)
         controller.onHostForeground(true);admission.refuse=true;assertFalse(controller.start().success)

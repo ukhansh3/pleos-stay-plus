@@ -18,7 +18,8 @@ import java.io.File
 class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2048Service,
     val quiz:QuizService,val karaoke:KaraokeSession,val history:KaraokeHistory,val video:VideoAppLauncher,
     val songs:List<KaraokeSong>,val recommendations:WaitingRecommendationFeed,
-    private val availability:MutableStateFlow<Map<EntertainmentContent,ContentAvailability>>) {
+    private val availability:MutableStateFlow<Map<EntertainmentContent,ContentAvailability>>,
+    val match:QuizMatchService=QuizMatchService()) {
     suspend fun select2048()=controller.select(EntertainmentContent.GAME_2048)
     suspend fun new2048()=controller.use(EntertainmentContent.GAME_2048){game.newGame()}
     suspend fun move2048(direction:MoveDirection)=controller.use(EntertainmentContent.GAME_2048){game.move(direction)}
@@ -26,6 +27,11 @@ class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2
     suspend fun newQuiz()=controller.use(EntertainmentContent.QUIZ){quiz.start()}
     suspend fun answerQuiz(questionId:String,answer:Int)=controller.use(EntertainmentContent.QUIZ){quiz.submit(questionId,answer)}
     suspend fun nextQuiz()=controller.use(EntertainmentContent.QUIZ){quiz.next()}
+    suspend fun selectMatch()=controller.select(EntertainmentContent.QUIZ_MATCH)
+    suspend fun startMatch(config:MatchConfig)=controller.use(EntertainmentContent.QUIZ_MATCH){match.start(config)}
+    suspend fun answerMatch(id:String,option:Int)=controller.use(EntertainmentContent.QUIZ_MATCH){match.submit(id,option)}
+    suspend fun nextMatch()=controller.use(EntertainmentContent.QUIZ_MATCH){match.next()}
+    suspend fun resetMatch()=controller.use(EntertainmentContent.QUIZ_MATCH){match.reset()}
     suspend fun selectKaraoke()=controller.select(EntertainmentContent.KARAOKE)
     suspend fun chooseSong(id:String)=controller.use(EntertainmentContent.KARAOKE){karaoke.select(songs.first{it.id==id})}
     suspend fun startKaraoke()=controller.use(EntertainmentContent.KARAOKE){karaoke.startOrResume()}
@@ -37,7 +43,7 @@ class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2
     /** Unknown full-duplex PCM capability stays unverified until an actual device probe proves it. */
     fun refreshAvailability(karaokeDeviceValidated:Boolean=false) {
         val values=EntertainmentContent.entries.associateWith{content->when(content){
-            EntertainmentContent.GAME_2048,EntertainmentContent.QUIZ->ContentAvailability(Availability.AVAILABLE)
+            EntertainmentContent.GAME_2048,EntertainmentContent.QUIZ,EntertainmentContent.QUIZ_MATCH->ContentAvailability(Availability.AVAILABLE)
             EntertainmentContent.KARAOKE-> {
                 val mic=karaoke.microphoneSupport()
                 if(!mic.available)ContentAvailability(Availability.UNAVAILABLE,mic.reason)
@@ -53,7 +59,7 @@ class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2
             admission:EntertainmentActivityAdmission,verifiedVideoTargets:List<VerifiedVideoTarget>):EntertainmentRuntime {
             val directory=File(context.noBackupFilesDir,"entertainment-v1")
             val store=FileEntertainmentStore(directory)
-            val game=Game2048Service(store);val quiz=QuizService(store);val history=KaraokeHistory(store)
+            val game=Game2048Service(store);val quiz=QuizService(store);val match=QuizMatchService();val history=KaraokeHistory(store)
             val songs=listOf(OriginalExercise.song(OriginalBackingTrack.create(File(directory,"backing"))))
             val video=VideoAppLauncher(AndroidVideoAppPlatform(context),verifiedVideoTargets){safety.state.value}
             lateinit var controller:EntertainmentController
@@ -73,6 +79,12 @@ class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2
                 override suspend fun stop(){quiz.resume()}
                 override fun interrupt()=Unit
             }
+            sessions[EntertainmentContent.QUIZ_MATCH]=object:EntertainmentContentSession {
+                override suspend fun enter(){match.enter()}
+                override suspend fun pause(){match.interrupt()}
+                override suspend fun stop(){match.stop()}
+                override fun interrupt(){match.interrupt()}
+            }
             sessions[EntertainmentContent.KARAOKE]=object:EntertainmentContentSession {
                 override suspend fun enter(){
                     if(karaoke.state.value.phase in setOf(KaraokePhase.UNPREPARED,KaraokePhase.USER_STOPPED,KaraokePhase.COMPLETED,KaraokePhase.INPUT_ERROR)){
@@ -90,10 +102,10 @@ class EntertainmentRuntime(val controller:EntertainmentController,val game:Game2
                 override suspend fun stop()=Unit
                 override fun interrupt()=Unit
             }}
-            controller=EntertainmentController(admission,safety,sessions,store,scope)
+            controller=EntertainmentController(admission,safety,sessions,store,scope,onEnded=match::stop)
             val availability=MutableStateFlow<Map<EntertainmentContent,ContentAvailability>>(emptyMap())
             val result=EntertainmentRuntime(controller,game,quiz,karaoke,history,video,songs,
-                WaitingRecommendationFeed(waiting,safety.state,availability),availability)
+                WaitingRecommendationFeed(waiting,safety.state,availability),availability,match)
             result.refreshAvailability();return result
         }
     }

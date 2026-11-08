@@ -14,7 +14,7 @@ internal fun StayRoute.activityMode():ActivityMode?=when(this) {
     StayRoute.WORK->ActivityMode.WORK;StayRoute.ENTERTAINMENT->ActivityMode.ENTERTAINMENT
     else->null
 }
-internal fun ActivityMode.label()=when(this){ActivityMode.REST->"휴식";ActivityMode.STUDY->"Study";ActivityMode.WORK->"Work";ActivityMode.ENTERTAINMENT->"Entertainment"}
+internal fun ActivityMode.label()=when(this){ActivityMode.REST->"휴식";ActivityMode.STUDY->"공부";ActivityMode.WORK->"업무";ActivityMode.ENTERTAINMENT->"엔터테인먼트"}
 internal fun ActivityMode.document()=this==ActivityMode.STUDY || this==ActivityMode.WORK
 
 internal data class ActivityUiState(

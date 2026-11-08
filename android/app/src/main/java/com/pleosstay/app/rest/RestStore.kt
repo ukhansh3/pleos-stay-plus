@@ -61,11 +61,12 @@ internal class RestStore(context: Context) : RestPersistence {
 
     private fun RestPreset.json() = JSONObject().put("id", id).put("name", name).put("minutes", minutes)
         .put("display", display.name).put("sound", sound.name).put("alert", alert.name)
-        .put("ev", ev).put("target", target)
+        .put("ev", ev).put("target", target).put("volume", volume).put("muted", muted)
 
     private fun JSONObject.toPreset() = RestPreset(
         getString("id"), getString("name"), getInt("minutes"),
         RestDisplay.valueOf(getString("display")), RestSound.valueOf(getString("sound")),
         RestAlert.valueOf(getString("alert")), getBoolean("ev"), getInt("target"),
+        optInt("volume", 100).coerceIn(0, 100), optBoolean("muted", false),
     )
 }

@@ -15,6 +15,8 @@ import com.pleosstay.app.work.docx.DocxEditorState
 
 /** Layout inspection only. Samples/providers live in src/debug, never in release. */
 internal data class FeatureInspectionState(
+    val nowMillis: Long? = null,
+    val restEditor: com.pleosstay.app.rest.RestPreset? = null,
     val parking: ParkingUiState? = null,
     val waiting: WaitingUiState? = null,
     val pickup: PickupUiState? = null,
