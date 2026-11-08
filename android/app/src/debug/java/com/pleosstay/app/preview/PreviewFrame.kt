@@ -17,10 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.pleosstay.app.R
 import com.pleosstay.app.parking.ui.ParkingScreen
 import com.pleosstay.app.pickup.ui.PickupScreen
 import com.pleosstay.app.realtime.FileTransferScreen
@@ -60,10 +57,7 @@ internal fun PreviewFeature(screen: PreviewScreen) {
             Row(Modifier.fillMaxSize().background(StayColors.Background)) {
                 StayNavigationRail(route.group, {}, 180.dp)
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                        TextButton({}, Modifier.heightIn(min = 60.dp)) { Text(stringResource(R.string.stay_back), fontSize = 19.sp) }
-                        Text(stringResource(route.label), color = StayColors.Secondary, modifier = Modifier.padding(top = 20.dp))
-                    }
+                    StayBackBar({})
                     Box(Modifier.weight(1f)) {
                         when (screen) {
                             PreviewScreen.PARKING -> ParkingScreen(models.parking, {})

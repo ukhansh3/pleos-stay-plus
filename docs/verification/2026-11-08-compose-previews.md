@@ -65,3 +65,9 @@ Added debug-only `AllScreensPreview.kt` at the user's request. Nine independent 
 ## Follow-up: Realtime Preview version schema
 
 The Realtime sample used `sizeBytes` while the actual FileTransferScreen calls `getLong("size")`. This missing required field can throw while rendering the version row. Corrected the debug-only sample to `size`; the existing server/UI contract is unchanged. Both the standalone RealtimePreview and gallery reuse this sample. Compared the display's required id/name/fileName/versionNo/size keys with the fixture. compileDebugKotlin PASS; actual IDE rendering NOT RUN (user operates Studio). No emulator or live server used.
+
+## Follow-up: shared back arrow
+
+Replaced the visible Back text and current-route breadcrumb with a shared StayBackBar/StayBackButton in the real app and debug Preview frame. The button uses a 64dp touch area, 18dp rounded navy surface, subtle border/shadow and a native 3dp rounded white arrow. It retains the back accessibility description and `back` test tag. The exact existing BackDispatcher callback, stack/Work save guard and Parking/Waiting action shortcuts remain unchanged. Home is still excluded from the header and its source/assets are unchanged. No dependency/image/API changes.
+
+assembleDebug and existing JVM suite PASS (204 tests, zero failures/errors/skips); diff --check PASS. Actual Preview/device appearance and button interaction NOT RUN; user operates Studio and requested no emulator execution.

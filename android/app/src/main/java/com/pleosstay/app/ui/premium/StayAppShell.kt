@@ -64,10 +64,8 @@ fun StayAppShell(
         Row(Modifier.fillMaxSize()) {
             StayNavigationRail(route.group,navigate,railWidth)
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                if(route!=StayRoute.HOME) Row(Modifier.fillMaxWidth().padding(horizontal=24.dp),verticalAlignment=Alignment.CenterVertically) {
-                    TextButton(onClick={if(backDispatcher!=null) backDispatcher.onBackPressed() else stack=popRoute(stack)},modifier=Modifier.heightIn(min=60.dp).testTag("back")) { Text(stringResource(R.string.stay_back),fontSize=19.sp) }
-                    Text(stringResource(route.label),color=StayColors.Secondary)
-                    Spacer(Modifier.weight(1f))
+                if(route!=StayRoute.HOME) StayBackBar(
+                    onBack = { if(backDispatcher!=null) backDispatcher.onBackPressed() else stack=popRoute(stack) }) {
                     if(route==StayRoute.PARKING) TextButton(onClick={navigate(StayRoute.WAITING)}) { Text(stringResource(R.string.stay_waiting)) }
                     if(route==StayRoute.WAITING) TextButton(onClick={navigate(StayRoute.PARKING)}) { Text(stringResource(R.string.stay_parking_search)) }
                 }
