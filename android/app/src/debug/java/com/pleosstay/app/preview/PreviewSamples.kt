@@ -54,7 +54,7 @@ internal fun previewSample(screen: PreviewScreen, resources: Resources): Feature
         }
         PreviewScreen.REALTIME -> FeatureInspectionState(files = FileTransferState(allowed = true, unlocked = true,
             connectionId = "preview-connection", message = "PC 연결됨", files = files.map { f -> JSONObject().put("id", f.fileId).put("name", f.name) },
-            versions = listOf(JSONObject().put("id", "v1").put("fileId", document.fileId).put("fileName", document.name).put("versionNo", 1).put("mimeType", DOCX_MIME).put("sizeBytes", 4096).put("sha256", "0".repeat(64)).put("createdAt", Instant.ofEpochMilli(now).toString()))))
+            versions = listOf(JSONObject().put("id", "v1").put("fileId", document.fileId).put("fileName", document.name).put("versionNo", 1).put("mimeType", DOCX_MIME).put("size", 4096).put("sha256", "0".repeat(64)).put("createdAt", Instant.ofEpochMilli(now).toString()))))
         PreviewScreen.REST -> FeatureInspectionState(rest = RestState(presets = RestPreset.defaults, ready = true,
             session = RestSession(RestPreset.defaults[2], now - 12 * 60_000, now + 18 * 60_000, "sample-waiting", alarmMode = RestAlarmMode.FOREGROUND_ONLY),
             ev = EvReading(54, "예시 배터리")), safety = safety)

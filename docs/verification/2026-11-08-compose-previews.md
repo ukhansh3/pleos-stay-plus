@@ -61,3 +61,7 @@ See [Compose Preview guide](../ui/COMPOSE_PREVIEW_GUIDE.md). In Android Studio c
 ## Follow-up: all-screen gallery
 
 Added debug-only `AllScreensPreview.kt` at the user's request. Nine independent native previews (approved home + eight existing feature previews) can be displayed in the IDE Grid/List, or selected individually in Focus mode. Existing per-screen files remain available. The home gallery reuses StayHomeScreen and the real rail without modifying production home code. All entry points remain inspection-only. No SDK/server/file operation or emulator launch. `compileDebugKotlin` and diff --check PASS; gallery rendering in Android Studio NOT RUN. Existing JVM tests were not repeated for this debug-wrapper/documentation-only change.
+
+## Follow-up: Realtime Preview version schema
+
+The Realtime sample used `sizeBytes` while the actual FileTransferScreen calls `getLong("size")`. This missing required field can throw while rendering the version row. Corrected the debug-only sample to `size`; the existing server/UI contract is unchanged. Both the standalone RealtimePreview and gallery reuse this sample. Compared the display's required id/name/fileName/versionNo/size keys with the fixture. compileDebugKotlin PASS; actual IDE rendering NOT RUN (user operates Studio). No emulator or live server used.
