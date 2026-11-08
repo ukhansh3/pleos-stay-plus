@@ -57,3 +57,7 @@ See [Compose Preview guide](../ui/COMPOSE_PREVIEW_GUIDE.md). In Android Studio c
 - `android/app/src/debug/java/com/pleosstay/app/preview/WorkLibraryPreview.kt`
 - `android/app/src/main/java/com/pleosstay/app/ui/premium/FeatureInspection.kt`
 - `docs/ui/COMPOSE_PREVIEW_GUIDE.md`
+
+## Follow-up: all-screen gallery
+
+Added debug-only `AllScreensPreview.kt` at the user's request. Nine independent native previews (approved home + eight existing feature previews) can be displayed in the IDE Grid/List, or selected individually in Focus mode. Existing per-screen files remain available. The home gallery reuses StayHomeScreen and the real rail without modifying production home code. All entry points remain inspection-only. No SDK/server/file operation or emulator launch. `compileDebugKotlin` and diff --check PASS; gallery rendering in Android Studio NOT RUN. Existing JVM tests were not repeated for this debug-wrapper/documentation-only change.
