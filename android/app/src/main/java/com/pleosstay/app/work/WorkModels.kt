@@ -23,7 +23,7 @@ class WorkDraftRecord(val summary: WorkDraftSummary, val original: ByteArray, va
     fun clearBuffers() { original.fill(0); engineSnapshot?.fill(0) }
 }
 
-data class WorkSession(val waitingId: String?, val endsAt: Long) {
+data class WorkSession(val waitingId: String?, val endsAt: Long, val id:String=java.util.UUID.randomUUID().toString(), val startedAt:Long=System.currentTimeMillis()) {
     fun remaining(now: Long): Long = (endsAt - now).coerceAtLeast(0)
 }
 

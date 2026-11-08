@@ -33,14 +33,11 @@ import kotlinx.coroutines.withContext
 fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
     val liveState by viewModel.state.collectAsState()
     val state = featureInspection()?.study ?: liveState
-    BackHandler { viewModel.leave(); onOpenFiles() }
+    BackHandler { viewModel.setForeground(false); onOpenFiles() }
     var minutes by remember { mutableStateOf("30") }
-    var noteText by remember(state.selected?.key, state.allowed) { mutableStateOf("") }
-    var editId by remember(state.selected?.key, state.allowed) { mutableStateOf<String?>(null) }
+    val noteText = state.noteText
+    val editId = state.editId
     var confirmDelete by remember(state.selected?.key, state.allowed) { mutableStateOf(false) }
-    LaunchedEffect(state.noteSaveSerial) {
-        if (state.noteSaveSerial > 0) { noteText = ""; editId = null }
-    }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("공부 · Study", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -134,18 +131,18 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                                     Text(note.body, fontSize = 18.sp)
                                     Row {
-                                        TextButton(onClick = { editId = note.id; noteText = note.body }, enabled = !state.busy) { Text("수정") }
+                                        TextButton(onClick = { viewModel.updateNoteDraft(note.id, note.body) }, enabled = !state.busy) { Text("수정") }
                                         TextButton(onClick = { viewModel.deleteNote(note.id) }, enabled = !state.busy) { Text("삭제") }
                                     }
                                 }
                             }
                         }
                         item {
-                            OutlinedTextField(noteText, { noteText = it }, label = { Text(if (editId == null) "새 메모" else "메모 수정") },
+                            OutlinedTextField(noteText, { viewModel.updateNoteDraft(editId, it) }, label = { Text(if (editId == null) "새 메모" else "메모 수정") },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 260.dp), enabled = state.selected != null && !state.busy)
                             Spacer(Modifier.height(12.dp))
                             PremiumAction("메모 저장", { viewModel.saveNote(editId, noteText) }, Modifier.fillMaxWidth(), state.selected != null && noteText.isNotBlank() && !state.busy)
-                            if (editId != null) TextButton(onClick = { editId = null; noteText = "" }) { Text("수정 취소") }
+                            if (editId != null) TextButton(onClick = { viewModel.cancelNoteDraft() }) { Text("수정 취소") }
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -170,7 +167,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
     if (confirmDelete && state.allowed) AlertDialog(
         onDismissRequest = { confirmDelete = false }, title = { Text("학습 기록 삭제") },
         text = { Text("이 버전의 메모와 진도를 삭제합니다. 원본 파일은 유지됩니다.") },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; noteText = ""; editId = null; viewModel.deleteLocalData() }) { Text("삭제") } },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; viewModel.cancelNoteDraft(); viewModel.deleteLocalData() }) { Text("삭제") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("취소") } })
 }
 

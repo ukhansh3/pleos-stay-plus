@@ -14,6 +14,7 @@ import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import com.pleosstay.app.work.docx.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,9 +36,13 @@ class WorkViewModel(
     val state = mutable.asStateFlow()
     private val foreground = MutableStateFlow(false)
     private var operation: Job? = null
+    private var stopping=false
     private var generation = 0L
     private var scopeIdentity: Pair<String?, String?>? = null
-    val docx = DocxEditorController(drafts, documents, docxFiles, viewModelScope) {
+    private var lastSessionId:String?=null
+    val transitionSessionId:String? get()=state.value.session?.id ?: lastSessionId?.takeIf { docx.requiresRetentionRecovery }
+    val docx = DocxEditorController(drafts, documents, docxFiles, viewModelScope,
+        retentionPermitted={ foreground.value && safety.state.value.canUse && documents.access.value.allowed }) {
         foreground.value && safety.state.value.canUse && documents.access.value.allowed &&
             state.value.session?.remaining(now())?.let { it > 0 } == true
     }
@@ -100,6 +105,38 @@ class WorkViewModel(
 
     fun setMinutes(value: String) { if (!state.value.busy) mutable.update { it.copy(minutes = value.filter(Char::isDigit).take(3)) } }
 
+    suspend fun transitionPreflight(): com.pleosstay.app.modes.ActivityOperation {
+        if(!foreground.value || !safety.state.value.canUse) return com.pleosstay.app.modes.ActivityOperation(false,"정차 상태와 활성 화면을 확인해 주세요.")
+        val access=documents.refreshAccess()
+        return com.pleosstay.app.modes.ActivityOperation(access.allowed && foreground.value && safety.state.value.canUse,"자료함 인증·PIN을 확인해 주세요.")
+    }
+
+    suspend fun startForTransition(choice:WaitingChoice?=null): com.pleosstay.app.modes.ActivityOperation {
+        check(documents.refreshAccess().allowed)
+        checkVisible()
+        if (state.value.session != null) return com.pleosstay.app.modes.ActivityOperation.Done
+        if (state.value.busy) return com.pleosstay.app.modes.ActivityOperation(false,"업무 작업 중입니다.")
+        val prompt=state.value.choice
+        if(prompt!=null && choice==null) return com.pleosstay.app.modes.ActivityOperation(false,state.value.message,true)
+        val result=if(prompt!=null) manager.resolve(prompt,checkNotNull(choice)) else manager.start(ModeStartRequest(ActivityMode.WORK,state.value.minutes.toIntOrNull() ?: 0))
+        applyStartResult(result)
+        return com.pleosstay.app.modes.ActivityOperation(state.value.session != null,state.value.message,state.value.choice!=null)
+    }
+
+    suspend fun stopForTransition(): com.pleosstay.app.modes.ActivityOperation {
+        if(stopping) return com.pleosstay.app.modes.ActivityOperation(false,"업무 종료 중입니다.")
+        stopping=true
+        return try {
+            operation?.cancelAndJoin()
+            mutable.update { it.copy(busy=true) }
+            val saved=docx.flushForTransition()
+            if (!saved.success) { mutable.update { it.copy(message=saved.message) };saved } else {
+                finishKeepingDraftsNow()
+                com.pleosstay.app.modes.ActivityOperation.Done
+            }
+        } finally { stopping=false;mutable.update { it.copy(busy=false) } }
+    }
+
     fun start() = command {
         check(state.value.session == null) { "WORK_ALREADY_STARTED" }
         val minutes = state.value.minutes.toIntOrNull()
@@ -124,7 +161,10 @@ class WorkViewModel(
         checkVisible()
         when (result) {
             is ModeStartResult.Ready -> {
-                val session = WorkSession(result.waiting?.id, result.endsAt ?: Math.addExact(now(), result.durationMillis))
+                val previous=state.value.session
+                val session = WorkSession(result.waiting?.id, result.endsAt ?: Math.addExact(now(), result.durationMillis),
+                    id=previous?.id ?: java.util.UUID.randomUUID().toString(),startedAt=previous?.startedAt ?: now())
+                lastSessionId=session.id
                 check(session.remaining(now()) > 0) { "WORK_DURATION_EXPIRED" }
                 mutable.update { it.copy(session = session, remainingMillis = session.remaining(now()), choice = null,
                     storageError = false, message = "업무 타이머를 시작했습니다. DOCX를 열거나 새 문서를 작성하세요. PDF 편집·업로드는 제외됩니다.") }
@@ -186,7 +226,11 @@ class WorkViewModel(
     }
     fun dismissExit() { mutable.update { it.copy(exitConfirmation = false) } }
     fun finishKeepingDrafts() {
+        viewModelScope.launch { stopForTransition() }
+    }
+    private fun finishKeepingDraftsNow() {
         docx.mask()
+        lastSessionId=null
         generation++; operation?.cancel()
         mutable.update { it.copy(session = null, remainingMillis = 0, busy = false, selected = null, versions = emptyList(),
             choice = null, exitConfirmation = false, message = "업무를 종료했습니다. 로컬 보관본·Waiting·Realtime 연결은 유지됩니다.") }
@@ -201,7 +245,7 @@ class WorkViewModel(
         check(foreground.value && safety.state.value.canUse && documents.access.value.allowed) { "WORK_ACCESS_BLOCKED" }
     }
     private fun command(block: suspend () -> Unit) {
-        if (state.value.busy) return
+        if (stopping || state.value.busy) return
         val token = generation
         // Claim synchronously: two taps before the first coroutine dispatch must not both start.
         mutable.update { it.copy(busy = true) }

@@ -258,6 +258,46 @@ internal class RestController(
 
     fun end() = command { active()?.let { finish(it, RestEnd.MANUAL) } }
 
+    fun transitionSessionId(): String? = state.value.session?.takeIf { it.end==null || state.value.ringing }?.alarmToken
+    fun transitionPreflight(preset:RestPreset):com.pleosstay.app.modes.ActivityOperation = try {
+        check(state.value.ready && !state.value.busy)
+        checkStart(preset,checkAlarm=false)
+        com.pleosstay.app.modes.ActivityOperation.Done
+    } catch(_:Exception) { com.pleosstay.app.modes.ActivityOperation(false,"휴식 설정과 안전 상태를 확인해 주세요.") }
+    suspend fun startForTransition(preset:RestPreset,choice:WaitingChoice?=null,acceptForeground:Boolean=false):com.pleosstay.app.modes.ActivityOperation {
+        val ready=transitionPreflight(preset)
+        if(!ready.success) return ready
+        when {
+            state.value.alarmConsent!=null -> if(acceptForeground) acceptForegroundAlarm() else return com.pleosstay.app.modes.ActivityOperation(false,"전경 알람 사용 동의가 필요합니다.",true)
+            state.value.decision!=null -> if(choice!=null) resolve(choice) else return com.pleosstay.app.modes.ActivityOperation(false,"대기 시간 선택이 필요합니다.",true)
+            else -> start(preset)
+        }
+        state.first { !it.busy }
+        return com.pleosstay.app.modes.ActivityOperation(active()!=null,state.value.message ?: "휴식 시작 동의·시간 선택을 확인해 주세요.",state.value.alarmConsent!=null || state.value.decision!=null)
+    }
+
+    /** Awaitable boundary for activity switches; includes an already completed ringing session. */
+    suspend fun stopForTransition(): com.pleosstay.app.modes.ActivityOperation = mutex.withLock {
+        try {
+            if(state.value.busy) return@withLock com.pleosstay.app.modes.ActivityOperation(false,"휴식 작업 완료 후 다시 시도해 주세요.")
+            audio.stop()
+            stopAlarm()
+            state.value.session?.let { session ->
+                // Cancel before committing end so a failed cancel remains retryable.
+                alarm.cancel(session)
+                if (session.end == null) persist(session.copy(end = RestEnd.MANUAL, targetPrompt = false))
+            }
+            previewEv = false
+            stopEv()
+            mutable.update { it.copy(decision = null, fallback = null, alarmConsent = null, ringing = false) }
+            com.pleosstay.app.modes.ActivityOperation.Done
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) {
+            message("휴식 종료 정리를 완료하지 못했습니다. 다시 시도해 주세요.")
+            com.pleosstay.app.modes.ActivityOperation(false, state.value.message.orEmpty())
+        }
+    }
+
     fun pauseSound(paused: Boolean) = command {
         val current = active() ?: return@command
         val updated = current.copy(soundPaused = paused)

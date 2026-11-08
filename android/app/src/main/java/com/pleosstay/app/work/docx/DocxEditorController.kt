@@ -16,7 +16,8 @@ data class DocxPickerRequest(val kind:DocxPickerKind,val owner:String,val connec
 /** Owns a real mutable document. Persistence, picker I/O and UI are separate ports. */
 class DocxEditorController(
  private val repository:WorkDraftRepository,private val documents:SharedDocumentGateway,
- private val files:DocxFileGateway?,private val scope:CoroutineScope,private val permitted:()->Boolean,
+ private val files:DocxFileGateway?,private val scope:CoroutineScope,
+ private val retentionPermitted:(()->Boolean)?=null,private val permitted:()->Boolean,
 ) {
  private val mutable=MutableStateFlow(DocxEditorState());val state=mutable.asStateFlow()
  private var engine:OoxmlDocxEngine?=null
@@ -25,11 +26,60 @@ class DocxEditorController(
  private val undo=ArrayDeque<ByteArray>();private val redo=ArrayDeque<ByteArray>()
  private var currentBytes:ByteArray?=null
  private var pending=0
+ private val jobs = mutableSetOf<Job>()
+ private var quiescing = false
+ private var retentionFailed = false
+ val requiresRetentionRecovery get()=retentionFailed || failedRetention!=null || pending>0
+ private var failedRetention: EncryptedEditRecovery? = null
+
+ /** Prevent new edits, drain accepted jobs, and verify private retention. Never exports. */
+ suspend fun flushForTransition(): com.pleosstay.app.modes.ActivityOperation {
+  quiescing = true
+  return try {
+   jobs.toList().joinAll()
+   mutex.withLock {
+    if (retentionFailed || failedRetention != null) return@withLock com.pleosstay.app.modes.ActivityOperation(false,"DOCX 초안 저장을 다시 확인해 주세요.")
+    if (engine != null) {
+     checkAccess()
+     repository.retainDocx(DocxDraft(checkNotNull(info),checkNotNull(currentBytes)))
+     checkAccess()
+    }
+    com.pleosstay.app.modes.ActivityOperation.Done
+   }
+  } catch (c:CancellationException) { throw c }
+  catch (_:Exception) { retentionFailed=true; com.pleosstay.app.modes.ActivityOperation(false,"DOCX 초안을 저장하지 못했습니다.") }
+  finally { if(retentionFailed) quiescing=false }
+ }
+
+ /** A failed candidate is retained privately for explicit retry, never reported as committed. */
+ suspend fun retryRetention(): com.pleosstay.app.modes.ActivityOperation = mutex.withLock {
+  try {
+   check((retentionPermitted?.invoke() ?: permitted()) && documents.refreshAccess().allowed)
+   failedRetention?.let { repository.loadDocx(it.info).bytes.fill(0) }
+   val candidate=failedRetention?.open()
+   if(candidate!=null) {
+    try {
+    repository.retainDocx(candidate)
+    if(permitted() && documents.access.value.allowed) {
+     engine=withContext(Dispatchers.IO){OoxmlDocxEngine.open(candidate.bytes)}
+     checkAccess()
+     info=candidate.info;currentBytes?.fill(0);currentBytes=candidate.bytes.copyOf()
+     publish("초안 저장을 재시도했습니다.")
+    }
+    failedRetention?.clear();failedRetention=null
+    } finally { candidate.bytes.fill(0) }
+   } else if(engine!=null) repository.retainDocx(DocxDraft(checkNotNull(info),checkNotNull(currentBytes)))
+   retentionFailed=false
+   com.pleosstay.app.modes.ActivityOperation.Done
+  } catch(c:CancellationException){throw c}
+  catch(_:Exception){com.pleosstay.app.modes.ActivityOperation(false,"초안 저장 재시도에 실패했습니다.")}
+ }
  private fun checkAccess(){check(permitted()&&documents.access.value.allowed){"DOCX_LOCKED"}}
  private fun clearHistory(){undo.forEach{it.fill(0)};redo.forEach{it.fill(0)};undo.clear();redo.clear()}
- fun mask(){epoch++;pending=0;files?.clearPrivateExports();engine=null;info=null;currentBytes?.fill(0);currentBytes=null;clearHistory();mutable.value=DocxEditorState(message="문서 잠김 · 암호화 초안은 유지됩니다.")}
- private fun action(queue:Boolean=false,block:suspend()->Unit){if(mutable.value.busy&&!queue)return;val ticket=epoch;pending++;mutable.update{it.copy(busy=true)}
-  scope.launch{try{mutex.withLock{check(ticket==epoch);checkAccess();block();if(ticket!=epoch||!permitted())mask()}}catch(c:CancellationException){throw c}catch(_:Exception){if(ticket==epoch)mutable.update{it.copy(message="DOCX 작업 실패: 권한·저장공간·파일 호환성을 확인해 주세요. 초안은 유지됩니다.")}}finally{if(ticket==epoch){pending--;mutable.update{it.copy(busy=pending>0)}}}}
+ fun mask(){if(pending>0)retentionFailed=true;epoch++;pending=0;quiescing=false;files?.clearPrivateExports();engine=null;info=null;currentBytes?.fill(0);currentBytes=null;clearHistory();mutable.value=DocxEditorState(message="문서 잠김 · 암호화 초안은 유지됩니다.")}
+ private fun action(queue:Boolean=false,block:suspend()->Unit){if(quiescing || failedRetention!=null || (mutable.value.busy&&!queue))return;val ticket=epoch;pending++;mutable.update{it.copy(busy=true)}
+  val job=scope.launch(start=CoroutineStart.LAZY){try{mutex.withLock{check(ticket==epoch);checkAccess();block();if(ticket!=epoch||!permitted())mask()}}catch(c:CancellationException){throw c}catch(_:Exception){if(ticket==epoch)retentionFailed=true;if(ticket==epoch)mutable.update{it.copy(message="DOCX 작업 실패: 권한·저장공간·파일 호환성을 확인해 주세요. 초안은 유지됩니다.")}}finally{if(ticket==epoch){pending--;mutable.update{it.copy(busy=pending>0)}}}}
+  jobs.add(job);job.invokeOnCompletion{jobs.remove(job)};job.start()
  }
  private suspend fun attach(draft:DocxDraft){try{
   val next=withContext(Dispatchers.IO){OoxmlDocxEngine.open(draft.bytes)};checkAccess()
@@ -49,7 +99,8 @@ class DocxEditorController(
   try{val candidate=withContext(Dispatchers.IO){OoxmlDocxEngine.open(old).also(change)};checkAccess();val bytes=withContext(Dispatchers.IO){candidate.export()}
    try{val d=DocxDraft(captured.copy(updatedAt=System.currentTimeMillis()),bytes)
     // Accepted edits finish encrypted retention atomically even if a local lock arrives meanwhile.
-    withContext(NonCancellable){repository.retainDocx(d)}
+    try { withContext(NonCancellable){repository.retainDocx(d)} }
+    catch(error:Exception) { failedRetention?.clear();failedRetention=EncryptedEditRecovery(d);throw error }
     if(ticket==epoch&&permitted()){history(undo,old);redo.forEach{it.fill(0)};redo.clear();engine=candidate;info=d.info;currentBytes?.fill(0);currentBytes=bytes.copyOf();publish("자동 초안 저장됨 · 외부 DOCX 내보내기 전")}
    }finally{bytes.fill(0)}
   }finally{old.fill(0)}

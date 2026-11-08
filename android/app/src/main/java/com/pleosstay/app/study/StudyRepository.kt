@@ -24,10 +24,11 @@ data class StudyNote(val id:String,val anchor:String?,val body:String,val update
 data class StudyProgress(val anchorKind:String,val anchor:String,val fraction:Float?,val completed:Boolean,val updatedAt:Long) {
     init { require(fraction==null || fraction.isFinite() && fraction in 0f..1f) }
 }
-data class StudyRecord(val key:StudyMaterialKey,val notes:List<StudyNote> = emptyList(),val progress:StudyProgress?=null)
+data class StudyRecord(val key:StudyMaterialKey,val notes:List<StudyNote> = emptyList(),val progress:StudyProgress?=null,val draft:StudyNoteDraft?=null)
 
 interface StudyRepository {
     suspend fun load(key:StudyMaterialKey):StudyRecord
+    suspend fun saveDraft(key:StudyMaterialKey,draft:StudyNoteDraft?) { error("STUDY_DRAFT_STORE_UNAVAILABLE") }
     suspend fun saveNote(key:StudyMaterialKey,id:String?,anchor:String?,body:String):StudyNote
     suspend fun deleteNote(key:StudyMaterialKey,id:String)
     suspend fun saveProgress(key:StudyMaterialKey,progress:StudyProgress)
@@ -71,6 +72,10 @@ class EncryptedStudyRepository(
             catch(_:AtomicMoveNotSupportedException) { Files.move(temp.toPath(),target.toPath(),StandardCopyOption.REPLACE_EXISTING) }
         } finally { temp.delete() }
     }
+    override suspend fun saveDraft(key:StudyMaterialKey,draft:StudyNoteDraft?)=withContext(io) { mutex.withLock {
+        require(draft==null || draft.body.toByteArray().size<=MAX_TEXT_BYTES)
+        write(read(key).copy(draft=draft))
+    } }
     override suspend fun load(key:StudyMaterialKey)=withContext(io) { mutex.withLock { read(key) } }
     override suspend fun saveNote(key:StudyMaterialKey,id:String?,anchor:String?,body:String):StudyNote=withContext(io) {
         mutex.withLock {
@@ -80,7 +85,7 @@ class EncryptedStudyRepository(
             val note=StudyNote(id ?: UUID.randomUUID().toString(),anchor,body,now())
             val notes=record.notes.filterNot { it.id==note.id }+note
             require(notes.size<=MAX_NOTES) { "STUDY_NOTE_LIMIT" }
-            write(record.copy(notes=notes));note
+            write(record.copy(notes=notes,draft=record.draft?.takeUnless { it.id==note.id && it.body==body }));note
         }
     }
     override suspend fun deleteNote(key:StudyMaterialKey,id:String)=withContext(io) { mutex.withLock {
@@ -121,23 +126,25 @@ class EncryptedStudyRepository(
 internal object StudyRecordCodec {
     fun encode(value:StudyRecord):ByteArray = ByteArrayOutputStream().also { bytes ->
         DataOutputStream(bytes).use { out ->
-            out.writeInt(1);with(value.key) { listOf(userScope,connectionId,fileId,versionId).forEach(out::writeValue) }
+            out.writeInt(2);with(value.key) { listOf(userScope,connectionId,fileId,versionId).forEach(out::writeValue) }
             out.writeInt(value.notes.size)
             value.notes.forEach { n -> out.writeValue(n.id);out.writeOptional(n.anchor);out.writeValue(n.body);out.writeLong(n.updatedAt) }
             out.writeBoolean(value.progress!=null)
             value.progress?.let { p -> out.writeValue(p.anchorKind);out.writeValue(p.anchor);out.writeBoolean(p.fraction!=null);p.fraction?.let(out::writeFloat);out.writeBoolean(p.completed);out.writeLong(p.updatedAt) }
+            out.writeBoolean(value.draft!=null);value.draft?.let { out.writeValue(it.id);out.writeValue(it.body) }
         }
     }.toByteArray().also { require(it.size<=EncryptedStudyRepository.MAX_RECORD_BYTES) { "STUDY_RECORD_TOO_LARGE" } }
     fun decode(bytes:ByteArray,expected:StudyMaterialKey?):StudyRecord = DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-        require(input.readInt()==1) { "STUDY_RECORD_VERSION" }
+        val version=input.readInt();require(version in 1..2) { "STUDY_RECORD_VERSION" }
         val key=StudyMaterialKey(input.readValue(),input.readValue(),input.readValue(),input.readValue())
         require(expected==null || key==expected) { "STUDY_SCOPE_MISMATCH" }
         val count=input.readInt();require(count in 0..EncryptedStudyRepository.MAX_NOTES)
         val notes=(0 until count).map { StudyNote(input.readValue(),input.readOptional(),input.readValue(),input.readLong()) }
         require(notes.map { it.id }.distinct().size==notes.size)
         val progress=if(input.readBoolean()) StudyProgress(input.readValue(),input.readValue(),if(input.readBoolean())input.readFloat() else null,input.readBoolean(),input.readLong()) else null
+        val draft=if(version>=2 && input.readBoolean()) StudyNoteDraft(input.readValue(),input.readValue()) else null
         require(input.available()==0) { "STUDY_RECORD_TRAILING_DATA" }
-        StudyRecord(key,notes,progress)
+        StudyRecord(key,notes,progress,draft)
     }
 }
 private fun DataOutputStream.writeValue(value:String) { val bytes=value.toByteArray(StandardCharsets.UTF_8);require(bytes.size<=EncryptedStudyRepository.MAX_TEXT_BYTES);writeInt(bytes.size);write(bytes) }

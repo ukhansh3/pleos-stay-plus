@@ -99,6 +99,75 @@ class StudyViewModelTest {
             assertEquals(0, f.store.endings)
         } finally { f.close() }
     }
+    @Test fun homeRetainsTimerAndEncryptedDraftThenReentryRestoresSameSession() = runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            val id=f.vm.sessionId;val time=f.vm.state.value.remainingMillis
+            f.vm.updateNoteDraft(null,"unfinished")
+            f.vm.setForeground(false);runCurrent()
+            assertEquals(id,f.vm.sessionId);assertTrue(f.vm.state.value.active)
+            assertEquals(time,f.vm.state.value.remainingMillis);assertEquals("",f.vm.state.value.noteText)
+            assertNull(f.vm.state.value.document)
+            f.vm.setForeground(true);runCurrent();f.vm.open(f.ref);runCurrent()
+            assertEquals(id,f.vm.sessionId);assertEquals("unfinished",f.vm.state.value.noteText)
+            assertTrue(f.vm.stopForTransition().success)
+            assertFalse(f.vm.state.value.active);assertEquals("unfinished",f.records.load(f.ref.materialKey()).notes.single().body)
+            assertEquals(0,f.store.endings)
+        } finally { f.close() }
+    }
+    @Test fun transitionSaveFailurePreservesSessionAndDraftForRetry() = runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            f.vm.updateNoteDraft(null,"keep me");val id=f.vm.sessionId;f.failNoteSave=true
+            assertFalse(f.vm.stopForTransition().success)
+            assertEquals(id,f.vm.sessionId);assertEquals("keep me",f.vm.state.value.noteText)
+            f.failNoteSave=false;assertTrue(f.vm.stopForTransition().success)
+            assertEquals(1,f.records.load(f.ref.materialKey()).notes.size)
+        } finally { f.close() }
+    }
+
+    @Test fun coordinatedStartKeepsWaitingChoiceUntilExplicitResolution()=runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.waiting.start(10);runCurrent()
+            val result=f.vm.startForTransition(30)
+            assertTrue(result.needsInput);assertFalse(f.vm.state.value.active)
+            assertTrue(f.vm.startForTransition(30).needsInput)
+            assertTrue(f.vm.startForTransition(30,WaitingChoice.SHORTEN).success)
+            assertEquals(10*60000L,f.vm.state.value.remainingMillis)
+        } finally { f.close() }
+    }
+    @Test fun pendingDraftIsPersistedSeparatelyAndNormalSaveRemovesIt()=runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            f.vm.updateNoteDraft(null,"restart draft");runCurrent()
+            val retained=f.records.load(f.ref.materialKey())
+            assertEquals("restart draft",retained.draft!!.body);assertTrue(retained.notes.isEmpty())
+            f.vm.setForeground(false);runCurrent();f.vm.setForeground(true);runCurrent();f.vm.open(f.ref);runCurrent()
+            assertEquals("restart draft",f.vm.state.value.noteText)
+            f.vm.saveNote(f.vm.state.value.editId,f.vm.state.value.noteText);runCurrent()
+            assertNull(f.records.load(f.ref.materialKey()).draft)
+            assertEquals("restart draft",f.records.load(f.ref.materialKey()).notes.single().body)
+        } finally { f.close() }
+    }
+    @Test fun inputArrivingDuringSaveIsNotClearedByOlderSaveCompletion()=runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            f.vm.updateNoteDraft(null,"first");runCurrent()
+            val gate=CompletableDeferred<Unit>();f.beforeNoteSave={gate.await()}
+            f.vm.saveNote(null,"first");runCurrent()
+            f.vm.updateNoteDraft(null,"newer input");runCurrent()
+            gate.complete(Unit);runCurrent()
+            assertEquals("newer input",f.vm.state.value.noteText)
+            assertEquals("newer input",f.records.load(f.ref.materialKey()).draft!!.body)
+            f.beforeNoteSave={};assertTrue(f.vm.stopForTransition().success)
+            assertEquals("newer input",f.records.load(f.ref.materialKey()).notes.single().body)
+        } finally { f.close() }
+    }
     private class Safety : WaitingSafetyGateway {
         override val state = MutableStateFlow(WaitingSafety(VehicleMotion.PARKED, false))
         override val drivingEvents = DrivingEventBuffer()
@@ -129,11 +198,13 @@ class StudyViewModelTest {
         val gateway = Gateway(ref, File(directory, "source.txt"))
         val records = EncryptedStudyRepository(File(directory, "records"), TestStudyCipher(), dispatcher)
         var failNoteSave = false
+        var beforeNoteSave:suspend()->Unit = {}
         val vm: StudyViewModel
         init {
             Dispatchers.setMain(dispatcher)
             vm = StudyViewModel(ModeStartManager(waiting, safety), safety, gateway, object : StudyRepository by records {
                 override suspend fun saveNote(key: StudyMaterialKey, id: String?, anchor: String?, body: String): StudyNote {
+                    beforeNoteSave()
                     check(!failNoteSave) { "test disk failure" }
                     return records.saveNote(key, id, anchor, body)
                 }

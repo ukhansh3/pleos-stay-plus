@@ -412,6 +412,28 @@ class RestControllerTest {
         assertEquals(waiting, f.waiting.sessions.value.single())
     }
 
+    @Test fun transitionStopDrainsSoundAlarmAndKeepsWaitingAndPresets() = runTest {
+        val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent()
+        val waiting=f.waiting.sessions.value.single();val presets=f.rest.state.value.presets
+        assertTrue(f.rest.stopForTransition().success)
+        assertFalse(f.player.playing);assertFalse(f.rest.state.value.ringing)
+        assertTrue(f.alarms.scheduled.isEmpty());assertNotNull(f.store.saved?.end)
+        assertEquals(waiting,f.waiting.sessions.value.single());assertEquals(presets,f.rest.state.value.presets)
+        assertTrue(f.rest.stopForTransition().success)
+    }
+    @Test fun transitionStopAlsoSilencesNaturallyCompletedAlarm() = runTest {
+        val f=Fixture(this);f.startForeground();val session=f.store.saved!!
+        f.now=session.endsAt+1;advanceTimeBy(1001);runCurrent()
+        assertTrue(f.rest.state.value.ringing)
+        assertTrue(f.rest.stopForTransition().success)
+        assertFalse(f.rest.state.value.ringing);assertFalse(f.alarms.playback.value.playing)
+    }
+    @Test fun transitionStopFailureIsReportedAndRetryable() = runTest {
+        val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent();f.store.failSave=true
+        assertFalse(f.rest.stopForTransition().success);assertNull(f.rest.state.value.session?.end)
+        f.store.failSave=false;assertTrue(f.rest.stopForTransition().success)
+    }
+
     private class Fixture(private val scope: TestScope) {
         var now = 100_000L
         val waitingStore = MemoryWaitingStore()
@@ -467,10 +489,11 @@ class RestControllerTest {
     private class FakeStore : RestPersistence {
         var savedPresets = emptyList<RestPreset>()
         var saved: RestSession? = null
+        var failSave=false
         override fun presets() = savedPresets
         override fun savePresets(values: List<RestPreset>) { savedPresets = values }
         override fun session() = saved
-        override fun saveSession(value: RestSession) { saved = value }
+        override fun saveSession(value: RestSession) { check(!failSave);saved = value }
     }
 
     private class FakeAlarms : RestAlerts {

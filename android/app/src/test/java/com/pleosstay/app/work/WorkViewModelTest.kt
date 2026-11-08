@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -28,7 +29,7 @@ class WorkViewModelTest {
             assertEquals(1, f.store.rows.size)
             assertEquals(30 * 60_000L, f.model.state.value.remainingMillis)
             val saved = f.store.rows.values.single()
-            f.model.finishKeepingDrafts()
+            f.model.finishKeepingDrafts(); runCurrent()
             assertNull(f.model.state.value.session)
             assertEquals(saved, f.store.rows.values.single())
             assertEquals("link", f.gateway.access.value.connectionId)
@@ -138,6 +139,37 @@ class WorkViewModelTest {
         }
     }
 
+    @Test fun homeAndReentryKeepSameWorkSessionWithoutShowingDocuments() = runTest {
+        withFixture { f ->
+            f.waiting.restore();f.model.setForeground(true);runCurrent();f.model.start();runCurrent()
+            val session=f.model.state.value.session
+            f.model.setForeground(false);runCurrent();advanceTimeBy(2000);runCurrent()
+            assertEquals(session,f.model.state.value.session);assertFalse(f.model.state.value.allowed)
+            assertNull(f.model.state.value.selected);assertNull(f.model.docx.state.value.view)
+            f.model.setForeground(true);runCurrent()
+            assertEquals(session,f.model.state.value.session)
+            assertTrue(f.model.stopForTransition().success)
+            assertNull(f.model.state.value.session);assertEquals(1,f.store.rows.size)
+        }
+    }
+
+    @Test fun expiredTimerDoesNotReleaseActivityWithFailedPrivateRetention()=runTest {
+        withFixture { f ->
+            f.waiting.restore();f.model.setForeground(true);runCurrent();f.model.start();runCurrent()
+            val session=f.model.state.value.session!!
+            f.model.docx.newDocument();f.model.docx.state.first { it.draft!=null && !it.busy }
+            f.failWrites=true;f.model.docx.setText(0,"keep activity until retained")
+            f.model.docx.state.first { !it.busy }
+            f.now=session.endsAt+1;advanceTimeBy(1001);runCurrent()
+            assertNull(f.model.state.value.session)
+            assertEquals(session.id,f.model.transitionSessionId)
+            assertFalse(f.model.stopForTransition().success)
+            f.failWrites=false;assertTrue(f.model.docx.retryRetention().success)
+            assertNull(f.model.docx.state.value.view)
+            assertTrue(f.model.stopForTransition().success);assertNull(f.model.transitionSessionId)
+        }
+    }
+
     private suspend fun TestScope.withFixture(block: suspend TestScope.(Fixture) -> Unit) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val fixture = Fixture(this)
@@ -150,7 +182,12 @@ class WorkViewModelTest {
         val waiting = LocalWaitingRepository(store, MemoryJournal(), { safety.state.value }, WaitingClock { now }, dispatcher = StandardTestDispatcher(scope.testScheduler))
         val ref = DocumentRef("owner", "link", "file", "v1", "fixture.pdf", "application/pdf", "0".repeat(64), 1, 1)
         val gateway = WorkTestGateway(ref)
-        val model = WorkViewModel(gateway, WorkDraftRepository(MemoryWorkRecords(), gateway), ModeStartManager(waiting, safety), safety) { now }
+        var failWrites=false
+        private val records=MemoryWorkRecords()
+        private val retained=object:com.pleosstay.app.documents.DocumentRecordStore by records {
+            override suspend fun write(key:String,bytes:ByteArray) { check(!failWrites);records.write(key,bytes) }
+        }
+        val model = WorkViewModel(gateway, WorkDraftRepository(retained, gateway), ModeStartManager(waiting, safety), safety) { now }
     }
 
     private class WorkTestSafety : WaitingSafetyGateway {
