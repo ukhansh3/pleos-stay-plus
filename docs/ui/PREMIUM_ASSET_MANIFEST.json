@@ -108,10 +108,23 @@
       "sha256": "a62ce6cbf8d8600623f73e837d2dc2daf12f402958d82c7126f4354ee53fb024",
       "mode": "RGB",
       "selected_on": "2026-11-08"
+    },
+    {
+      "asset": "hero_daylight_expanded.png",
+      "source_generated_filename": "exec-3c8e3317-c3c3-443c-aa2d-bb1940d4458f.png",
+      "pixels": [
+        2172,
+        724
+      ],
+      "bytes": 2026826,
+      "sha256": "b84a1e5e9fd1e40ee6d7960afbb35025a35d2ad30e5f14108b27ff8b03178eac",
+      "mode": "RGB",
+      "selected_on": "2026-11-08",
+      "source_reference": "Built-in image_gen outpainting of hero_daylight_rear.png; user requested more sky and mountain scenery to the right of the car."
     }
   ],
   "updated_on": "2026-11-08",
-  "current_hero": "hero_daylight_rear.png",
+  "current_hero": "hero_daylight_expanded.png",
   "current_rail_brand": "stay_brand_logo.png",
-  "latest_approval": "User selected the supplied Stay+ arch/desk/seat logo and the blue-sky green-mountain daytime rear-car image."
+  "latest_approval": "User requested extension of the existing daytime mountain hero to the right and above, keeping all other home UI unchanged."
 }

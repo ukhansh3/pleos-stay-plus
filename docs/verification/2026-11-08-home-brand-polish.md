@@ -32,3 +32,9 @@ The daylight mountain/car panorama is the existing generated image explicitly se
 | Backend/API and device integration tests | NOT RUN; this change is presentation/assets only |
 
 No API contract, backend, ViewModel, Repository, authentication, document engine, safety gate or SDK behavior was changed. Actual logo size, background blending and description placement still need the user's visual check on the PLEOS display. No push or deployment was performed.
+
+## Follow-up: extend the hero scenery
+
+Starting HEAD: `ad6751a`. The user requested more mountain scenery to the right of the car and more sky above. Built-in image_gen expanded the existing panorama into `hero_daylight_expanded.png` (2172 x 724); the previous source remains preserved. The hero now fills its existing background bounds with Crop. The opaque top/right masks were softened, retaining the 0.82 image alpha and lower navy fade. Foreground cards, layout, labels, routing and API logic were untouched.
+
+Validation: `:app:assembleDebug` and `:app:testDebugUnitTest` PASS (127 tests, zero failures/errors/skips); `git diff --check` PASS. Emulator, screenshots and device visual comparison NOT RUN by user request. Background crop/blending still requires the user's on-device visual check. No push.

@@ -62,21 +62,20 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
 private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigate: (StayRoute) -> Unit) {
     Box(Modifier.fillMaxWidth().heightIn(min = height)) {
         Box(Modifier.matchParentSize().fillMaxWidth()) {
-            Image(painterResource(R.drawable.hero_daylight_rear), null,
-                Modifier.fillMaxWidth(if (wide) .78f else 1f).fillMaxHeight(),
-                contentScale = if (wide) ContentScale.FillWidth else ContentScale.Crop,
+            Image(painterResource(R.drawable.hero_daylight_expanded), null,
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
                 alignment = Alignment.BottomEnd, alpha = .82f)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                0f to StayColors.Background,
-                .26f to StayColors.Background,
+                0f to StayColors.Background.copy(alpha = .58f),
+                .26f to StayColors.Background.copy(alpha = .28f),
                 .48f to StayColors.Background.copy(alpha = .12f),
                 .70f to StayColors.Background.copy(alpha = .10f),
                 1f to StayColors.Background)))
             Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
                 0f to StayColors.Background.copy(alpha = .12f),
                 .62f to Color.Transparent,
-                .78f to StayColors.Background,
-                1f to StayColors.Background)))
+                1f to StayColors.Background.copy(alpha = .18f))))
         }
         if (wide) Row(Modifier.fillMaxWidth().heightIn(min = height), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1.8f).padding(top = 48.dp, start = 24.dp),
