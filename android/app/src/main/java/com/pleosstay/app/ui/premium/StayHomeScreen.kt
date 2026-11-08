@@ -42,7 +42,7 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
             ModeCards(wide, modesHeight,
                 onRest = { navigate(StayRoute.REST) },
                 onStudy = { navigate(StayRoute.STUDY) },
-                onWork = { navigate(StayRoute.WORK) })
+                onWork = { navigate(StayRoute.WORK) }, onEntertainment = { navigate(StayRoute.ENTERTAINMENT) })
             val cards = listOf(
                 Triple(StayRoute.PARKING, R.drawable.parking_visual, stringResource(R.string.stay_parking_hint)),
                 Triple(StayRoute.PICKUP, R.drawable.pickup_visual, pickup.session?.let { "Pickup · ${it.status}" } ?: stringResource(R.string.stay_pickup_hint)),
@@ -139,12 +139,12 @@ private fun HomeStatus(waiting: WaitingUiState, navigate: (StayRoute) -> Unit) {
 
 @Composable
 fun ModeCards(wide: Boolean, rowHeight: Dp = 280.dp, onRest: (() -> Unit)? = null,
-              onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null) {
+              onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null, onEntertainment: (() -> Unit)? = null) {
     val modes = listOf(
         ModeVisual("REST", R.string.stay_rest, R.string.stay_rest_hint, R.drawable.rest_pillow, onRest),
         ModeVisual("STUDY", R.string.stay_study, R.string.stay_study_hint, R.drawable.study_book, onStudy),
         ModeVisual("WORK", R.string.stay_work, R.string.stay_work_hint, R.drawable.work_laptop, onWork),
-        ModeVisual("ENTERTAINMENT", R.string.stay_entertainment, R.string.stay_entertainment_hint, R.drawable.entertainment_visual, null),
+        ModeVisual("ENTERTAINMENT", R.string.stay_entertainment, R.string.stay_entertainment_hint, R.drawable.entertainment_visual, onEntertainment),
     )
     BoxWithConstraints {
         val columns = if (maxWidth < 520.dp) 1 else if (wide) 4 else 2
@@ -193,12 +193,12 @@ private fun Shortcut(route: StayRoute, image: Int, hint: String, modifier: Modif
 }
 
 @Composable
-fun StayModeMenuScreen(onRest: (() -> Unit)? = null, onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null) {
+fun StayModeMenuScreen(onRest: (() -> Unit)? = null, onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null, onEntertainment: (() -> Unit)? = null) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text(stringResource(R.string.stay_modes), style = MaterialTheme.typography.headlineMedium)
         Text(stringResource(R.string.stay_mode_notice), color = StayColors.Secondary)
-        ModeCards(wide = false, onRest = onRest, onStudy = onStudy, onWork = onWork)
+        ModeCards(wide = false, onRest = onRest, onStudy = onStudy, onWork = onWork, onEntertainment = onEntertainment)
     }
 }
 

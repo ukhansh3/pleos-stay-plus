@@ -1,6 +1,8 @@
 package com.pleosstay.app.entertainment
 
 import androidx.activity.compose.BackHandler
+import com.pleosstay.app.ui.activity.*
+import com.pleosstay.app.modes.ActivityMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -27,23 +29,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Presentation for the implemented local game/quiz services. The host must provide
- * a runtime with a real shared activity admission and own its foreground lifecycle.
- * This screen is deliberately not registered by the UI-only change: the current
- * production app does not yet have that admission adapter. No permissive permit,
- * microphone, video package guess or policy bypass is supplied here.
- */
+/** Existing game/quiz presentation. Production admission is supplied by the shared activity host. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, onHome: () -> Unit) {
+fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, onHome: () -> Unit, hostForeground:Boolean=true) {
+    val actions=LocalActivityUiActions.current
     val state by runtime.controller.state.collectAsState()
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var game by remember { mutableStateOf<Game2048State?>(null) }
     var quiz by remember { mutableStateOf<QuizState?>(null) }
-    val canUse = safety.canUse && runtime.controller.foreground()
+    val canUse = safety.canUse && hostForeground
     fun command(action: suspend () -> Unit) {
         if (busy) return
         busy = true
@@ -58,7 +55,8 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
             finally { busy = false }
         }
     }
-    val home = {
+    val home:()->Unit = {
+        if(actions!=null)actions.home() else
         command {
             val result = runtime.controller.onInternalHome()
             if (result.success) withContext(Dispatchers.Main) { onHome() }
@@ -84,7 +82,7 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
             message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.phase == EntertainmentPhase.ERROR) Text(state.message, color = MaterialTheme.colorScheme.error)
             if (!state.active) {
-                PremiumAction("시작", { command { runtime.controller.start() } }, enabled = !busy,
+                PremiumAction("시작", { if(actions!=null)actions.startEntertainment() else command { runtime.controller.start() } }, enabled = !busy,
                     modifier = Modifier.testTag("ent_start"))
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -92,7 +90,7 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
                         modifier = Modifier.testTag("ent_2048"), secondary = state.content != EntertainmentContent.GAME_2048)
                     PremiumAction("상식 퀴즈", { command { runtime.selectQuiz() } }, enabled = !busy,
                         modifier = Modifier.testTag("ent_quiz"), secondary = state.content != EntertainmentContent.QUIZ)
-                    OutlinedButton(onClick = { command { runtime.controller.end() } }, enabled = !busy,
+                    OutlinedButton(onClick = { if(actions!=null)actions.finish(ActivityMode.ENTERTAINMENT) else command { runtime.controller.end() } }, enabled = !busy,
                         modifier = Modifier.heightIn(min = 64.dp)) { Text("종료", fontSize = 20.sp) }
                 }
                 when (state.content) {
@@ -115,7 +113,7 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GamePanel(state: Game2048State, enabled: Boolean, move: (MoveDirection) -> Unit, restart: () -> Unit) {
+internal fun GamePanel(state: Game2048State, enabled: Boolean, move: (MoveDirection) -> Unit, restart: () -> Unit) {
     Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Text("점수 ${state.score}", fontSize = 24.sp)
@@ -149,7 +147,7 @@ private fun GamePanel(state: Game2048State, enabled: Boolean, move: (MoveDirecti
 }
 
 @Composable
-private fun QuizPanel(state: QuizState, enabled: Boolean, answer: (String, Int) -> Unit, next: () -> Unit, restart: () -> Unit) {
+internal fun QuizPanel(state: QuizState, enabled: Boolean, answer: (String, Int) -> Unit, next: () -> Unit, restart: () -> Unit) {
     Column(Modifier.widthIn(max = 920.dp).fillMaxWidth().background(StayColors.Surface, RoundedCornerShape(24.dp)).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp)) {
         if (state.complete) {

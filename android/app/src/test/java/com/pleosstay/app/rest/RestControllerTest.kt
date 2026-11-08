@@ -11,6 +11,7 @@ import com.pleosstay.app.waiting.safety.DrivingEventBuffer
 import com.pleosstay.app.waiting.safety.VehicleMotion
 import com.pleosstay.app.waiting.safety.WaitingSafety
 import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
+import kotlinx.coroutines.async
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -432,6 +433,18 @@ class RestControllerTest {
         val f=Fixture(this);f.restore();f.rest.start(rain);runCurrent();f.store.failSave=true
         assertFalse(f.rest.stopForTransition().success);assertNull(f.rest.state.value.session?.end)
         f.store.failSave=false;assertTrue(f.rest.stopForTransition().success)
+    }
+
+    @Test fun coordinatedStartRequiresExplicitConsentBeforeIndependentRest()=runTest {
+        val f=Fixture(this);f.restore();f.waitingStore.failWrites=true
+        val first=async { f.rest.startForTransition(rain) };runCurrent()
+        assertTrue(first.await().needsInput);assertNull(f.rest.transitionSessionId())
+        assertNotNull(f.rest.state.value.fallback)
+        assertTrue(f.rest.startForTransition(rain).needsInput);assertTrue(f.alarms.scheduled.isEmpty())
+        val approved=async { f.rest.startForTransition(rain,withoutWaiting=true) };runCurrent()
+        assertTrue(approved.await().success);assertNotNull(f.rest.transitionSessionId())
+        assertNull(f.store.saved!!.waitingId);assertEquals(1,f.alarms.scheduled.size)
+        assertTrue(f.waiting.sessions.value.isEmpty())
     }
 
     private class Fixture(private val scope: TestScope) {

@@ -1,6 +1,8 @@
 package com.pleosstay.app.work
 
 import androidx.activity.compose.BackHandler
+import com.pleosstay.app.ui.activity.*
+import com.pleosstay.app.modes.ActivityMode
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +28,8 @@ import com.pleosstay.app.work.docx.*
 @Composable
 fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: () -> Unit, onHome: () -> Unit,
     onDocxPicker: (DocxPickerKind, Int?) -> Unit = { _, _ -> }) {
+    val actions=LocalActivityUiActions.current
+    var recoveryDismissed by remember { mutableStateOf(false) }
     val liveState by model.state.collectAsState()
     val state = featureInspection()?.work ?: liveState
     val liveEditor by model.docx.state.collectAsState()
@@ -34,8 +38,12 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
     var deletingDocx by remember(state.allowed) { mutableStateOf<DocxDraftInfo?>(null) }
     var selectedVersion by remember(state.allowed) { mutableStateOf<DocumentRef?>(null) }
     var tab by remember { mutableIntStateOf(0) }
-    BackHandler { if (state.choice != null) model.resolve(WaitingChoice.BACK) else if (state.session != null) model.requestExit() else onHome() }
-    if (state.allowed && editor.view != null) { DocxEditorPanel(model.docx, onDocxPicker, model.docx::mask); return }
+    BackHandler { if(actions!=null)actions.home() else if (state.choice != null) model.resolve(WaitingChoice.BACK) else if (state.session != null) model.requestExit() else onHome() }
+    LaunchedEffect(editor.busy,editor.message){if(model.docx.requiresRetentionRecovery && !editor.busy)recoveryDismissed=false}
+    val recovery:@Composable ()->Unit={if(model.docx.requiresRetentionRecovery && !editor.busy && !recoveryDismissed)ActivityRecoveryPanel(
+        "암호화 초안을 보관하지 못했습니다. 현재 작업은 유지되며 외부 DOCX를 덮어쓰지 않습니다.",editor.busy,
+        {actions?.retry(ActivityMode.WORK)},{recoveryDismissed=true})}
+    if (state.allowed && editor.view != null) { Column { recovery();Box(Modifier.weight(1f)){DocxEditorPanel(model.docx, onDocxPicker, model.docx::mask)} }; return }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("업무 · Work", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -46,6 +54,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
             PremiumAction("연결·PIN 확인", onRealtime, secondary = true)
             return@Column
         }
+        recovery()
         workMessage(state.message)?.let { Text(it, color = StayColors.Secondary) }
         if (editor.message != "DOCX를 열거나 새 문서를 만드세요.") workMessage(editor.message)?.let { Text(it, color = StayColors.Secondary) }
         if (state.busy || editor.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -120,11 +129,11 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                         Text("업무 시간", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                         if (state.session == null) {
                             OutlinedTextField(state.minutes, model::setMinutes, label = { Text("시간 · 분") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                            PremiumAction("업무 시작", model::start, Modifier.fillMaxWidth(), !state.busy)
+                            PremiumAction("업무 시작", {if(actions!=null)actions.startWork() else model.start()}, Modifier.fillMaxWidth(), !state.busy)
                         } else {
                             Text(duration(state.remainingMillis), fontSize = 44.sp, color = StayColors.Text, fontWeight = FontWeight.SemiBold)
                             PremiumAction("10분 연장", { model.extend(10) }, Modifier.fillMaxWidth(), !state.busy, true)
-                            PremiumAction("업무 종료", model::requestExit, Modifier.fillMaxWidth(), !state.busy, true)
+                            PremiumAction("업무 종료", {if(actions!=null)actions.finish(ActivityMode.WORK) else model.requestExit()}, Modifier.fillMaxWidth(), !state.busy, true)
                         }
                         if (state.storageError) PremiumAction("대기 기록 복구", onRecoverWaiting, Modifier.fillMaxWidth(), !state.busy, true)
                         HorizontalDivider(color = StayColors.Border)
@@ -142,7 +151,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
             }
         }
     }
-    state.choice?.takeIf { state.allowed }?.let { prompt ->
+    state.choice?.takeIf { state.allowed && (actions==null || state.session!=null) }?.let { prompt ->
         AlertDialog(onDismissRequest = { model.resolve(WaitingChoice.BACK) }, title = { Text("대기 시간 확인") },
             text = { Text("잔여 ${duration(prompt.remainingMillis)} · 대기 시간을 ${prompt.extensionMinutes}분 연장할까요?") },
             confirmButton = { TextButton(onClick = { model.resolve(WaitingChoice.EXTEND) }, enabled = !state.busy && prompt.extensionUnavailable == null) { Text("대기 연장") } },

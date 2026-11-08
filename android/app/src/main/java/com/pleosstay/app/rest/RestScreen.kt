@@ -25,6 +25,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import com.pleosstay.app.ui.activity.*
+import com.pleosstay.app.modes.ActivityMode
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +56,7 @@ import java.util.Date
 
 @Composable
 internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit, onHome: () -> Unit) {
+    val actions=LocalActivityUiActions.current
     val liveState by controller.state.collectAsState()
     val state = featureInspection()?.rest ?: liveState
     val liveSafety by controller.safetyState.collectAsState()
@@ -88,7 +91,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     }
     BackHandler {
         if (state.alarmConsent != null) controller.dismissAlarmConsent()
-        else if (state.decision != null) controller.resolve(WaitingChoice.BACK)
+        else if (state.decision != null) { if(actions!=null)actions.choose(ActivityMode.REST,WaitingChoice.BACK) else controller.resolve(WaitingChoice.BACK) }
         else if (editor != null) editor = null else onHome()
     }
 
@@ -131,7 +134,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                         OutlinedButton(onClick = { extend = true }, enabled = !state.busy,
                                             modifier = Modifier.heightIn(min = 60.dp)) { Text("휴식 시간 연장") }
                                     }
-                                    PremiumAction("휴식 종료", controller::end, enabled = !state.busy)
+                                    PremiumAction("휴식 종료", { if(actions!=null)actions.finish(ActivityMode.REST) else controller.end() }, enabled = !state.busy)
                                 }
                             })
                     }
@@ -200,7 +203,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                                 TextButton(onClick = controller::retryEv, enabled = safety.canUse) { Text("배터리 정보 다시 확인") }
                                             }
                                             if (!safety.canUse) Text(safety.message, color = StayColors.Warning)
-                                            PremiumAction("휴식 시작", { controller.start(preset) },
+                                            PremiumAction("휴식 시작", { if(actions!=null)actions.startRest(preset) else controller.start(preset) },
                                                 modifier = Modifier.fillMaxWidth().testTag("rest_start"),
                                                 enabled = !state.busy && safety.canUse && preset.valid &&
                                                     (!preset.ev || state.ev.percent?.let { it < preset.target } == true))
@@ -242,7 +245,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
         }
     }
 
-    if (state.alarmConsent != null && safety.canUse) AlertDialog(
+    if (actions==null && state.alarmConsent != null && safety.canUse) AlertDialog(
         onDismissRequest = controller::dismissAlarmConsent,
         title = { Text("현재는 앱 실행 중 알람을 사용할 수 있어요") },
         text = { Text("Stay+를 화면에 유지하는 동안에만 종료 알람이 울립니다. 다른 앱으로 이동하거나 화면이 꺼지면 알람이 울리지 않을 수 있어요.") },
@@ -255,10 +258,10 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     )
 
     val decision = state.decision
-    if (decision != null && safety.canUse) {
+    if (decision != null && safety.canUse && (actions==null || state.session!=null)) {
         val prompt = decision.prompt
         AlertDialog(
-            onDismissRequest = { controller.resolve(WaitingChoice.BACK) },
+            onDismissRequest = { if(actions!=null)actions.choose(ActivityMode.REST,WaitingChoice.BACK) else controller.resolve(WaitingChoice.BACK) },
             title = { Text("대기 시간을 확인해 주세요") },
             text = {
                 Column {
@@ -266,19 +269,19 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                     Text("남은 대기 ${duration(prompt.remainingMillis)}")
                     if (prompt.extensionUnavailable != null) Text("대기 총 예정 시간 720분 한도 내에서 연장할 수 없어요.")
                     if (prompt.shortenUnavailable != null) Text("남은 대기 시간이 없어 단축할 수 없어요.")
-                    else TextButton(onClick = { controller.resolve(WaitingChoice.SHORTEN) }, enabled = safety.canUse && !state.busy) {
+                    else TextButton(onClick = { if(actions!=null)actions.choose(ActivityMode.REST,WaitingChoice.SHORTEN) else controller.resolve(WaitingChoice.SHORTEN) }, enabled = safety.canUse && !state.busy) {
                         Text("휴식 시간을 ${duration(prompt.remainingMillis)}로 줄이기")
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { controller.resolve(WaitingChoice.EXTEND) },
+                TextButton(onClick = { if(actions!=null)actions.choose(ActivityMode.REST,WaitingChoice.EXTEND) else controller.resolve(WaitingChoice.EXTEND) },
                     enabled = safety.canUse && !state.busy && prompt.extensionUnavailable == null) { Text("대기 ${prompt.extensionMinutes}분 연장") }
             },
-            dismissButton = { TextButton(onClick = { controller.resolve(WaitingChoice.BACK) }) { Text("뒤로가기") } },
+            dismissButton = { TextButton(onClick = { if(actions!=null)actions.choose(ActivityMode.REST,WaitingChoice.BACK) else controller.resolve(WaitingChoice.BACK) }) { Text("뒤로가기") } },
         )
     }
-    if (state.fallback != null && safety.canUse) AlertDialog(
+    if (actions==null && state.fallback != null && safety.canUse) AlertDialog(
         onDismissRequest = controller::dismissFallback,
         title = { Text("대기 관리 없이 휴식할까요?") },
         text = { Text("대기 상태와 종료 예정 시각은 관리되지 않아요. 휴식 알람은 예약됩니다.") },

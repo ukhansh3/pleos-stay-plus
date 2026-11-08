@@ -4,6 +4,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.pleosstay.app.ui.activity.*
+import com.pleosstay.app.entertainment.EntertainmentScreen
+import com.pleosstay.app.modes.ActivityMode
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.pleosstay.app.rest.RestAlarm
 import com.pleosstay.app.rest.RestAudio
 import com.pleosstay.app.rest.RestController
@@ -59,6 +67,10 @@ class MainActivity : ComponentActivity() {
 
     private val waitingDependencies by lazy { WaitingDependencies.get(applicationContext) }
     internal val modeStartManager get() = waitingDependencies.modeStartManager
+    private val activityHost:PremiumActivityHost by viewModels { object:ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T =
+            PremiumActivityHost(applicationContext,waitingDependencies.rest,waitingDependencies.safety,waitingDependencies.repository) as T
+    } }
     private var openRest by mutableStateOf(false)
     private val documentForeground = MutableStateFlow(false)
     private val waitingViewModel: WaitingViewModel by viewModels {
@@ -91,6 +103,7 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT < 29) {
             waitingDependencies.rest.setForeground(true)
             documentForeground.value = true
+            activityHost.setForeground(true)
         }
     }
 
@@ -99,11 +112,13 @@ class MainActivity : ComponentActivity() {
         // PLEOS multi-window can keep several activities RESUMED after Home/app switches.
         waitingDependencies.rest.setForeground(isTopResumedActivity)
         documentForeground.value = isTopResumedActivity
+        activityHost.setForeground(isTopResumedActivity)
         Log.d("RestLifecycle", "topResumed=" + isTopResumedActivity)
     }
 
     override fun onPause() {
         documentForeground.value = false
+        activityHost.setForeground(false)
         waitingDependencies.rest.setForeground(false)
         super.onPause()
     }
@@ -115,6 +130,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         documentForeground.value = false
+        activityHost.setForeground(false)
         waitingDependencies.safety.setForeground(false)
         super.onStop()
     }
@@ -142,10 +158,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PleosStayPlusTheme {
-                var workSaving by remember { mutableStateOf(false) }
-                var workUnexported by remember { mutableStateOf(false) }
-                var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
+                val host=activityHost
+                val activityUi by host.ui.state.collectAsState()
                 val documentVisible by documentForeground.collectAsState()
+                val safety by waitingDependencies.safety.state.collectAsState()
                 val parkingState by parkingViewModel.state.collectAsState()
                 val waitingState by waitingModel.state.collectAsState()
                 val pickupState by pickupViewModel.state.collectAsState()
@@ -153,21 +169,25 @@ class MainActivity : ComponentActivity() {
                     val linkedId = pickupState.session?.waitingSessionId
                     if (hasEndedLinkedWaiting(linkedId, waitingState.sessions)) pickupViewModel.endLinkedWaiting()
                 }
+                LaunchedEffect(openRest,documentVisible) { if(openRest && documentVisible){openRest=false;host.open(ActivityMode.REST)} }
+                CompositionLocalProvider(LocalActivityUiActions provides host) {
                 StayAppShell(
                     onEnter = { route -> if (route != StayRoute.HOME) requestVehicleInformation() },
-                    requestedRoute = if (openRest) StayRoute.REST else null,
-                    onRequestedRouteHandled = { openRest = false },
-                    navigationGuard = { from, _, proceed ->
-                        if (from == StayRoute.WORK && (workSaving || workUnexported)) pendingNavigation = proceed
+                    requestedRoute = activityUi.destination,
+                    onRequestedRouteHandled = host.ui::handledNavigation,
+                    navigationGuard = { from, to, proceed ->
+                        if(host.ui.takeNavigationPermit(to))proceed()
                         else {
-                            workSaving = false
-                            workUnexported = false
-                            proceed()
+                            requestVehicleInformation()
+                            val target=to.activityMode()
+                            if(target!=null)host.open(target) else host.ui.leave(from,to)
                         }
                     },
                 ) { route, navigate ->
-                    DisposableEffect(route) {
-                        val document = route == StayRoute.STUDY || route == StayRoute.WORK
+                    SideEffect{host.routeChanged(route)}
+                    LaunchedEffect(route,documentVisible){host.setForeground(documentVisible)}
+                    val document=route.activityMode()?.document()==true || activityUi.documentLease
+                    DisposableEffect(document) {
                         if (document) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                         onDispose { if (document) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
                     }
@@ -177,50 +197,33 @@ class MainActivity : ComponentActivity() {
                             onWaiting = { navigate(StayRoute.WAITING) })
                         StayRoute.WAITING -> WaitingScreen(waitingModel,
                             parkingState.selected?.let { WaitingPlace(it.id, it.name) },
-                            onRest = { navigate(StayRoute.REST) },
-                            onStudy = { navigate(StayRoute.STUDY) },
-                            onWork = { navigate(StayRoute.WORK) })
+                            onRest = { navigate(StayRoute.REST) }, onStudy = { navigate(StayRoute.STUDY) }, onWork = { navigate(StayRoute.WORK) })
                         StayRoute.PICKUP -> PickupScreen(pickupViewModel, ::requestPickupStart)
-                        StayRoute.FILES, StayRoute.STUDY, StayRoute.WORK -> RealtimeEntry(
-                            applicationContext, waitingDependencies.safety, documentVisible,
-                            managedWorkspace = if (route == StayRoute.WORK) { model, endpoint ->
-                                rememberProtectedWorkContent(applicationContext, model, endpoint, modeStartManager,
-                                    waitingDependencies.safety, documentVisible,
-                                    { navigate(StayRoute.FILES) }, { navigate(StayRoute.WAITING) }, { navigate(StayRoute.HOME) },
-                                    { saving, dirty -> workSaving = saving; workUnexported = dirty })
-                            } else null,
-                        ) { model, endpoint ->
-                            if (route == StayRoute.FILES) com.pleosstay.app.realtime.FileTransferScreen(model)
-                            else DocumentWorkspaceEntry(applicationContext, model, endpoint, modeStartManager,
-                                waitingDependencies.safety, study = true, foreground = documentVisible,
-                                onOpenFiles = { navigate(StayRoute.FILES) },
-                                onOpenWaiting = { navigate(StayRoute.WAITING) },
-                                onHome = { navigate(StayRoute.HOME) })
-                        }
-                        StayRoute.REST -> RestScreen(waitingDependencies.rest,
-                            onRecoverWaiting = waitingModel::reload) { navigate(StayRoute.HOME) }
+                        StayRoute.FILES, StayRoute.STUDY, StayRoute.WORK -> Unit
+                        StayRoute.REST -> RestScreen(waitingDependencies.rest,waitingModel::reload,host::home)
+                        StayRoute.ENTERTAINMENT -> EntertainmentScreen(host.entertainment.runtime,safety,host::home,documentVisible)
                         StayRoute.MODES -> StayModeMenuScreen(
-                            onRest = { navigate(StayRoute.REST) },
-                            onStudy = { navigate(StayRoute.STUDY) },
-                            onWork = { navigate(StayRoute.WORK) })
+                            onRest = { navigate(StayRoute.REST) }, onStudy = { navigate(StayRoute.STUDY) },
+                            onWork = { navigate(StayRoute.WORK) },onEntertainment={navigate(StayRoute.ENTERTAINMENT)})
                         StayRoute.SETTINGS -> StaySettingsScreen()
                     }
+                    // Kept at one composition location across routes; the original PIN gate owns all private rendering.
+                    val filesVisible=route==StayRoute.FILES || route.activityMode()?.document()==true
+                    RealtimeEntry(applicationContext,waitingDependencies.safety,
+                        foreground=documentVisible && (filesVisible || activityUi.documentLease),
+                        visible=documentVisible && (filesVisible || activityUi.preparing),
+                        presentation={ body ->
+                            if(activityUi.preparing)ActivityModal("자료함 연결 및 활동 준비",activityUi.busy,host.ui::cancelPreparation) {
+                                PremiumAction("취소",host.ui::cancelPreparation,enabled=!activityUi.busy,secondary=true)
+                                Box(Modifier.fillMaxWidth().height(820.dp)){body()}
+                            } else body()
+                        },
+                        managedWorkspace={model,endpoint->rememberPremiumDocuments(applicationContext,model,endpoint,
+                            host,modeStartManager,route,documentVisible,navigate,waitingModel::reload)},
+                    )
                 }
-                if (pendingNavigation != null && documentVisible) AlertDialog(
-                    onDismissRequest = { pendingNavigation = null },
-                    title = { Text(if (workSaving) "초안 저장 중" else "변경 사항이 있습니다") },
-                    text = { Text("초안을 보관하고 이동할까요?") },
-                    confirmButton = {
-                        TextButton(enabled = !workSaving, onClick = {
-                            val proceed = pendingNavigation
-                            pendingNavigation = null
-                            workSaving = false
-                            workUnexported = false
-                            proceed?.invoke()
-                        }) { Text("초안 보관 후 이동") }
-                    },
-                    dismissButton = { TextButton(onClick = { pendingNavigation = null }) { Text("계속 편집") } },
-                )
+                ActivityPrompts(host,documentVisible,waitingModel::reload)
+                }
             }
         }
     }

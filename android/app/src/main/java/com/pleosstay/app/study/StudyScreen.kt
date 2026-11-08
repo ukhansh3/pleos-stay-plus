@@ -2,6 +2,8 @@ package com.pleosstay.app.study
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import com.pleosstay.app.ui.activity.*
+import com.pleosstay.app.modes.ActivityMode
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,9 +33,11 @@ import kotlinx.coroutines.withContext
 /** Presentation only; authorization, mode transitions and records remain in the ViewModel. */
 @Composable
 fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
+    val actions=LocalActivityUiActions.current
+    var recoveryDismissed by remember { mutableStateOf(false) }
     val liveState by viewModel.state.collectAsState()
     val state = featureInspection()?.study ?: liveState
-    BackHandler { viewModel.setForeground(false); onOpenFiles() }
+    BackHandler { if(actions!=null)actions.home() else {viewModel.setForeground(false);onOpenFiles()} }
     var minutes by remember { mutableStateOf("30") }
     val noteText = state.noteText
     val editId = state.editId
@@ -52,12 +56,15 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             if (!state.active) {
                 OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit).take(3) }, label = { Text("학습 시간 · 분") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(180.dp), enabled = !state.busy, singleLine = true)
-                PremiumAction("학습 시작", { viewModel.start(minutes.toIntOrNull() ?: 0) }, enabled = !state.busy)
-            } else PremiumAction("학습 종료", viewModel::end, enabled = !state.busy, secondary = true)
+                PremiumAction("학습 시작", { if(actions!=null)actions.startStudy(minutes.toIntOrNull() ?: 0) else viewModel.start(minutes.toIntOrNull() ?: 0) }, enabled = !state.busy)
+            } else PremiumAction("학습 종료", { if(actions!=null)actions.finish(ActivityMode.STUDY) else viewModel.end() }, enabled = !state.busy, secondary = true)
             TextButton(onClick = viewModel::refreshFiles, enabled = state.active && !state.busy) { Text("새로고침") }
             TextButton(onClick = viewModel::restoreLast, enabled = state.active && !state.busy) { Text("이전 학습") }
         }
         studyMessage(state.message)?.let { Text(it, color = StayColors.Secondary, fontSize = 18.sp) }
+        LaunchedEffect(state.busy,state.noteSaveFailed){if(state.noteSaveFailed && !state.busy)recoveryDismissed=false}
+        if(state.noteSaveFailed && !recoveryDismissed)ActivityRecoveryPanel("메모 입력을 유지하고 있습니다. 저장을 다시 시도해 주세요.",state.busy,
+            {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true})
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val library: @Composable (Modifier) -> Unit = { modifier ->
@@ -159,7 +166,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             }
         }
     }
-    state.prompt?.takeIf { state.allowed }?.let { prompt -> AlertDialog(
+    state.prompt?.takeIf { state.allowed && actions==null }?.let { prompt -> AlertDialog(
         onDismissRequest = { viewModel.choose(WaitingChoice.BACK) }, title = { Text("대기 시간 확인") },
         text = { Text("학습 시간을 맞추려면 대기 시간을 ${prompt.extensionMinutes}분 연장해 주세요.") },
         confirmButton = { TextButton(onClick = { viewModel.choose(WaitingChoice.EXTEND) }, enabled = !state.busy && prompt.extensionUnavailable == null) { Text("대기 연장") } },

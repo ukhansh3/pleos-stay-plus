@@ -264,16 +264,17 @@ internal class RestController(
         checkStart(preset,checkAlarm=false)
         com.pleosstay.app.modes.ActivityOperation.Done
     } catch(_:Exception) { com.pleosstay.app.modes.ActivityOperation(false,"휴식 설정과 안전 상태를 확인해 주세요.") }
-    suspend fun startForTransition(preset:RestPreset,choice:WaitingChoice?=null,acceptForeground:Boolean=false):com.pleosstay.app.modes.ActivityOperation {
+    suspend fun startForTransition(preset:RestPreset,choice:WaitingChoice?=null,acceptForeground:Boolean=false,withoutWaiting:Boolean=false):com.pleosstay.app.modes.ActivityOperation {
         val ready=transitionPreflight(preset)
         if(!ready.success) return ready
         when {
+            state.value.fallback!=null -> if(withoutWaiting) independent() else return com.pleosstay.app.modes.ActivityOperation(false,"대기 기록 복구 또는 독립 휴식 선택이 필요합니다.",true)
             state.value.alarmConsent!=null -> if(acceptForeground) acceptForegroundAlarm() else return com.pleosstay.app.modes.ActivityOperation(false,"전경 알람 사용 동의가 필요합니다.",true)
             state.value.decision!=null -> if(choice!=null) resolve(choice) else return com.pleosstay.app.modes.ActivityOperation(false,"대기 시간 선택이 필요합니다.",true)
             else -> start(preset)
         }
         state.first { !it.busy }
-        return com.pleosstay.app.modes.ActivityOperation(active()!=null,state.value.message ?: "휴식 시작 동의·시간 선택을 확인해 주세요.",state.value.alarmConsent!=null || state.value.decision!=null)
+        return com.pleosstay.app.modes.ActivityOperation(active()!=null,state.value.message ?: "휴식 시작 동의·시간 선택을 확인해 주세요.",state.value.alarmConsent!=null || state.value.decision!=null || state.value.fallback!=null)
     }
 
     /** Awaitable boundary for activity switches; includes an already completed ringing session. */

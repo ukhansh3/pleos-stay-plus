@@ -92,6 +92,7 @@ class StudyViewModelTest {
             f.waiting.restore(); f.vm.start(30); runCurrent(); f.vm.open(f.ref); runCurrent()
             f.failNoteSave = true
             f.vm.saveNote(null, "keep editor input"); runCurrent()
+            assertTrue(f.vm.state.value.noteSaveFailed)
             assertEquals(0L, f.vm.state.value.noteSaveSerial)
             assertTrue(f.vm.state.value.record!!.notes.isEmpty())
             f.vm.leave(); runCurrent()
@@ -187,6 +188,27 @@ class StudyViewModelTest {
         override fun clearTemporaryFiles() = Unit
         override fun close() = Unit
     }
+    @Test fun privateHomeRetentionFailureKeepsTimerDraftAndSuccessfulRetry()=runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            f.failDraftSave=true;f.vm.updateNoteDraft(null,"retained input");runCurrent();val id=f.vm.sessionId
+            assertFalse(f.vm.retainForNavigation().success);assertEquals(id,f.vm.sessionId)
+            assertEquals("retained input",f.vm.state.value.noteText)
+            f.failDraftSave=false;assertTrue(f.vm.retainForNavigation().success)
+            assertEquals(id,f.vm.sessionId);assertEquals("retained input",f.records.load(f.ref.materialKey()).draft?.body);assertEquals(0,f.store.endings)
+        }finally{f.close()}
+    }
+    @Test fun failedNoteSaveRetryClearsErrorOnlyAfterSuccess()=runTest {
+        val f=Fixture(this)
+        try {
+            f.waiting.restore();f.vm.start(30);runCurrent();f.vm.open(f.ref);runCurrent()
+            f.vm.updateNoteDraft(null,"retry input");runCurrent();f.failNoteSave=true
+            f.vm.saveNote(null,f.vm.state.value.noteText);runCurrent();assertTrue(f.vm.state.value.noteSaveFailed);assertEquals("retry input",f.vm.state.value.noteText)
+            f.failNoteSave=false;f.vm.saveNote(null,f.vm.state.value.noteText);runCurrent()
+            assertFalse(f.vm.state.value.noteSaveFailed);assertEquals("retry input",f.vm.state.value.record!!.notes.single().body)
+        }finally{f.close()}
+    }
     private class Fixture(scope: TestScope) {
         val directory = Files.createTempDirectory("study-vm").toFile()
         private val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -198,11 +220,13 @@ class StudyViewModelTest {
         val gateway = Gateway(ref, File(directory, "source.txt"))
         val records = EncryptedStudyRepository(File(directory, "records"), TestStudyCipher(), dispatcher)
         var failNoteSave = false
+        var failDraftSave=false
         var beforeNoteSave:suspend()->Unit = {}
         val vm: StudyViewModel
         init {
             Dispatchers.setMain(dispatcher)
             vm = StudyViewModel(ModeStartManager(waiting, safety), safety, gateway, object : StudyRepository by records {
+                override suspend fun saveDraft(key:StudyMaterialKey,draft:StudyNoteDraft?) { check(!failDraftSave);records.saveDraft(key,draft) }
                 override suspend fun saveNote(key: StudyMaterialKey, id: String?, anchor: String?, body: String): StudyNote {
                     beforeNoteSave()
                     check(!failNoteSave) { "test disk failure" }

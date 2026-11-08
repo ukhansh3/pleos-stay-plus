@@ -17,7 +17,7 @@ data class StudyUiState(
     val selected: DocumentRef? = null, val document: StudyDocument? = null,
     val record: StudyRecord? = null, val position: Int = 0, val zoom: Float = 1f,
     val page: Bitmap? = null, val noteSaveSerial: Long = 0,
-    val noteText: String = "", val editId: String? = null,
+    val noteText: String = "", val editId: String? = null, val noteSaveFailed:Boolean=false,
 )
 
 /** UI owns rendering only. Every retained/source read requires fresh shared authorization. */
@@ -43,7 +43,7 @@ class StudyViewModel(
         draftWrite=viewModelScope.launch {
             previous?.join()
             try { withContext(NonCancellable) { repository.saveDraft(key,draft) };draftWriteFailed=false }
-            catch(_:Exception) { draftWriteFailed=true;mutable.update { it.copy(message="메모 초안 저장에 실패했습니다. 입력은 유지됩니다.") } }
+            catch(_:Exception) { draftWriteFailed=true;mutable.update { it.copy(noteSaveFailed=true,message="메모 초안 저장에 실패했습니다. 입력은 유지됩니다.") } }
         }
     }
     @Volatile private var sessionToken:String?=null
@@ -72,6 +72,21 @@ class StudyViewModel(
                 }
             }
         }
+    }
+    val hasDraftRetentionFailure get()=draftWriteFailed
+    /** Internal Home keeps the timer. Only already accepted, private draft input is retained. */
+    suspend fun retainForNavigation():ActivityOperation {
+        if(stopping)return ActivityOperation(false,"학습 작업 중입니다.")
+        stopping=true
+        mutable.update{it.copy(busy=true)}
+        return try {
+            operation?.cancelAndJoin();draftWrite?.join()
+            for(ref in draftRefs.values.toList())noteDrafts.get(ref.materialKey())?.let{repository.saveDraft(ref.materialKey(),it)}
+            if(draftRefs.isEmpty() && draftWriteFailed)ActivityOperation(false,"메모 초안 보관 결과를 확인해 주세요.")
+            else {draftWriteFailed=false;ActivityOperation.Done}
+        } catch(c:CancellationException){throw c}
+        catch(_:Exception){draftWriteFailed=true;ActivityOperation(false,"메모 초안을 보관하지 못했습니다. 입력을 유지합니다.")}
+        finally{stopping=false;mutable.update{it.copy(busy=false)}}
     }
     private fun canUse() = foreground && safety.state.value.canUse && documents.access.value.allowed
     private fun updateAllowed() { mutable.update { it.copy(allowed = canUse()) } }
@@ -286,6 +301,7 @@ class StudyViewModel(
         mutable.update { it.copy(position = bounded, zoom = magnification, page = bitmap, record = it.record?.copy(progress = progress)) }
     }
     fun saveNote(id: String?, body: String) = recordOperation { ref, ticket ->
+        try {
         draftWrite?.join()
         val current = mutable.value
         val anchor = current.document?.let { progress(it, current.position, false).anchor }
@@ -295,8 +311,10 @@ class StudyViewModel(
         val latest=noteDrafts.get(ref.materialKey())
         if(latest==null || (latest.id==(id ?: draft?.id) && latest.body==body)) {
             noteDrafts.remove(ref.materialKey());draftRefs.remove(ref.materialKey())
-            mutable.update { it.copy(noteSaveSerial = it.noteSaveSerial + 1,noteText="",editId=null) }
+            mutable.update { it.copy(noteSaveSerial = it.noteSaveSerial + 1,noteText="",editId=null,noteSaveFailed=false) }
         }
+        } catch(c:CancellationException){throw c}
+        catch(e:Exception){mutable.update{it.copy(noteSaveFailed=true)};throw e}
     }
     fun deleteNote(id: String) = recordOperation { ref, ticket -> repository.deleteNote(ref.materialKey(), id); reloadRecord(ref, ticket) }
     fun complete(value: Boolean) = recordOperation { ref, ticket ->

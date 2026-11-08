@@ -12,6 +12,7 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 
 private class ActivityLease(val owner: Any, val token:String):AbstractCoroutineContextElement(Key) {
@@ -51,6 +52,7 @@ class EntertainmentActivityHost(context:Context,safety:WaitingSafetyGateway,wait
     init { viewModelScope.launch { runtime.controller.restore() } }
     suspend fun internalHome()=runtime.controller.onInternalHome()
     suspend fun foreground(value:Boolean)=runtime.controller.onHostForeground(value)
+    fun close() { runtime.karaoke.interrupt();viewModelScope.cancel() }
     override fun onCleared() {
         // Immediate interruption does not depend on a scope that ViewModelStore is cancelling.
         runtime.karaoke.interrupt()
