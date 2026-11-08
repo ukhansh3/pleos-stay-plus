@@ -83,6 +83,35 @@
       ],
       "bytes": 1656815,
       "sha256": "39181ef0f906c26d5b157a6c3653e6acebdef61c930c48a121178ee2dd76105e"
+    },
+    {
+      "asset": "stay_brand_logo.png",
+      "source_generated_filename": "exec-8a0a700f-dd73-4698-a568-2a7dba67626a.png",
+      "pixels": [
+        1228,
+        1281
+      ],
+      "bytes": 670142,
+      "sha256": "e432863c477739605d7b3d1cf9aa5950013a1bf206acef98dc89e159d02d8aa4",
+      "mode": "RGBA",
+      "selected_on": "2026-11-08",
+      "source_reference": "User-supplied approved arch/desk/seat Stay+ logo; redrawn with background transparency using built-in image_gen."
+    },
+    {
+      "asset": "hero_daylight_rear.png",
+      "source_generated_filename": "exec-6c0aee60-edcd-4b12-8cf7-ab1ba6500e62.png",
+      "pixels": [
+        2172,
+        724
+      ],
+      "bytes": 2015464,
+      "sha256": "a62ce6cbf8d8600623f73e837d2dc2daf12f402958d82c7126f4354ee53fb024",
+      "mode": "RGB",
+      "selected_on": "2026-11-08"
     }
-  ]
+  ],
+  "updated_on": "2026-11-08",
+  "current_hero": "hero_daylight_rear.png",
+  "current_rail_brand": "stay_brand_logo.png",
+  "latest_approval": "User selected the supplied Stay+ arch/desk/seat logo and the blue-sky green-mountain daytime rear-car image."
 }

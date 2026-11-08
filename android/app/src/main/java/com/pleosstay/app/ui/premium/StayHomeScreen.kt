@@ -62,7 +62,7 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
 private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigate: (StayRoute) -> Unit) {
     Box(Modifier.fillMaxWidth().heightIn(min = height)) {
         Box(Modifier.matchParentSize().fillMaxWidth()) {
-            Image(painterResource(R.drawable.hero_sunset_rear), null,
+            Image(painterResource(R.drawable.hero_daylight_rear), null,
                 Modifier.fillMaxWidth(if (wide) .78f else 1f).fillMaxHeight(),
                 contentScale = if (wide) ContentScale.FillWidth else ContentScale.Crop,
                 alignment = Alignment.BottomEnd, alpha = .82f)
@@ -129,10 +129,10 @@ private fun HomeStatus(waiting: WaitingUiState, navigate: (StayRoute) -> Unit) {
 fun ModeCards(wide: Boolean, rowHeight: Dp = 280.dp, onRest: (() -> Unit)? = null,
               onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null) {
     val modes = listOf(
-        ModeVisual("REST", R.string.stay_rest, R.string.stay_rest_hint, R.drawable.rest_pillow, onRest, "프리셋·타이머"),
-        ModeVisual("STUDY", R.string.stay_study, R.string.stay_study_hint, R.drawable.study_book, onStudy, "자료 열람·메모·진도"),
-        ModeVisual("WORK", R.string.stay_work, R.string.stay_work_hint, R.drawable.work_laptop, onWork, "DOCX 작성·편집"),
-        ModeVisual("ENTERTAINMENT", R.string.stay_entertainment, R.string.stay_entertainment_hint, R.drawable.entertainment_visual, null, ""),
+        ModeVisual("REST", R.string.stay_rest, R.string.stay_rest_hint, R.drawable.rest_pillow, onRest),
+        ModeVisual("STUDY", R.string.stay_study, R.string.stay_study_hint, R.drawable.study_book, onStudy),
+        ModeVisual("WORK", R.string.stay_work, R.string.stay_work_hint, R.drawable.work_laptop, onWork),
+        ModeVisual("ENTERTAINMENT", R.string.stay_entertainment, R.string.stay_entertainment_hint, R.drawable.entertainment_visual, null),
     )
     BoxWithConstraints {
         val columns = if (maxWidth < 520.dp) 1 else if (wide) 4 else 2
@@ -145,14 +145,17 @@ fun ModeCards(wide: Boolean, rowHeight: Dp = 280.dp, onRest: (() -> Unit)? = nul
                             Modifier.clickable(role = Role.Button, onClick = action).testTag("mode_${mode.icon}")
                         else Modifier.semantics { disabled() }
                         PhotoPanel(mode.image, Modifier.weight(1f).heightIn(min = rowHeight).then(actionModifier)) {
-                            StayIcon(mode.icon, Modifier.size(46.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                StayIcon(mode.icon, Modifier.size(46.dp))
+                                Spacer(Modifier.weight(1f))
+                                if (action == null) Text(stringResource(R.string.stay_preparing),
+                                    fontSize = 14.sp, color = StayColors.Warning)
+                            }
                             Spacer(Modifier.height(16.dp))
                             Text(stringResource(mode.title), fontSize = 30.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.weight(1f))
                             Text(stringResource(mode.hint), fontSize = 21.sp, lineHeight = 30.sp, color = StayColors.Secondary)
-                            Spacer(Modifier.height(10.dp))
-                            Text(if (action != null) "${mode.detail} ›" else stringResource(R.string.stay_preparing),
-                                fontSize = 14.sp, color = if (action != null) StayColors.Blue else StayColors.Warning)
+
                         }
                     }
                 }
@@ -162,7 +165,7 @@ fun ModeCards(wide: Boolean, rowHeight: Dp = 280.dp, onRest: (() -> Unit)? = nul
 }
 
 private data class ModeVisual(val icon: String, val title: Int, val hint: Int, val image: Int,
-                              val action: (() -> Unit)?, val detail: String)
+                              val action: (() -> Unit)?)
 
 @Composable
 private fun Shortcut(route: StayRoute, image: Int, hint: String, modifier: Modifier, navigate: (StayRoute) -> Unit) {
@@ -171,7 +174,6 @@ private fun Shortcut(route: StayRoute, image: Int, hint: String, modifier: Modif
             StayIcon(route.name, Modifier.size(40.dp))
             Text(if (route == StayRoute.PARKING) stringResource(R.string.stay_parking_search) else stringResource(route.label),
                 Modifier.weight(1f), fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
-            Text("›", fontSize = 32.sp)
         }
         Spacer(Modifier.weight(1f))
         Text(hint, Modifier.fillMaxWidth(.76f), fontSize = 20.sp, lineHeight = 30.sp, color = StayColors.Secondary)

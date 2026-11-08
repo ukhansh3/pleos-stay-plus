@@ -17,10 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,8 +84,9 @@ fun StayNavigationRail(selected:NavigationGroup,navigate:(StayRoute)->Unit,width
         val itemHeight=((maxHeight-200.dp)/6).coerceIn(72.dp,116.dp)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=14.dp,vertical=36.dp),
             horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) {
-            Text("P",fontSize=50.sp,fontWeight=FontWeight.Black,color=StayColors.Blue)
-            Spacer(Modifier.height(24.dp))
+            Image(painterResource(R.drawable.stay_brand_logo), "Stay+ 로고",
+                Modifier.size(if(expanded) 104.dp else 76.dp), contentScale=ContentScale.Fit)
+            Spacer(Modifier.height(8.dp))
             listOf(StayRoute.HOME,StayRoute.PARKING,StayRoute.PICKUP,StayRoute.MODES,StayRoute.FILES,StayRoute.SETTINGS).forEach { route ->
                 val active=route.group==selected
                 val itemModifier=Modifier.fillMaxWidth().heightIn(min=itemHeight).clip(RoundedCornerShape(18.dp))
