@@ -66,16 +66,29 @@ private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigat
                 Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.BottomEnd, alpha = .82f)
+            // Match the surrounding navy at every edge, with a gradual falloff
+            // into the photograph. Foreground text and status cards stay unmasked.
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                0f to StayColors.Background.copy(alpha = .58f),
-                .26f to StayColors.Background.copy(alpha = .28f),
+                0f to StayColors.Background,
+                .04f to StayColors.Background.copy(alpha = .92f),
+                .12f to StayColors.Background.copy(alpha = .58f),
+                .24f to StayColors.Background.copy(alpha = .28f),
                 .48f to StayColors.Background.copy(alpha = .12f),
                 .70f to StayColors.Background.copy(alpha = .10f),
+                .82f to StayColors.Background.copy(alpha = .38f),
+                .94f to StayColors.Background.copy(alpha = .88f),
                 1f to StayColors.Background)))
             Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
-                0f to StayColors.Background.copy(alpha = .12f),
-                .62f to Color.Transparent,
-                1f to StayColors.Background.copy(alpha = .18f))))
+                0f to StayColors.Background,
+                .02f to StayColors.Background.copy(alpha = .92f),
+                .05f to StayColors.Background.copy(alpha = .58f),
+                .10f to StayColors.Background.copy(alpha = .18f),
+                .18f to Color.Transparent,
+                .82f to Color.Transparent,
+                .90f to StayColors.Background.copy(alpha = .18f),
+                .95f to StayColors.Background.copy(alpha = .58f),
+                .98f to StayColors.Background.copy(alpha = .92f),
+                1f to StayColors.Background)))
         }
         if (wide) Row(Modifier.fillMaxWidth().heightIn(min = height), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1.8f).padding(top = 48.dp, start = 24.dp),

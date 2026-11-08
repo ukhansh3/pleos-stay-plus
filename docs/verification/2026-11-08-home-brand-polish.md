@@ -38,3 +38,9 @@ No API contract, backend, ViewModel, Repository, authentication, document engine
 Starting HEAD: `ad6751a`. The user requested more mountain scenery to the right of the car and more sky above. Built-in image_gen expanded the existing panorama into `hero_daylight_expanded.png` (2172 x 724); the previous source remains preserved. The hero now fills its existing background bounds with Crop. The opaque top/right masks were softened, retaining the 0.82 image alpha and lower navy fade. Foreground cards, layout, labels, routing and API logic were untouched.
 
 Validation: `:app:assembleDebug` and `:app:testDebugUnitTest` PASS (127 tests, zero failures/errors/skips); `git diff --check` PASS. Emulator, screenshots and device visual comparison NOT RUN by user request. Background crop/blending still requires the user's on-device visual check. No push.
+
+## Follow-up: soften the photograph boundary
+
+Starting HEAD: `838ab3e`. Only the hero's two Compose background gradients changed. All four image edges now reach fully opaque `StayColors.Background`, with intermediate stops forming a gradual fade into the central sky/car/scenery. These overlays remain behind the foreground text and cards. Image assets, image crop, foreground layout, callbacks, APIs and domain logic are unchanged.
+
+Validation: `:app:assembleDebug` and `:app:testDebugUnitTest` PASS (127 tests, 0 failures/errors/skips). `git diff --check` PASS. Device visual comparison and emulator execution NOT RUN per user instruction. Visual softness still requires user confirmation. No push.
