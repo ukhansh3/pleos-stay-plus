@@ -28,7 +28,8 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, modifier: Modifier = Modifier) {
-    val state by viewModel.state.collectAsState()
+    val liveState by viewModel.state.collectAsState()
+    val state = featureInspection()?.pickup ?: liveState
     var largeQr by remember { mutableStateOf(false) }
     var guide by remember { mutableStateOf(false) }
     var confirmation by remember { mutableStateOf<String?>(null) }

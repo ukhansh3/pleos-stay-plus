@@ -25,8 +25,10 @@ import com.pleosstay.app.ui.premium.*
 
 @Composable
 fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modifier: Modifier = Modifier, onWaiting: () -> Unit = {}) {
-    val state by viewModel.state.collectAsState()
-    var detailId by rememberSaveable { mutableStateOf<String?>(null) }
+    val liveState by viewModel.state.collectAsState()
+    val state = featureInspection()?.parking ?: liveState
+    val inspectionSelected = featureInspection()?.parking?.selected?.id
+    var detailId by rememberSaveable { mutableStateOf(inspectionSelected) }
     BackHandler(enabled = detailId != null) { detailId = null }
     val selected = state.selected?.takeIf { it.id == detailId }?.let { detail ->
         detail.copy(distanceMeters = detail.distanceMeters ?: state.places.firstOrNull { it.id == detail.id }?.distanceMeters)

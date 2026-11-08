@@ -28,7 +28,8 @@ import java.util.Date
 @Composable
 fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, modifier: Modifier = Modifier,
     onRest: (() -> Unit)? = null, onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null) {
-    val state by viewModel.state.collectAsState()
+    val liveState by viewModel.state.collectAsState()
+    val state = featureInspection()?.waiting ?: liveState
     var minutes by remember { mutableStateOf("30") }
     var extension by remember { mutableStateOf("15") }
     var endConfirm by remember { mutableStateOf(false) }

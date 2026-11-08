@@ -20,7 +20,8 @@ import org.json.JSONObject
 /** The same authenticated transport and PIN gate supply every action on this screen. */
 @Composable
 fun FileTransferScreen(model: FileTransferViewModel) {
-    val state by model.state.collectAsState()
+    val liveState by model.state.collectAsState()
+    val state = featureInspection()?.files ?: liveState
     var confirmSwitch by remember(state.allowed, state.unlocked) { mutableStateOf(false) }
     var confirmClear by remember(state.allowed, state.unlocked) { mutableStateOf(false) }
     var code by remember(state.allowed, state.unlocked) { mutableStateOf("") }
@@ -37,8 +38,9 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     }
     fun otherOperation(action: () -> Unit) { downloadUi = null; action() }
 
-    var selectedFile by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf<String?>(null) }
-    var selectedVersion by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf<String?>(null) }
+    val inspectionFiles = featureInspection()?.files
+    var selectedFile by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf(inspectionFiles?.files?.firstOrNull()?.optString("id")) }
+    var selectedVersion by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf(inspectionFiles?.versions?.firstOrNull()?.optString("id")) }
     if (!state.allowed || !state.unlocked) { NoticePanel("파일 화면 잠김", "정차 상태와 PIN을 확인해 주세요.", true); return }
     val pairing = runCatching { JSONObject(state.message) }.getOrNull()?.takeIf { it.has("issuer") && it.has("claimant") }
     val version = state.versions.firstOrNull { it.optString("id") == selectedVersion }

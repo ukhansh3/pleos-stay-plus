@@ -31,7 +31,8 @@ import kotlinx.coroutines.withContext
 /** Presentation only; authorization, mode transitions and records remain in the ViewModel. */
 @Composable
 fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
-    val state by viewModel.state.collectAsState()
+    val liveState by viewModel.state.collectAsState()
+    val state = featureInspection()?.study ?: liveState
     BackHandler { viewModel.leave(); onOpenFiles() }
     var minutes by remember { mutableStateOf("30") }
     var noteText by remember(state.selected?.key, state.allowed) { mutableStateOf("") }

@@ -1,5 +1,6 @@
 package com.pleosstay.app.rest
 
+import com.pleosstay.app.ui.premium.featureInspection
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,8 +54,10 @@ import java.util.Date
 
 @Composable
 internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit, onHome: () -> Unit) {
-    val state by controller.state.collectAsState()
-    val safety by controller.safetyState.collectAsState()
+    val liveState by controller.state.collectAsState()
+    val state = featureInspection()?.rest ?: liveState
+    val liveSafety by controller.safetyState.collectAsState()
+    val safety = featureInspection()?.safety ?: liveSafety
     var editor by remember { mutableStateOf<RestPreset?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<RestPreset?>(null) }
@@ -64,7 +67,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
     val session = state.session
     val active = session?.takeIf { it.end == null }
     val context = LocalContext.current
-    val exactSettingsAvailable = Build.VERSION.SDK_INT >= 31 && Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+    val exactSettingsAvailable = !androidx.compose.ui.platform.LocalInspectionMode.current && Build.VERSION.SDK_INT >= 31 && Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
         Uri.parse("package:${context.packageName}")).resolveActivity(context.packageManager) != null
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         // Start is deliberately explicit after returning from the permission dialog.

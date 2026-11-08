@@ -28,3 +28,8 @@ The debug API URL defaults to `http://10.0.2.2:3000/api/v1/`. Override it at bui
 `assembleDebug` verifies compilation against the official dependencies. FusedLocation permission denial and last-known coordinate reception were also exercised on Pleos Connect Emulator v2.1.0. The emulator did not propagate `adb emu geo fix` into the Pleos FusedLocation service, and Navi route acceptance remains unverified. Check `docs/verification/2026-11-02-parking-api.md` for exact evidence and `SDK_VERIFY` items.
 
 See [DEVELOPMENT_GUIDE.md](../DEVELOPMENT_GUIDE.md) and [AGENTS.md](../AGENTS.md).
+
+
+## UI 미리보기
+
+[에뮬레이터 없는 UI 미리보기](../docs/ui/COMPOSE_PREVIEW_GUIDE.md) — debug의 `ParkingPreview.kt` 등을 열고 Design/Split에서 한 화면씩 확인합니다. 에뮬레이터·서버를 실행하지 않습니다.

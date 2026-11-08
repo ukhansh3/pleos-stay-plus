@@ -25,7 +25,8 @@ import com.pleosstay.app.ui.premium.*
 
 @Composable
 fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind, Int?) -> Unit, onClose: () -> Unit) {
-    val state by controller.state.collectAsState()
+    val liveState by controller.state.collectAsState()
+    val state = featureInspection()?.docx ?: liveState
     val view = state.view ?: return
     var selected by remember(state.draft?.id) { mutableIntStateOf(0) }
     var selectedImage by remember(state.draft?.id) { mutableStateOf<Int?>(null) }

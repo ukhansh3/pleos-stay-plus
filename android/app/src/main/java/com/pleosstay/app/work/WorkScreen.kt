@@ -26,8 +26,10 @@ import com.pleosstay.app.work.docx.*
 @Composable
 fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: () -> Unit, onHome: () -> Unit,
     onDocxPicker: (DocxPickerKind, Int?) -> Unit = { _, _ -> }) {
-    val state by model.state.collectAsState()
-    val editor by model.docx.state.collectAsState()
+    val liveState by model.state.collectAsState()
+    val state = featureInspection()?.work ?: liveState
+    val liveEditor by model.docx.state.collectAsState()
+    val editor = featureInspection()?.docx ?: liveEditor
     var deleting by remember(state.allowed) { mutableStateOf<DocumentRef?>(null) }
     var deletingDocx by remember(state.allowed) { mutableStateOf<DocxDraftInfo?>(null) }
     var selectedVersion by remember(state.allowed) { mutableStateOf<DocumentRef?>(null) }
