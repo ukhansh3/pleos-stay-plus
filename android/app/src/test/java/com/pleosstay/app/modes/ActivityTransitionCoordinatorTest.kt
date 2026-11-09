@@ -1,6 +1,11 @@
 package com.pleosstay.app.modes
 
+import com.pleosstay.app.waiting.safety.DrivingEventBuffer
+import com.pleosstay.app.waiting.safety.VehicleMotion
+import com.pleosstay.app.waiting.safety.WaitingSafety
+import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -93,7 +98,7 @@ class ActivityTransitionCoordinatorTest {
         val result=async { f.coordinator.confirm(token,true) };runCurrent();f.study.ready=false;gate.complete(Unit)
         assertEquals(TransitionStatus.BLOCKED,result.await().status);assertEquals(0,f.study.starts)
     }
-    @Test fun fourActivitiesNeverOverlapDuringSuccessiveSwitches()=runTest {
+    @Test fun activitiesNeverOverlapDuringSuccessiveSwitches()=runTest {
         val f=Fixture()
         for(mode in ActivityMode.entries) {
             val result=f.coordinator.request(mode)
@@ -102,7 +107,13 @@ class ActivityTransitionCoordinatorTest {
         }
     }
     @Test fun transitionWithExistingModeStartManagerKeepsRealWaiting()=runTest {
-        val safety=com.pleosstay.app.entertainment.EntertainmentSafety()
+        val safety = object : WaitingSafetyGateway {
+            override val drivingEvents = DrivingEventBuffer()
+            override val state = MutableStateFlow(WaitingSafety(VehicleMotion.PARKED, false))
+            override fun start() = Unit
+            override fun stop() = Unit
+            override fun close() = Unit
+        }
         val waiting=com.pleosstay.app.waiting.data.LocalWaitingRepository(
             com.pleosstay.app.waiting.MemoryWaitingStore(),com.pleosstay.app.waiting.MemoryJournal(),
             {safety.state.value},com.pleosstay.app.waiting.domain.WaitingClock { 0 },dispatcher=StandardTestDispatcher(testScheduler))
@@ -127,6 +138,8 @@ class ActivityTransitionCoordinatorTest {
         val prompt=coordinator.request(ActivityMode.STUDY)
         assertEquals(TransitionStatus.STARTED,coordinator.confirm(prompt.state.confirmation!!,true).status)
         assertEquals(before,waiting.sessions.value)
+        assertEquals(TransitionStatus.STOPPED, coordinator.end().status)
+        assertEquals(before, waiting.sessions.value)
     }
     @Test fun persistedActivityMustRecoverBeforeAnyOtherStart()=runTest {
         val f=Fixture();f.rest.recovered=false

@@ -96,68 +96,8 @@ import com.android.tools.screenshot.PreviewTest
 @PreviewTest @Preview(name="scenario03_step05_pickup_home",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
 @Composable fun Journey03_05()=JourneyHome(true)
 
-@PreviewTest @Preview(name="scenario04_step01_entry",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_01()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="scenario04_step02_game_start",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_02()=JourneyEntertainment("game")
-
-@PreviewTest @Preview(name="scenario04_step03_game_move",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_03()=JourneyEntertainment("game",1)
-
-@PreviewTest @Preview(name="scenario04_step04_catalogue",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_04()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="scenario04_step05_quiz_question",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_05()=JourneyEntertainment("quiz")
-
-@PreviewTest @Preview(name="scenario04_step06_quiz_answer",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_06()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="scenario04_step07_quiz_next",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_07()=JourneyEntertainment("quiz",2)
-
-@PreviewTest @Preview(name="scenario04_step08_quiz_wrong",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_08()=JourneyEntertainment("quiz",3)
-
-@PreviewTest @Preview(name="scenario04_step09_quiz_result",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_09()=JourneyEntertainment("quiz",4)
-
-@PreviewTest @Preview(name="scenario04_step10_home",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey04_10()=JourneyHome(true)
-
-@PreviewTest @Preview(name="scenario05_step01_entry",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_01()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="scenario05_step02_setup",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_02()=JourneyEntertainment("match")
-
-@PreviewTest @Preview(name="scenario05_step03_p1_question",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_03()=JourneyEntertainment("match",1)
-
-@PreviewTest @Preview(name="scenario05_step04_p1_score",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_04()=JourneyEntertainment("match",2)
-
-@PreviewTest @Preview(name="scenario05_step05_p2_question",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_05()=JourneyEntertainment("match",3)
-
-@PreviewTest @Preview(name="scenario05_step06_p2_score",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_06()=JourneyEntertainment("match",4)
-
-@PreviewTest @Preview(name="scenario05_step07_result",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_07()=JourneyEntertainment("match",5)
-
-@PreviewTest @Preview(name="scenario05_step08_again",widthDp=1682,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun Journey05_08()=JourneyEntertainment("match")
-
 @PreviewTest @Preview(name="AdaptiveHome",widthDp=960,heightDp=720,apiLevel=34,locale="ko-rKR")
 @Composable fun JourneyAdaptiveHome()=JourneyHome(true)
-
-@PreviewTest @Preview(name="AdaptiveGame",widthDp=720,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun JourneyAdaptiveGame()=JourneyEntertainment("game",1)
-
-@PreviewTest @Preview(name="AdaptiveQuiz",widthDp=720,heightDp=1210,apiLevel=34,locale="ko-rKR")
-@Composable fun JourneyAdaptiveQuiz()=JourneyEntertainment("quiz")
 
 @PreviewTest @Preview(name="AdaptiveRest",widthDp=720,heightDp=1210,apiLevel=34,locale="ko-rKR")
 @Composable fun JourneyAdaptiveRest()=JourneyRest(20)

@@ -1,14 +1,6 @@
 package com.pleosstay.app.preview
 
 import android.net.Uri
-import com.pleosstay.app.entertainment.*
-import com.pleosstay.app.entertainment.audio.*
-import com.pleosstay.app.entertainment.data.*
-import com.pleosstay.app.entertainment.games.*
-import com.pleosstay.app.entertainment.quiz.*
-import com.pleosstay.app.entertainment.karaoke.*
-import com.pleosstay.app.entertainment.launcher.*
-import com.pleosstay.app.entertainment.recommendation.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pleosstay.app.documents.*
@@ -136,22 +128,6 @@ internal class PreviewModels {
         override fun stop() = Unit
     }, RestBattery { emptyFlow() }, manager, safety, scope, io = Dispatchers.Unconfined) }
     /** Inactive real screen only. Every operation and real admission remain denied. */
-    val entertainment by lazy {
-        val store=object:EntertainmentStore {override fun read(key:String):ByteArray?=null;override fun write(key:String,bytes:ByteArray)=unavailable()}
-        val history=KaraokeHistory(store)
-        val controller=EntertainmentController(object:EntertainmentActivityAdmission {override suspend fun acquire():String=unavailable();override suspend fun release(permit:String)=Unit},safety,emptyMap(),store,scope)
-        val microphone=object:KaraokeMicrophone {override fun support()=MicrophoneSupport(false,"PREVIEW_ONLY");override fun frames():Flow<PcmChunk> = emptyFlow();override fun interrupt()=Unit;override suspend fun stop()=Unit}
-        val player=object:KaraokeBackingPlayer {
-            override var onEvent:((PlaybackEvent)->Unit)?=null
-            override suspend fun prepare(song:KaraokeSong)=unavailable();override suspend fun seekTo(positionMillis:Long)=unavailable()
-            override suspend fun play()=unavailable();override suspend fun pause()=Unit;override fun positionMillis()=0L
-            override fun interrupt()=Unit;override suspend fun release()=Unit
-        }
-        val karaoke=KaraokeSession(microphone,player,history,store,scope,{safety.state.value},{false})
-        val availability=MutableStateFlow<Map<EntertainmentContent,ContentAvailability>>(emptyMap())
-        val video=VideoAppLauncher(object:VideoAppPlatform {override fun inspect(target:VerifiedVideoTarget)=LaunchResult(LaunchStatus.POLICY_BLOCKED,"PREVIEW_ONLY");override fun launch(target:VerifiedVideoTarget)=unavailable()},emptyList()){safety.state.value}
-        EntertainmentRuntime(controller,Game2048Service(store),QuizService(store),karaoke,history,video,emptyList(),WaitingRecommendationFeed(waitingRepository,safety.state,availability),availability)
-    }
     fun close() { created.forEach { it.viewModelScope.cancel() }; scope.cancel() }
 }
 private fun unavailable(): Nothing = error("Static Compose Preview: no operation is performed")

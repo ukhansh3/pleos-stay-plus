@@ -22,12 +22,7 @@ import com.pleosstay.app.waiting.safety.*
 import com.pleosstay.app.pickup.ui.PickupUiState
 import com.pleosstay.app.parking.ui.ParkingDetail
 import com.pleosstay.app.parking.navigation.NavigationStatus
-import com.pleosstay.app.entertainment.*
-import com.pleosstay.app.entertainment.games.*
-import com.pleosstay.app.entertainment.quiz.*
-import com.pleosstay.app.entertainment.data.EntertainmentStore
 import com.pleosstay.app.work.docx.*
-import kotlin.random.Random
 
 // Fixed UTC instant = 14:00 KST. Only inspection state uses this clock.
 internal const val JOURNEY_START=1794114000000L
@@ -35,7 +30,7 @@ internal val journeySafety=WaitingSafety(VehicleMotion.PARKED,false,message="주
 internal fun journeyWaiting(elapsed:Int=0)=WaitingUiState(ready=true,safety=journeySafety,now=JOURNEY_START+elapsed*60_000,
     sessions=listOf(WaitingSession("journey-waiting",JOURNEY_START,JOURNEY_START+120*60_000,place=WaitingPlace("sample-parking","예시 공영주차장"))))
 
-@Composable internal fun JourneyFrame(route:StayRoute=StayRoute.ENTERTAINMENT,scroll:Boolean=true,content:@Composable ()->Unit) {
+@Composable internal fun JourneyFrame(route:StayRoute,scroll:Boolean=true,content:@Composable ()->Unit) {
     if(!LocalInspectionMode.current){Text("Preview only");return}
     PleosStayPlusTheme {BoxWithConstraints(Modifier.fillMaxSize()) {
         val railWidth=if(maxWidth>=1300.dp)180.dp else 112.dp
@@ -110,55 +105,4 @@ internal fun journeyWaiting(elapsed:Int=0)=WaitingUiState(ready=true,safety=jour
         1->old.copy(sharingLocation=false,locationMessage="위치 공유 전입니다.")
         else->old
     }))
-}
-internal fun journeyGame(stage:Int):Game2048State {
-    val initial=Game2048State(listOf(2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
-    return if(stage==0)initial else Game2048Engine(Random(7)).move(initial,MoveDirection.LEFT)
-}
-private class JourneyStore:EntertainmentStore {
-    private val records=mutableMapOf<String,ByteArray>()
-    override fun read(key:String)=records[key]?.copyOf()
-    override fun write(key:String,bytes:ByteArray){records[key]=bytes.copyOf()}
-}
-internal fun journeyQuiz(stage:Int):QuizState {
-    val service=QuizService(JourneyStore(),Random(7));var state=service.start()
-    if(stage>=1){state=service.submit(state.current!!.id,state.current!!.answer)}
-    if(stage>=2)state=service.next()
-    if(stage>=3)state=service.submit(state.current!!.id,(state.current!!.answer+1)%4)
-    if(stage>=4){service.next();while(service.resume()?.complete==false){val q=service.resume()!!.current!!;service.submit(q.id,q.answer);service.next()};state=service.resume()!!}
-    return state
-}
-internal fun journeyMatch(stage:Int):MatchState? {
-    if(stage==0)return null
-    val engine=QuizMatchService(random=Random(7));engine.enter();var s=engine.start(MatchConfig(listOf("플레이어 1","플레이어 2")))
-    if(stage>=2)s=engine.submit(s.current!!.id,s.current!!.answer)
-    if(stage>=3)s=engine.next()
-    if(stage>=4)s=engine.submit(s.current!!.id,s.current!!.answer)
-    if(stage>=5){engine.next();while(engine.state.value?.complete==false){val q=engine.state.value!!.current!!;engine.submit(q.id,q.answer);engine.next()};s=engine.state.value!!}
-    return s
-}
-@Composable internal fun JourneyEntertainment(content:String,stage:Int=0)=JourneyFrame {
-    when(content) {
-        "catalogue"->EntertainmentCatalogue(true,{},{},{})
-        "game"->GamePanel(journeyGame(stage),true,{},{})
-        "quiz"->QuizPanel(journeyQuiz(stage),true,{_,_->},{},{})
-        "match"->MatchPanel(journeyMatch(stage),true,{},{_,_->},{},{})
-    }
-}
-
-@Composable
-internal fun Journey2048(showHelp: Boolean = false) = JourneyFrame(scroll = false) {
-    EntertainmentViewport(playing2048 = true) { fitGameToWindow ->
-        if (!fitGameToWindow) EntertainmentHeading({}, true)
-        EntertainmentSessionActions(true, {}, {}, onHome = if (fitGameToWindow) ({}) else null)
-        Box(if (fitGameToWindow) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth()) {
-            GamePanel(
-                Game2048State(listOf(2, 4, 8, 0, 16, 32, 64, 0, 128, 256, 512, 0, 0, 1024, 2048, 4096), 4280, 8192),
-                enabled = true,
-                move = {},
-                restart = {},
-                showHelpInPreview = showHelp,
-            )
-        }
-    }
 }

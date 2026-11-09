@@ -14,18 +14,24 @@ enum class StayRoute(val group: NavigationGroup, val label: Int) {
     REST(NavigationGroup.MODES, R.string.stay_rest),
     STUDY(NavigationGroup.MODES, R.string.stay_study),
     WORK(NavigationGroup.MODES, R.string.stay_work),
-    ENTERTAINMENT(NavigationGroup.MODES, R.string.stay_entertainment),
     SETTINGS(NavigationGroup.SETTINGS, R.string.stay_settings);
 }
 
-fun pushRoute(stack: List<String>, route: StayRoute) =
-    if (stack.lastOrNull() == route.name) stack
-    else if (route == StayRoute.HOME) listOf(StayRoute.HOME.name)
-    else if (route.isActivity() || stack.lastOrNull()?.let { StayRoute.valueOf(it).isActivity() } == true)
-        stack.filterNot { StayRoute.valueOf(it).isActivity() }.let { if(it.lastOrNull()==route.name)it else it+route.name }
-    else stack + route.name
+// Ignore obsolete or unknown route names when restoring the Android saved state.
+internal fun submissionRouteStack(saved: List<String>): List<String> =
+    saved.filter { name -> StayRoute.entries.any { it.name == name } }
+        .ifEmpty { listOf(StayRoute.HOME.name) }
 
-internal fun StayRoute.isActivity()=this in setOf(StayRoute.REST,StayRoute.STUDY,StayRoute.WORK,StayRoute.ENTERTAINMENT)
+fun pushRoute(stack: List<String>, route: StayRoute): List<String> {
+    val available = submissionRouteStack(stack)
+    return if (available.lastOrNull() == route.name) available
+    else if (route == StayRoute.HOME) listOf(StayRoute.HOME.name)
+    else if (route.isActivity() || StayRoute.valueOf(available.last()).isActivity())
+        available.filterNot { StayRoute.valueOf(it).isActivity() }.let { if(it.lastOrNull()==route.name)it else it+route.name }
+    else available + route.name
+}
+
+internal fun StayRoute.isActivity()=this in setOf(StayRoute.REST,StayRoute.STUDY,StayRoute.WORK)
 
 fun popRoute(stack: List<String>) =
     if (stack.size > 1) stack.dropLast(1) else listOf(StayRoute.HOME.name)

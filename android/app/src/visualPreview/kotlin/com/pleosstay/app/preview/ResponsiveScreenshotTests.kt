@@ -18,21 +18,6 @@ import com.android.tools.screenshot.PreviewTest
 @PreviewTest @Preview(name="work_editor_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_wide()=JourneyWork(2)
 
-@PreviewTest @Preview(name="catalogue_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_catalogue_wide()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="game_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_wide()=Journey2048()
-
-@PreviewTest @Preview(name="quiz_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_quiz_wide()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="match_setup_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_setup_wide()=JourneyEntertainment("match",0)
-
-@PreviewTest @Preview(name="match_play_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_play_wide()=JourneyEntertainment("match",2)
-
 @PreviewTest @Preview(name="transition_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_transition_wide()=JourneyTransition()
 
@@ -50,21 +35,6 @@ import com.android.tools.screenshot.PreviewTest
 
 @PreviewTest @Preview(name="work_editor_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_small()=JourneyWork(2)
-
-@PreviewTest @Preview(name="catalogue_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_catalogue_small()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="game_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_small()=Journey2048()
-
-@PreviewTest @Preview(name="quiz_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_quiz_small()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="match_setup_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_setup_small()=JourneyEntertainment("match",0)
-
-@PreviewTest @Preview(name="match_play_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_play_small()=JourneyEntertainment("match",2)
 
 @PreviewTest @Preview(name="transition_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_transition_small()=JourneyTransition()
@@ -84,21 +54,6 @@ import com.android.tools.screenshot.PreviewTest
 @PreviewTest @Preview(name="work_editor_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_portrait()=JourneyWork(2)
 
-@PreviewTest @Preview(name="catalogue_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_catalogue_portrait()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="game_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_portrait()=Journey2048()
-
-@PreviewTest @Preview(name="quiz_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_quiz_portrait()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="match_setup_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_setup_portrait()=JourneyEntertainment("match",0)
-
-@PreviewTest @Preview(name="match_play_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_play_portrait()=JourneyEntertainment("match",2)
-
 @PreviewTest @Preview(name="transition_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_transition_portrait()=JourneyTransition()
 
@@ -116,21 +71,6 @@ import com.android.tools.screenshot.PreviewTest
 
 @PreviewTest @Preview(name="work_editor_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_narrow()=JourneyWork(2)
-
-@PreviewTest @Preview(name="catalogue_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_catalogue_narrow()=JourneyEntertainment("catalogue")
-
-@PreviewTest @Preview(name="game_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_narrow()=Journey2048()
-
-@PreviewTest @Preview(name="quiz_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_quiz_narrow()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="match_setup_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_setup_narrow()=JourneyEntertainment("match",0)
-
-@PreviewTest @Preview(name="match_play_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_play_narrow()=JourneyEntertainment("match",2)
 
 @PreviewTest @Preview(name="transition_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_transition_narrow()=JourneyTransition()
@@ -168,20 +108,8 @@ import com.android.tools.screenshot.PreviewTest
 @PreviewTest @Preview(name="home_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_home_font130()=JourneyHome(true)
 
-@PreviewTest @Preview(name="game_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_font130()=Journey2048()
-
-@PreviewTest @Preview(name="quiz_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_quiz_font130()=JourneyEntertainment("quiz",1)
-
-@PreviewTest @Preview(name="match_setup_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_match_setup_font130()=JourneyEntertainment("match",0)
-
 @PreviewTest @Preview(name="rest_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_rest_font130()=JourneyRest(20)
 
 @PreviewTest @Preview(name="work_editor_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_font130()=JourneyWork(2)
-
-@PreviewTest @Preview(name="game_help_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_help_narrow()=Journey2048(showHelp = true)

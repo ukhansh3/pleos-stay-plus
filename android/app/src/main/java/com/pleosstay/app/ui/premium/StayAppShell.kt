@@ -38,16 +38,18 @@ fun StayAppShell(
     navigationGuard:(StayRoute,StayRoute,()->Unit)->Unit={_,_,proceed->proceed()},
     content:@Composable (StayRoute,(StayRoute)->Unit)->Unit,
 ) {
-    var stack by rememberSaveable { mutableStateOf(listOf(StayRoute.HOME.name)) }
+    var savedStack by rememberSaveable { mutableStateOf(listOf(StayRoute.HOME.name)) }
+    val stack = submissionRouteStack(savedStack)
     val route=StayRoute.valueOf(stack.last())
+    SideEffect { if (savedStack != stack) savedStack = stack }
     val backDispatcher=LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    val navigate:(StayRoute)->Unit={ next -> if(next!=route) navigationGuard(route,next) { stack=pushRoute(stack,next);onEnter(next) } }
+    val navigate:(StayRoute)->Unit={ next -> if(next!=route) navigationGuard(route,next) { savedStack=pushRoute(stack,next);onEnter(next) } }
     LaunchedEffect(requestedRoute) {
         requestedRoute?.let { navigate(it);onRequestedRouteHandled() }
     }
     BackHandler(stack.size>1) {
         val target=StayRoute.valueOf(popRoute(stack).last())
-        navigationGuard(route,target) { stack=popRoute(stack);onEnter(target) }
+        navigationGuard(route,target) { savedStack=popRoute(stack);onEnter(target) }
     }
     val density=LocalDensity.current
     val context=LocalContext.current
@@ -65,7 +67,7 @@ fun StayAppShell(
             StayNavigationRail(route.group,navigate,railWidth)
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 if(route!=StayRoute.HOME) StayBackBar(
-                    onBack = { if(backDispatcher!=null) backDispatcher.onBackPressed() else stack=popRoute(stack) }) {
+                    onBack = { if(backDispatcher!=null) backDispatcher.onBackPressed() else savedStack=popRoute(stack) }) {
                     if(route==StayRoute.PARKING) TextButton(onClick={navigate(StayRoute.WAITING)}) { Text(stringResource(R.string.stay_waiting)) }
                     if(route==StayRoute.WAITING) TextButton(onClick={navigate(StayRoute.PARKING)}) { Text(stringResource(R.string.stay_parking_search)) }
                 }

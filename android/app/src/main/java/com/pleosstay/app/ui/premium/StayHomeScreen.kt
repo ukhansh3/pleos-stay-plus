@@ -32,17 +32,21 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
     BoxWithConstraints(Modifier.fillMaxSize().testTag("stay_home_screen")) {
         val wide = maxWidth >= 1000.dp
         val largeType = LocalDensity.current.fontScale > 1.3f
+        val compact = !wide && maxHeight < 860.dp
         val available = (maxHeight - 104.dp).coerceAtLeast(660.dp)
         val heroHeight = if (wide) (available * .44f).coerceAtLeast(310.dp) else 300.dp
         val modesHeight = if (wide) (available * .34f).coerceAtLeast(if (largeType) 340.dp else 280.dp) else 300.dp
         val shortcutsHeight = if (wide) (available * .22f).coerceAtLeast(if (largeType) 250.dp else 190.dp) else 190.dp
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 32.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            HomeHero(waiting, heroHeight, wide, navigate)
-            ModeCards(wide, modesHeight,
+            HomeHero(waiting, heroHeight, wide, compact, navigate)
+            ModeCards(wide, if (!wide) 166.dp else modesHeight, compact = !wide,
                 onRest = { navigate(StayRoute.REST) },
                 onStudy = { navigate(StayRoute.STUDY) },
-                onWork = { navigate(StayRoute.WORK) }, onEntertainment = { navigate(StayRoute.ENTERTAINMENT) })
+                onWork = { navigate(StayRoute.WORK) })
+            if (compact) Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                HomeStatus(waiting, navigate)
+            }
             val cards = listOf(
                 Triple(StayRoute.PARKING, R.drawable.parking_visual, stringResource(R.string.stay_parking_hint)),
                 Triple(StayRoute.PICKUP, R.drawable.pickup_visual, pickup.session?.let { "Pickup · ${it.status}" } ?: stringResource(R.string.stay_pickup_hint)),
@@ -59,11 +63,11 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
 
 /** Decorative photography only. Text, status and actions remain real Compose components. */
 @Composable
-private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigate: (StayRoute) -> Unit) {
-    Box(Modifier.fillMaxWidth().heightIn(min = height)) {
+private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, compact: Boolean, navigate: (StayRoute) -> Unit) {
+    Box(Modifier.fillMaxWidth().heightIn(min = if (compact) 222.dp else height)) {
         // Reserve the narrow photo band above status cards so the original car stays visible.
         Box(if (wide) Modifier.matchParentSize().fillMaxWidth()
-            else Modifier.fillMaxWidth().height(360.dp).align(Alignment.TopCenter)) {
+            else Modifier.fillMaxWidth().height(if (compact) 222.dp else 360.dp).align(Alignment.TopCenter)) {
             Image(painterResource(R.drawable.hero_daylight_expanded), null,
                 Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -100,17 +104,22 @@ private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigat
                 HomeStatus(waiting, navigate)
             }
         } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { BrandHeading() }
-            Spacer(Modifier.height(200.dp))
-            HomeStatus(waiting, navigate)
+            Column(Modifier.padding(if (compact) 16.dp else 24.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 16.dp)) { BrandHeading(compact) }
+            if (!compact) {
+                Spacer(Modifier.height(200.dp))
+                HomeStatus(waiting, navigate)
+            }
         }
     }
 }
 
 @Composable
-private fun BrandHeading() {
-    Text("Pleos Stay+", fontSize = 54.sp, lineHeight = 62.sp, fontWeight = FontWeight.Bold, color = StayColors.Text)
-    Text(stringResource(R.string.stay_tagline), fontSize = 25.sp, lineHeight = 36.sp, color = StayColors.Secondary)
+private fun BrandHeading(compact: Boolean = false) {
+    Text("Pleos Stay+", fontSize = if (compact) 38.sp else 54.sp,
+        lineHeight = if (compact) 46.sp else 62.sp, fontWeight = FontWeight.Bold, color = StayColors.Text)
+    Text(stringResource(R.string.stay_tagline), fontSize = if (compact) 19.sp else 25.sp,
+        lineHeight = if (compact) 27.sp else 36.sp, color = StayColors.Secondary)
 }
 
 @Composable
@@ -142,34 +151,38 @@ private fun HomeStatus(waiting: WaitingUiState, navigate: (StayRoute) -> Unit) {
 
 @Composable
 fun ModeCards(wide: Boolean, rowHeight: Dp = 280.dp, onRest: (() -> Unit)? = null,
-              onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null, onEntertainment: (() -> Unit)? = null) {
+              onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null, compact: Boolean = false) {
     val modes = listOf(
         ModeVisual("REST", R.string.stay_rest, R.string.stay_rest_hint, R.drawable.rest_pillow, onRest),
         ModeVisual("STUDY", R.string.stay_study, R.string.stay_study_hint, R.drawable.study_book, onStudy),
         ModeVisual("WORK", R.string.stay_work, R.string.stay_work_hint, R.drawable.work_laptop, onWork),
-        ModeVisual("ENTERTAINMENT", R.string.stay_entertainment, R.string.stay_entertainment_hint, R.drawable.entertainment_visual, onEntertainment),
     )
     BoxWithConstraints {
-        val columns = if (maxWidth < 520.dp) 1 else if (wide) 4 else 2
-        Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        val useCompact = compact && maxWidth >= 378.dp && LocalDensity.current.fontScale <= 1.3f
+        val columns = if (wide || useCompact || maxWidth >= 680.dp) 3 else 1
+        val spacing = if (useCompact) 10.dp else 22.dp
+        Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
             modes.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                     row.forEach { mode ->
                         val action = mode.action
                         val actionModifier = if (action != null)
                             Modifier.clickable(role = Role.Button, onClick = action).testTag("mode_${mode.icon}")
                         else Modifier.semantics { disabled() }
-                        PhotoPanel(mode.image, Modifier.weight(1f).heightIn(min = rowHeight).then(actionModifier)) {
+                        PhotoPanel(mode.image, Modifier.weight(1f).heightIn(min = rowHeight).then(actionModifier),
+                            contentPadding = if (useCompact) 12.dp else 26.dp) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                StayIcon(mode.icon, Modifier.size(46.dp))
+                                StayIcon(mode.icon, Modifier.size(if (useCompact) 30.dp else 46.dp))
                                 Spacer(Modifier.weight(1f))
                                 if (action == null) Text(stringResource(R.string.stay_preparing),
                                     fontSize = 14.sp, color = StayColors.Warning)
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Text(stringResource(mode.title), fontSize = 30.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(if (useCompact) 8.dp else 16.dp))
+                            Text(stringResource(mode.title), fontSize = if (useCompact) 22.sp else 30.sp,
+                                lineHeight = if (useCompact) 28.sp else 38.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.weight(1f))
-                            Text(stringResource(mode.hint), fontSize = 21.sp, lineHeight = 30.sp, color = StayColors.Secondary)
+                            Text(stringResource(mode.hint), fontSize = if (useCompact) 15.sp else 21.sp,
+                                lineHeight = if (useCompact) 21.sp else 30.sp, color = StayColors.Secondary)
 
                         }
                     }
@@ -196,12 +209,12 @@ private fun Shortcut(route: StayRoute, image: Int, hint: String, modifier: Modif
 }
 
 @Composable
-fun StayModeMenuScreen(onRest: (() -> Unit)? = null, onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null, onEntertainment: (() -> Unit)? = null) {
+fun StayModeMenuScreen(onRest: (() -> Unit)? = null, onStudy: (() -> Unit)? = null, onWork: (() -> Unit)? = null) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text(stringResource(R.string.stay_modes), style = MaterialTheme.typography.headlineMedium)
         Text(stringResource(R.string.stay_mode_notice), color = StayColors.Secondary)
-        ModeCards(wide = false, onRest = onRest, onStudy = onStudy, onWork = onWork, onEntertainment = onEntertainment)
+        ModeCards(wide = false, rowHeight = 220.dp, onRest = onRest, onStudy = onStudy, onWork = onWork, compact = true)
     }
 }
 

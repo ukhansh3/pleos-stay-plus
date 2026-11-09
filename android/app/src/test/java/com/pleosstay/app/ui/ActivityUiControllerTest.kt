@@ -32,7 +32,14 @@ class ActivityUiControllerTest {
   val work get()=adapters.getValue(ActivityMode.WORK)
   fun handled(route:StayRoute){assertTrue(ui.takeNavigationPermit(route));assertFalse(ui.takeNavigationPermit(route))}
  }
- @Test fun homeAndSameModeReturnKeepSessionForAllFourActivities()=runTest {
+ @Test fun legacyAndUnknownRoutesAreDroppedFromSavedNavigation() {
+  assertEquals(listOf("HOME", "MODES"), submissionRouteStack(listOf("HOME", "MODES", "ENTERTAINMENT")))
+  assertEquals(listOf("HOME"), submissionRouteStack(listOf("ENTERTAINMENT", "UNKNOWN")))
+  assertEquals(listOf("HOME", "WORK"), submissionRouteStack(listOf("HOME", "ENTERTAINMENT", "WORK")))
+  assertEquals(listOf("HOME", "WORK"), pushRoute(listOf("HOME", "ENTERTAINMENT"), StayRoute.WORK))
+ }
+
+ @Test fun homeAndSameModeReturnKeepSessionForAllActivities()=runTest {
   for(mode in ActivityMode.entries){val f=Fixture(this);f.ui.open(mode);runCurrent();f.handled(mode.route());val id=f.adapters.getValue(mode).id
    f.ui.leave(mode.route(),StayRoute.HOME);runCurrent();f.handled(StayRoute.HOME)
    assertEquals(id,f.adapters.getValue(mode).id);f.ui.open(mode);runCurrent();assertEquals(1,f.adapters.getValue(mode).starts);assertEquals(mode.route(),f.ui.state.value.destination)
@@ -71,8 +78,8 @@ class ActivityUiControllerTest {
  }
  @Test fun returnToWorkAfterFailureKeepsSourceAndDoesNotStartTarget()=runTest {
   val f=Fixture(this);f.ui.open(ActivityMode.WORK);runCurrent();f.handled(StayRoute.WORK);f.work.failStop=true
-  f.ui.open(ActivityMode.ENTERTAINMENT);runCurrent();f.ui.confirmSwitch(true);runCurrent();f.ui.returnToWork()
-  assertEquals(StayRoute.WORK,f.ui.state.value.destination);assertNotNull(f.work.id);assertEquals(0,f.adapters.getValue(ActivityMode.ENTERTAINMENT).starts)
+  f.ui.open(ActivityMode.STUDY);runCurrent();f.ui.confirmSwitch(true);runCurrent();f.ui.returnToWork()
+  assertEquals(StayRoute.WORK,f.ui.state.value.destination);assertNotNull(f.work.id);assertEquals(0,f.study.starts)
  }
  @Test fun expiredApprovalRetryMustAskAgainWithoutStoppingSource()=runTest {
   val f=Fixture(this);f.ui.open(ActivityMode.REST);runCurrent();f.handled(StayRoute.REST)
@@ -85,8 +92,8 @@ class ActivityUiControllerTest {
   assertEquals(0,f.rest.stops);assertNotNull(f.ui.state.value.confirmation)
  }
  @Test fun foregroundLossBlocksIdleStartAndRecoveryRetry()=runTest {
-  val f=Fixture(this);f.foreground=false;f.ui.open(ActivityMode.ENTERTAINMENT);runCurrent();assertNotNull(f.ui.state.value.error);assertEquals(0,f.adapters.getValue(ActivityMode.ENTERTAINMENT).starts)
-  f.foreground=true;f.ui.retry();runCurrent();assertEquals(StayRoute.ENTERTAINMENT,f.ui.state.value.destination)
+  val f=Fixture(this);f.foreground=false;f.ui.open(ActivityMode.REST);runCurrent();assertNotNull(f.ui.state.value.error);assertEquals(0,f.rest.starts)
+  f.foreground=true;f.ui.retry();runCurrent();assertEquals(StayRoute.REST,f.ui.state.value.destination)
  }
  @Test fun explicitEndUsesOneConfirmationAndKeepsConfigurationOnSuccess()=runTest {
   val f=Fixture(this);f.ui.open(ActivityMode.WORK);runCurrent();f.handled(StayRoute.WORK);f.confirmEnd=true
@@ -112,9 +119,9 @@ class ActivityUiControllerTest {
   val first=Adapter(ActivityMode.STUDY);assertTrue(binding.bind(first));first.start()
   assertFalse(binding.bind(Adapter(ActivityMode.STUDY)));assertEquals(first.id,binding.sessionId())
  }
- @Test fun activityHistoryNeverResurrectsEndedModeAndEntertainmentUsesModesRail() {
+ @Test fun activityHistoryNeverResurrectsEndedMode() {
   var stack=listOf("HOME");stack=pushRoute(stack,StayRoute.REST);stack=pushRoute(stack,StayRoute.STUDY)
   assertFalse(stack.contains("REST"));assertEquals(listOf("HOME"),popRoute(stack))
-  stack=pushRoute(stack,StayRoute.FILES);assertFalse(stack.contains("STUDY"));assertEquals(NavigationGroup.MODES,StayRoute.ENTERTAINMENT.group)
+  stack=pushRoute(stack,StayRoute.FILES);assertFalse(stack.contains("STUDY"))
  }
 }

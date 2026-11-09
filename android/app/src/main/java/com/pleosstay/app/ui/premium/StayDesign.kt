@@ -66,7 +66,6 @@ fun StayIcon(kind:String,modifier:Modifier=Modifier,tint:Color=StayColors.Text) 
             "FILES" -> drawPath(Path().apply { moveTo(s*.1f,s*.28f); lineTo(s*.1f,s*.83f); lineTo(s*.9f,s*.83f); lineTo(s*.9f,s*.3f); lineTo(s*.48f,s*.3f); lineTo(s*.38f,s*.17f); lineTo(s*.1f,s*.17f); close() },tint,style=stroke)
             "REST" -> { line(.12f,.25f,.12f,.88f); line(.88f,.5f,.88f,.88f); line(.12f,.72f,.88f,.72f); drawRect(tint,p(.12f,.4f),Size(s*.76f,s*.3f),style=stroke) }
             "STUDY" -> drawPath(Path().apply { moveTo(s*.5f,s*.25f); quadraticTo(s*.25f,s*.1f,s*.08f,s*.22f); lineTo(s*.08f,s*.82f); quadraticTo(s*.3f,s*.7f,s*.5f,s*.85f); quadraticTo(s*.7f,s*.7f,s*.92f,s*.82f); lineTo(s*.92f,s*.22f); quadraticTo(s*.7f,s*.1f,s*.5f,s*.25f); lineTo(s*.5f,s*.85f) },tint,style=stroke)
-            "ENTERTAINMENT" -> { drawCircle(tint,s*.43f,p(.5f,.5f),style=stroke); drawPath(Path().apply { moveTo(s*.42f,s*.3f); lineTo(s*.7f,s*.5f); lineTo(s*.42f,s*.7f); close() },tint,style=stroke) }
         }
     }
 }

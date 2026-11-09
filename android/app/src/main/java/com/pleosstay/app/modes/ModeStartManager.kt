@@ -12,7 +12,7 @@ import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 
-enum class ActivityMode { REST, STUDY, WORK, ENTERTAINMENT }
+enum class ActivityMode { REST, STUDY, WORK }
 
 data class ModeStartRequest(val mode: ActivityMode, val minutes: Int, val place: WaitingPlace? = null)
 

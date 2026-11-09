@@ -20,7 +20,7 @@ class ActivityPanelsDeviceTest {
   ui.onNodeWithText("종료 후 전환").performClick();assertEquals(1,confirm)
  }
  @Test fun busyTransitionDisablesBothButtons(){
-  ui.setContent{PleosStayPlusTheme{Column{ActivitySwitchPanel(ActivityMode.WORK,ActivityMode.ENTERTAINMENT,true,{},{})}}}
+  ui.setContent{PleosStayPlusTheme{Column{ActivitySwitchPanel(ActivityMode.WORK,ActivityMode.STUDY,true,{},{})}}}
   ui.onNodeWithText("취소").assertIsNotEnabled();ui.onNodeWithText("종료 후 전환").assertIsNotEnabled()
  }
  @Test fun recoveryOffersRetryAndReturnWithoutDiscard(){

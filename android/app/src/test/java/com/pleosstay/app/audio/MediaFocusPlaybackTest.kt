@@ -89,7 +89,7 @@ class MediaFocusPlaybackTest {
         assertEquals(0, playback.interruptions)
     }
 
-    @Test fun karaokeCanDuckButCannotAutomaticallyResumeAfterInterruption() {
+    @Test fun nonResumingPlayerCanDuckButDoesNotRestartAfterInterruption() {
         val playback = Playback(resumeAfterTransient = false)
         playback.focus(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, AudioManager.AUDIOFOCUS_GAIN)
         assertEquals(listOf(0.2f, 1f), playback.volumes)

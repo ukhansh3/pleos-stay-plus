@@ -1,12 +1,9 @@
 package com.pleosstay.app.ui.activity
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.pleosstay.app.entertainment.*
 import com.pleosstay.app.modes.*
 import com.pleosstay.app.rest.*
-import com.pleosstay.app.waiting.data.WaitingRepository
 import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import com.pleosstay.app.workspace.DocumentSessionOwner
 import com.pleosstay.app.realtime.FileTransferViewModel
@@ -31,9 +28,8 @@ internal class BoundActivityAdapter(override val mode:ActivityMode):ActivityAdap
     override suspend fun stop()=delegate?.stop() ?: ActivityOperation(false,"활동 상태를 확인할 수 없습니다.")
 }
 
-internal class PremiumActivityHost(context:Context,val rest:RestController,
-    val safety:WaitingSafetyGateway,waiting:WaitingRepository):ViewModel(),ActivityUiActions {
-    val entertainment=EntertainmentActivityHost(context.applicationContext,safety,waiting,emptyList())
+internal class PremiumActivityHost(val rest:RestController,
+    val safety:WaitingSafetyGateway):ViewModel(),ActivityUiActions {
     private val studyBinding=BoundActivityAdapter(ActivityMode.STUDY)
     private val workBinding=BoundActivityAdapter(ActivityMode.WORK)
     var studyOwner:DocumentSessionOwner?=null;private set
@@ -48,16 +44,16 @@ internal class PremiumActivityHost(context:Context,val rest:RestController,
     var route=StayRoute.HOME;private set
     val coordinator=ActivityTransitionCoordinator(listOf(
         RestActivityAdapter(rest,{selectedPreset},{choices.remove(ActivityMode.REST)},{consent.also{consent=false}},{independent.also{independent=false}}),
-        studyBinding,workBinding,entertainment.adapter))
+        studyBinding,workBinding))
     val ui=ActivityUiController(coordinator,viewModelScope,
-        documentsReady={documentsReady()},beforeStart={mode->
+        documentsReady={documentsReady()},beforeStart={
             if(!foreground)ActivityOperation(false,"Stay+ 화면으로 돌아온 뒤 다시 선택해 주세요.")
-            else {if(mode==ActivityMode.ENTERTAINMENT)entertainment.foreground(true);ActivityOperation.Done}},
+            else ActivityOperation.Done},
         saveForNavigation={mode->guarded { when(mode){
             ActivityMode.STUDY->studyOwner?.study?.retainForNavigation() ?: ActivityOperation.Done
             ActivityMode.WORK->workOwner?.work?.docx?.flushForTransition() ?: ActivityOperation.Done
             else->ActivityOperation.Done }}},
-        hide={mode->when(mode){ActivityMode.STUDY->studyOwner?.hide();ActivityMode.WORK->workOwner?.hide();ActivityMode.ENTERTAINMENT->{val result=entertainment.internalHome();check(result.success)};else->Unit}},
+        hide={mode->when(mode){ActivityMode.STUDY->studyOwner?.hide();ActivityMode.WORK->workOwner?.hide();else->Unit}},
         repair={mode->guarded { when(mode){
             ActivityMode.WORK->workOwner?.work?.docx?.retryRetention() ?: ActivityOperation(false,"Work를 다시 열어 주세요.")
             ActivityMode.STUDY->studyOwner?.study?.retainForNavigation() ?: ActivityOperation(false,"Study를 다시 열어 주세요.")
@@ -66,7 +62,7 @@ internal class PremiumActivityHost(context:Context,val rest:RestController,
         confirmEnd={mode->when(mode){ActivityMode.WORK->workOwner?.work?.docx?.state?.value?.let{it.dirty || it.busy}==true;ActivityMode.STUDY->studyOwner?.study?.state?.value?.noteText?.isNotBlank()==true;else->false}},
         setChoice={mode,choice->choices[mode]=choice},
         setConsent={mode->if(mode==ActivityMode.REST){if(rest.state.value.fallback!=null)independent=true else consent=true}},
-        cancelInput={mode->when(mode){ActivityMode.REST->{rest.dismissAlarmConsent();rest.dismissFallback();if(rest.state.value.decision!=null)rest.resolve(WaitingChoice.BACK)};ActivityMode.STUDY->studyOwner?.study?.choose(WaitingChoice.BACK);ActivityMode.WORK->workOwner?.work?.resolve(WaitingChoice.BACK);else->Unit}})
+        cancelInput={mode->when(mode){ActivityMode.REST->{rest.dismissAlarmConsent();rest.dismissFallback();if(rest.state.value.decision!=null)rest.resolve(WaitingChoice.BACK)};ActivityMode.STUDY->studyOwner?.study?.choose(WaitingChoice.BACK);ActivityMode.WORK->workOwner?.work?.resolve(WaitingChoice.BACK)}})
     init {
         if(!rest.state.value.ready)rest.restore()
         viewModelScope.launch { while(isActive){ui.refresh();delay(1000)} }
@@ -85,10 +81,7 @@ internal class PremiumActivityHost(context:Context,val rest:RestController,
     fun setStudyMinutes(value:Int){studyMinutes=value}
     fun setForeground(value:Boolean) {
         foreground=value
-        if(!value){studyOwner?.hide();workOwner?.hide();transfer?.lock();entertainment.runtime.karaoke.interrupt()}
-        viewModelScope.launch(start=CoroutineStart.UNDISPATCHED){
-            entertainment.foreground(value && route==StayRoute.ENTERTAINMENT)
-        }
+        if(!value){studyOwner?.hide();workOwner?.hide();transfer?.lock()}
     }
     fun prepareDocuments() {
         if(!ui.beginPreparation())return
@@ -105,7 +98,6 @@ internal class PremiumActivityHost(context:Context,val rest:RestController,
     override fun startRest(preset:RestPreset){selectedPreset=preset;ui.open(ActivityMode.REST)}
     override fun startStudy(minutes:Int){studyMinutes=minutes;ui.open(ActivityMode.STUDY)}
     override fun startWork(){ui.open(ActivityMode.WORK)}
-    override fun startEntertainment(){ui.open(ActivityMode.ENTERTAINMENT)}
     fun open(mode:ActivityMode){ui.open(mode)}
     override fun finish(mode:ActivityMode){ui.finish(mode)}
     override fun home(){ui.leave(route,StayRoute.HOME)}
@@ -117,5 +109,5 @@ internal class PremiumActivityHost(context:Context,val rest:RestController,
     override fun consentRest(){ui.consent()}
     override fun independentRest(){independent=true;ui.consent()}
     override fun retry(mode:ActivityMode){ui.repairOnly(mode)}
-    override fun onCleared(){studyOwner?.hide();workOwner?.hide();transfer?.lock();entertainment.close();super.onCleared()}
+    override fun onCleared(){studyOwner?.hide();workOwner?.hide();transfer?.lock();super.onCleared()}
 }

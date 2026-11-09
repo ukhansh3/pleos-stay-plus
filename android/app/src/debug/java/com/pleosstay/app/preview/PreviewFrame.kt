@@ -85,19 +85,3 @@ private class PreviewOwners : OnBackPressedDispatcherOwner, ActivityResultRegist
         override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>, input: I, options: ActivityOptionsCompat?) = Unit
     }
 }
-
-/** Actual inactive EntertainmentScreen, with operation-denying inspection ports. */
-@Composable internal fun PreviewEntertainmentEntry() {
-    if(!LocalInspectionMode.current){Text("Compose Preview 전용");return}
-    val models=remember{PreviewModels()};val owners=remember{PreviewOwners()}
-    DisposableEffect(models,owners){onDispose{models.close();owners.lifecycle.currentState=Lifecycle.State.DESTROYED}}
-    CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides owners,LocalActivityResultRegistryOwner provides owners) {
-        PleosStayPlusTheme {Row(Modifier.fillMaxSize().background(StayColors.Background)) {
-            StayNavigationRail(NavigationGroup.MODES,{},180.dp)
-            Column(Modifier.weight(1f).fillMaxHeight()){StayBackBar({});Box(Modifier.weight(1f)) {
-                com.pleosstay.app.entertainment.EntertainmentScreen(models.entertainment,
-                    com.pleosstay.app.waiting.safety.WaitingSafety(com.pleosstay.app.waiting.safety.VehicleMotion.PARKED,false),{},true)
-            }}
-        }}
-    }
-}

@@ -8,7 +8,6 @@ internal interface ActivityUiActions {
     fun startRest(preset:RestPreset)
     fun startStudy(minutes:Int)
     fun startWork()
-    fun startEntertainment()
     fun finish(mode:ActivityMode)
     fun home()
     fun choose(mode:ActivityMode,choice:WaitingChoice)

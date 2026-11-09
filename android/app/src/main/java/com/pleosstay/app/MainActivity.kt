@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pleosstay.app.ui.activity.*
-import com.pleosstay.app.entertainment.EntertainmentScreen
 import com.pleosstay.app.modes.ActivityMode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -69,7 +68,7 @@ class MainActivity : ComponentActivity() {
     internal val modeStartManager get() = waitingDependencies.modeStartManager
     private val activityHost:PremiumActivityHost by viewModels { object:ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T =
-            PremiumActivityHost(applicationContext,waitingDependencies.rest,waitingDependencies.safety,waitingDependencies.repository) as T
+            PremiumActivityHost(waitingDependencies.rest,waitingDependencies.safety) as T
     } }
     private var openRest by mutableStateOf(false)
     private val documentForeground = MutableStateFlow(false)
@@ -201,10 +200,9 @@ class MainActivity : ComponentActivity() {
                         StayRoute.PICKUP -> PickupScreen(pickupViewModel, ::requestPickupStart)
                         StayRoute.FILES, StayRoute.STUDY, StayRoute.WORK -> Unit
                         StayRoute.REST -> RestScreen(waitingDependencies.rest,waitingModel::reload,host::home)
-                        StayRoute.ENTERTAINMENT -> EntertainmentScreen(host.entertainment.runtime,safety,host::home,documentVisible)
                         StayRoute.MODES -> StayModeMenuScreen(
                             onRest = { navigate(StayRoute.REST) }, onStudy = { navigate(StayRoute.STUDY) },
-                            onWork = { navigate(StayRoute.WORK) },onEntertainment={navigate(StayRoute.ENTERTAINMENT)})
+                            onWork = { navigate(StayRoute.WORK) })
                         StayRoute.SETTINGS -> StaySettingsScreen()
                     }
                     // Kept at one composition location across routes; the original PIN gate owns all private rendering.

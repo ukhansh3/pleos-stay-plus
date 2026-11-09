@@ -17,14 +17,12 @@
     <string name="stay_start_waiting">대기 세션 시작  ›</string>
     <string name="stay_manage_waiting">대기 관리  ›</string>
     <string name="stay_rest">휴식</string>
-    <string name="stay_rest_hint">편안하게 쉬기</string>
+    <string name="stay_rest_hint">프리셋 · 타이머 · 배경음 · 충전 휴식</string>
     <string name="stay_study">공부</string>
-    <string name="stay_study_hint">집중해서 학습하기</string>
+    <string name="stay_study_hint">학습 내용 기록 · 복습</string>
     <string name="stay_work">업무</string>
-    <string name="stay_work_hint">효율적으로 일하기</string>
-    <string name="stay_entertainment">엔터테인먼트</string>
-    <string name="stay_entertainment_hint">영상, 음악 등 즐기기</string>
+    <string name="stay_work_hint">문서 편집 · PC 파일 전송</string>
     <string name="stay_preparing">준비 중</string>
-    <string name="stay_mode_notice">휴식 타이머, 학습자료 열람·메모, DOCX 문서 작업을 이용할 수 있습니다. 공부·업무는 자료함 인증과 PIN 확인이 필요합니다. 엔터테인먼트는 준비 중입니다.</string>
+    <string name="stay_mode_notice">휴식 타이머, 학습자료 열람·메모, DOCX 문서 작업을 이용할 수 있습니다. 공부·업무는 자료함 인증과 PIN 확인이 필요합니다.</string>
     <string name="stay_settings">설정</string>
 </resources>

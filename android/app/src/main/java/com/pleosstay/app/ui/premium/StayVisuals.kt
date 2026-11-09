@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -55,7 +56,7 @@ fun GlassPanel(modifier: Modifier=Modifier,content:@Composable ColumnScope.()->U
 }
 
 @Composable
-fun PhotoPanel(image:Int,modifier:Modifier=Modifier,highlighted:Boolean=false,content:@Composable ColumnScope.()->Unit) {
+fun PhotoPanel(image:Int,modifier:Modifier=Modifier,highlighted:Boolean=false,contentPadding:Dp=26.dp,content:@Composable ColumnScope.()->Unit) {
     val shape=RoundedCornerShape(24.dp)
     Box(modifier.stayGlow(highlighted).clip(shape).background(StayColors.Surface)
         .border(if(highlighted) 1.5.dp else 1.dp,
@@ -63,7 +64,7 @@ fun PhotoPanel(image:Int,modifier:Modifier=Modifier,highlighted:Boolean=false,co
         Image(painterResource(image),null,Modifier.matchParentSize(),alignment=Alignment.CenterEnd,contentScale=ContentScale.Crop)
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(StayColors.Background.copy(alpha=.58f),StayColors.Background.copy(alpha=.10f)))))
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent,StayColors.Background.copy(alpha=.16f),StayColors.Background.copy(alpha=.72f)))))
-        Column(Modifier.matchParentSize().padding(26.dp)) {
+        Column(Modifier.matchParentSize().padding(contentPadding)) {
             androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides StayColors.Text) { content() }
         }
     }
