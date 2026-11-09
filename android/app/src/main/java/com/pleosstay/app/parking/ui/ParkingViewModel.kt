@@ -3,6 +3,7 @@ package com.pleosstay.app.parking.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.pleosstay.app.BuildConfig
 import com.pleosstay.app.parking.data.ParkingRepository
 import com.pleosstay.app.parking.domain.ParkingPlace
 import com.pleosstay.app.parking.domain.ParkingPurpose
@@ -21,11 +22,6 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 enum class LocationUiState { IDLE, LOCATING, READY, PERMISSION_DENIED, DISABLED, UNSUPPORTED, FAILED }
-
-sealed interface ParkingSearchOrigin {
-    data object CurrentVehicle : ParkingSearchOrigin
-    data class ManualTest(val latitude: Double, val longitude: Double) : ParkingSearchOrigin
-}
 
 data class ParkingUiState(
     val latitude: String = "",
@@ -47,12 +43,21 @@ data class ParkingUiState(
     val navigationStatus: NavigationStatus = NavigationStatus.Initializing,
 )
 
-class ParkingViewModel(
+class ParkingViewModel internal constructor(
     private val repository: ParkingRepository,
     private val navigationGateway: NavigationGateway,
     private val locationGateway: CurrentLocationGateway,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val ioDispatcher: CoroutineDispatcher,
+    allowDeveloperCoordinates: Boolean,
 ) : ViewModel() {
+    constructor(
+        repository: ParkingRepository,
+        navigationGateway: NavigationGateway,
+        locationGateway: CurrentLocationGateway,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    ) : this(repository, navigationGateway, locationGateway, ioDispatcher, allowDeveloperCoordinates = true)
+
+    internal val developerCoordinatesEnabled = BuildConfig.DEBUG && allowDeveloperCoordinates
     private val mutableState = MutableStateFlow(ParkingUiState())
     val state: StateFlow<ParkingUiState> = mutableState.asStateFlow()
 
@@ -66,9 +71,11 @@ class ParkingViewModel(
     }
 
     fun updateCoordinates(latitude: String? = null, longitude: String? = null) {
-        mutableState.value = mutableState.value.copy(
-            latitude = latitude ?: mutableState.value.latitude,
-            longitude = longitude ?: mutableState.value.longitude,
+        val current = mutableState.value
+        if (!developerCoordinatesEnabled || !current.showDeveloperCoordinates || current.loading) return
+        mutableState.value = current.copy(
+            latitude = latitude ?: current.latitude,
+            longitude = longitude ?: current.longitude,
             error = null,
         )
     }
@@ -84,59 +91,57 @@ class ParkingViewModel(
     }
 
     fun toggleDeveloperCoordinates() {
-        mutableState.value = mutableState.value.copy(showDeveloperCoordinates = !mutableState.value.showDeveloperCoordinates)
+        val current = mutableState.value
+        if (!developerCoordinatesEnabled || current.loading) return
+        mutableState.value = current.copy(showDeveloperCoordinates = !current.showDeveloperCoordinates)
     }
 
     fun searchManual() {
         val current = mutableState.value
+        if (!developerCoordinatesEnabled || !current.showDeveloperCoordinates || current.loading) return
         val latitude = current.latitude.toDoubleOrNull()
         val longitude = current.longitude.toDoubleOrNull()
         if (latitude == null || latitude !in -90.0..90.0 || longitude == null || longitude !in -180.0..180.0) {
             mutableState.value = current.copy(error = "위도와 경도를 올바르게 입력해 주세요")
             return
         }
-        search(ParkingSearchOrigin.ManualTest(latitude, longitude))
+        mutableState.value = current.copy(loading = true, error = null, selected = null)
+        viewModelScope.launch { search(latitude, longitude) }
     }
 
     fun searchNearby() {
+        val current = mutableState.value
+        if (current.loading) return
+        mutableState.value = current.copy(
+            loading = true,
+            locationState = LocationUiState.LOCATING,
+            locationMessage = "현재 위치를 확인하고 있습니다.",
+            error = null,
+            selected = null,
+        )
         viewModelScope.launch {
-            mutableState.value = mutableState.value.copy(
-                loading = true,
-                locationState = LocationUiState.LOCATING,
-                locationMessage = "차량 현재 위치를 확인하고 있습니다",
-                error = null,
-                selected = null,
-            )
             when (val result = withContext(ioDispatcher) { locationGateway.getCurrentLocation() }) {
                 is CurrentLocationResult.Success -> {
+                    val (latitude, longitude) = result.location
                     mutableState.value = mutableState.value.copy(
-                        latitude = result.location.latitude.toString(),
-                        longitude = result.location.longitude.toString(),
                         locationState = LocationUiState.READY,
                         locationMessage = "차량 위치를 확인했습니다",
-                        lastLocationLabel = "${result.location.latitude.coordinate()}, ${result.location.longitude.coordinate()}",
+                        lastLocationLabel = "${latitude.coordinate()}, ${longitude.coordinate()}",
                     )
-                    search(ParkingSearchOrigin.CurrentVehicle)
+                    search(latitude, longitude)
                 }
-                CurrentLocationResult.PermissionDenied -> locationFailure(
-                    LocationUiState.PERMISSION_DENIED,
-                    "차량 위치 권한이 거부되었습니다. 권한을 허용하거나 개발자용 좌표를 입력해 주세요.",
-                )
+                CurrentLocationResult.PermissionDenied -> onLocationPermissionDenied()
                 CurrentLocationResult.LocationDisabled -> locationFailure(
                     LocationUiState.DISABLED,
-                    "차량 위치 기능이 꺼져 있습니다. 차량 설정을 확인하거나 개발자용 좌표를 입력해 주세요.",
+                    "차량의 위치 설정을 켠 뒤 다시 검색해 주세요.",
                 )
                 CurrentLocationResult.Unsupported -> locationFailure(
                     LocationUiState.UNSUPPORTED,
-                    "이 차량 환경은 FusedLocation을 지원하지 않습니다. 개발자용 좌표를 이용해 주세요.",
+                    "이 차량에서 현재 위치를 확인할 수 없습니다.",
                 )
-                CurrentLocationResult.Timeout -> locationFailure(
+                CurrentLocationResult.Timeout, is CurrentLocationResult.Failed -> locationFailure(
                     LocationUiState.FAILED,
-                    "차량 위치 수신 시간이 초과되었습니다. 다시 시도하거나 개발자용 좌표를 입력해 주세요.",
-                )
-                is CurrentLocationResult.Failed -> locationFailure(
-                    LocationUiState.FAILED,
-                    "${result.reason}. 다시 시도하거나 개발자용 좌표를 입력해 주세요.",
+                    "위치를 확인할 수 없습니다. 다시 시도해 주세요.",
                 )
             }
         }
@@ -145,7 +150,7 @@ class ParkingViewModel(
     fun onLocationPermissionDenied() {
         locationFailure(
             LocationUiState.PERMISSION_DENIED,
-            "차량 위치 권한이 거부되었습니다. 권한을 허용하거나 개발자용 좌표를 입력해 주세요.",
+            "위치 권한을 허용한 뒤 다시 검색해 주세요.",
         )
     }
 
@@ -156,39 +161,32 @@ class ParkingViewModel(
             loading = false,
             locationState = state,
             locationMessage = message,
-            showDeveloperCoordinates = true,
+            showDeveloperCoordinates = false,
         )
     }
 
-    private fun search(origin: ParkingSearchOrigin) {
+    private suspend fun search(latitude: Double, longitude: Double) {
         val current = mutableState.value
-        val (latitude, longitude) = when (origin) {
-            ParkingSearchOrigin.CurrentVehicle -> current.latitude.toDoubleOrNull() to current.longitude.toDoubleOrNull()
-            is ParkingSearchOrigin.ManualTest -> origin.latitude to origin.longitude
-        }
         val radius = current.radiusMeters.toIntOrNull()
         val minutes = current.plannedMinutes.toIntOrNull()
-        if (latitude == null || longitude == null || radius == null || radius !in 1..10_000 || minutes == null || minutes !in 1..1_440) {
+        if (radius == null || radius !in 1..10_000 || minutes == null || minutes !in 1..1_440) {
             mutableState.value = current.copy(loading = false, error = "검색 조건을 올바르게 입력해 주세요")
             return
         }
-        viewModelScope.launch {
-            mutableState.value = mutableState.value.copy(loading = true, error = null, selected = null)
-            runCatching {
-                withContext(ioDispatcher) {
-                    repository.search(latitude, longitude, radius, minutes, current.purpose, current.freeOnly)
-                }
-            }.onSuccess { result ->
-                mutableState.value = mutableState.value.copy(
-                    loading = false,
-                    places = result.places,
-                    total = result.total,
-                    dataFreshness = result.dataFreshness,
-                    error = if (result.places.isEmpty()) "조건에 맞는 주차장을 찾지 못했습니다" else null,
-                )
-            }.onFailure { error ->
-                mutableState.value = mutableState.value.copy(loading = false, error = error.message ?: "검색 실패")
+        runCatching {
+            withContext(ioDispatcher) {
+                repository.search(latitude, longitude, radius, minutes, current.purpose, current.freeOnly)
             }
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                loading = false,
+                places = result.places,
+                total = result.total,
+                dataFreshness = result.dataFreshness,
+                error = if (result.places.isEmpty()) "조건에 맞는 주차장을 찾지 못했습니다" else null,
+            )
+        }.onFailure { error ->
+            mutableState.value = mutableState.value.copy(loading = false, error = error.message ?: "검색 실패")
         }
     }
 

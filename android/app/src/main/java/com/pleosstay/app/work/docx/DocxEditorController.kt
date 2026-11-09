@@ -119,9 +119,31 @@ class DocxEditorController(
  fun exportDownloads(name:String)=action{
   mutable.update{it.copy(confirmDownloads=false)}
   val ticket=epoch;val draft=repository.loadDocx(checkNotNull(info))
-  try{checkAccess();val uri=files!!.writeDownload(name,draft.bytes){ticket==epoch&&permitted()}
-   if(ticket==epoch&&permitted())mutable.update{it.copy(exportUri=uri,dirty=false,message="Download/StayPlus에 새 DOCX 저장·재열기 검증 완료. 공개 저장본은 잠금·앱 삭제 후에도 남습니다.")}
-  }finally{draft.bytes.fill(0)}
+  fun stillAllowed(): Boolean {
+   val access = documents.access.value
+   return ticket == epoch && permitted() && access.allowed &&
+       access.userScope == draft.info.owner && access.connectionId == draft.info.connection
+  }
+  try {
+   checkAccess()
+   val gateway = checkNotNull(files)
+   val uri = gateway.writeDownload(name, draft.bytes, ::stillAllowed)
+   if (stillAllowed()) {
+    val registered = try {
+     gateway.rememberDownload(uri, draft.bytes, draft.info)
+     true
+    } catch (c: CancellationException) {
+     throw c
+    } catch (_: Exception) {
+     false
+    }
+    if (stillAllowed()) mutable.update {
+     it.copy(exportUri = uri, dirty = false, message =
+        if (registered) "DOCX를 저장했습니다."
+        else "DOCX를 저장했습니다. 전송 목록에 추가하려면 다시 내보내 주세요.")
+    }
+   }
+  } finally { draft.bytes.fill(0) }
  }
  suspend fun prepare(kind:DocxPickerKind,image:Int?=null):DocxPickerRequest=mutex.withLock{
   checkAccess();val a=documents.refreshAccess();checkAccess();require(a.allowed)

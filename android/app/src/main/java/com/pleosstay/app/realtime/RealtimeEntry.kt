@@ -71,7 +71,7 @@ class RealtimeUiSession:ViewModel() {
  val provider=remember(authUrl,publicKey,local){if(local)null else RealtimeIdentityProvider(authUrl,publicKey,RealtimeTokenStore(app,"realtime-auth-"+java.security.MessageDigest.getInstance("SHA-256").digest(authUrl.toByteArray()).joinToString(""){"%02x".format(it)}+".bin"))}
  val modelKey=remember(url,authUrl,local,credential){java.security.MessageDigest.getInstance("SHA-256").digest((url+authUrl+local+credential).toByteArray()).joinToString(""){"%02x".format(it)}}
  val model:FileTransferViewModel=viewModel(key="realtime-"+modelKey,factory=remember(url,credential,provider){object:ViewModelProvider.Factory{
-  @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T=FileTransferViewModel(RealtimeApi(url){provider?.validToken() ?: credential},safety,LocalFileStore(app),File(app.noBackupFilesDir,"realtime/downloads")){provider?.resetAfterRevocation();withContext(Dispatchers.IO){RealtimePinStore(app).clearAfterUserVerification()}} as T
+  @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T=FileTransferViewModel(RealtimeApi(url){provider?.validToken() ?: credential},safety,LocalFileStore(app),File(app.noBackupFilesDir,"realtime/downloads"),WorkExportCatalog(app)){provider?.resetAfterRevocation();withContext(Dispatchers.IO){RealtimePinStore(app).clearAfterUserVerification()}} as T
  }})
  DisposableEffect(model){onDispose{model.lock()}}
  // Construct state/ActivityResult registrations, never render workspace content here.

@@ -68,13 +68,14 @@ class KaraokeSession(private val microphone:KaraokeMicrophone,private val player
             check(safety().canUse && foreground())
             completing=false
             origin=monotonicNanos()-position*1_000_000
+            val input = microphone.frames()
             player.play()
             check(safety().canUse && foreground())
             val token=++generation
             mutable.value=state.value.copy(phase=KaraokePhase.PLAYING)
             capture=scope.launch {
                 try {
-                    microphone.frames().collect{chunk->
+                    input.collect{chunk->
                         val estimate=detector.analyze(chunk.samples,chunk.sampleRate)
                         val rawStart=(chunk.capturedAtNanos-origin)/1_000_000
                         val duration=chunk.samples.size*1000L/chunk.sampleRate
@@ -100,9 +101,10 @@ class KaraokeSession(private val microphone:KaraokeMicrophone,private val player
     suspend fun pause(message:String="직접 이어 부르기를 선택해 주세요.",safetyStop:Boolean=false)=mutex.withLock {
         if(state.value.phase !in setOf(KaraokePhase.PLAYING,KaraokePhase.PREPARING,KaraokePhase.PAUSED))return@withLock
         interrupt();generation++
-        val at=player.positionMillis();val oldCapture=capture;capture=null
+        val at=if(prepared)player.positionMillis() else state.value.positionMillis;val oldCapture=capture;capture=null
         // A collector may be waiting for this mutex: cancel it before joining.
-        oldCapture?.cancel();microphone.stop();player.pause()
+        oldCapture?.cancel();microphone.stop();player.pause();player.release()
+        prepared = false
         mutable.value=state.value.copy(phase=if(safetyStop)KaraokePhase.SAFETY_STOPPED else KaraokePhase.PAUSED,positionMillis=at,message=message)
         checkpoint()
     }

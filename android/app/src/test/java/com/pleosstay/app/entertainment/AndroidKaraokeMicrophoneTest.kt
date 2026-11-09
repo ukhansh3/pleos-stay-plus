@@ -56,6 +56,19 @@ class AndroidKaraokeMicrophoneTest {
         try { block() } catch (error: MicrophonePermissionException) { return error }
         throw AssertionError("Expected explicit microphone permission failure")
     }
+    @Test fun interruptedPendingFlowDoesNotStartWithoutAnExplicitNewCapture() = runTest {
+        val platform = Platform()
+        val mic = AndroidKaraokeMicrophone(platform, StandardTestDispatcher(testScheduler))
+        val pending = mic.frames()
+        mic.interrupt()
+        assertNull(pending.firstOrNull())
+        assertEquals(0, platform.creates)
+        assertEquals(0, platform.recorder.starts)
+
+        assertNotNull(mic.frames().buffer(0).first())
+        assertEquals(1, platform.recorder.starts)
+    }
+
     @Test fun deniedCollectionCanRetryAfterExplicitPermissionGrant() = runTest {
         val platform = Platform().apply { allowed = false }
         val mic = AndroidKaraokeMicrophone(platform, StandardTestDispatcher(testScheduler))

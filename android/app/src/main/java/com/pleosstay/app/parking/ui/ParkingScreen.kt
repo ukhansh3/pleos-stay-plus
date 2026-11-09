@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pleosstay.app.BuildConfig
 import com.pleosstay.app.R
 import com.pleosstay.app.parking.domain.*
 import com.pleosstay.app.parking.navigation.NavigationStatus
@@ -89,18 +88,18 @@ private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: Park
     Text("검색 조건", fontSize = 27.sp, fontWeight = FontWeight.Bold)
     HorizontalDivider(color = StayColors.Border)
     Text("검색 위치", fontSize = 18.sp, color = StayColors.Secondary)
-    PremiumAction(if (state.locationState == LocationUiState.LOCATING) "위치 확인 중…" else "내 주변 검색", onNearbySearch, Modifier.fillMaxWidth(), !state.loading)
-    if (state.locationState !in listOf(LocationUiState.IDLE, LocationUiState.READY)) {
-        val locationHint = when (state.locationState) {
-            LocationUiState.LOCATING -> "현재 위치를 확인하고 있습니다."
-            LocationUiState.PERMISSION_DENIED -> "위치 권한을 허용한 뒤 다시 검색해 주세요."
-            LocationUiState.DISABLED -> "차량의 위치 설정을 켜 주세요."
-            LocationUiState.UNSUPPORTED -> "이 차량에서는 현재 위치를 사용할 수 없습니다."
-            else -> "위치를 받지 못했습니다. 다시 검색해 주세요."
-        }
-        Text(locationHint, color = StayColors.Secondary, fontSize = 18.sp)
+    val searchLabel = when (state.locationState) {
+        LocationUiState.IDLE, LocationUiState.READY -> "내 주변 검색"
+        LocationUiState.LOCATING -> "위치 확인 중…"
+        else -> "다시 검색"
     }
-    if (state.locationState in listOf(LocationUiState.FAILED, LocationUiState.PERMISSION_DENIED, LocationUiState.DISABLED)) TextButton(onClick = viewModel::showLocationAccessInformation) { Text("위치 권한 확인") }
+    PremiumAction(searchLabel, onNearbySearch, Modifier.fillMaxWidth(), !state.loading)
+    if (state.locationState !in listOf(LocationUiState.IDLE, LocationUiState.LOCATING, LocationUiState.READY)) {
+        Text(state.locationMessage, color = StayColors.Secondary, fontSize = 18.sp)
+    }
+    if (state.locationState == LocationUiState.PERMISSION_DENIED || state.locationState == LocationUiState.DISABLED) {
+        TextButton(onClick = viewModel::showLocationAccessInformation) { Text("위치 사용 안내") }
+    }
     OutlinedTextField(state.radiusMeters, { viewModel.updateFilters(radius = it) }, label = { Text("검색 반경(m)") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(state.plannedMinutes, { viewModel.updateFilters(minutes = it) }, label = { Text("예상 이용 시간(분)") },
@@ -115,14 +114,7 @@ private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: Park
         Text("무료만 보기", Modifier.weight(1f), fontSize = 19.sp)
         Switch(state.freeOnly, { viewModel.updateFilters(freeOnly = it) })
     }
-    if (BuildConfig.DEBUG) {
-        TextButton(onClick = viewModel::toggleDeveloperCoordinates) { Text(if (state.showDeveloperCoordinates) "좌표 입력 닫기" else "좌표 입력", color = StayColors.Secondary) }
-        if (state.showDeveloperCoordinates) {
-            OutlinedTextField(state.latitude, { viewModel.updateCoordinates(latitude = it) }, label = { Text("위도") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(state.longitude, { viewModel.updateCoordinates(longitude = it) }, label = { Text("경도") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            PremiumAction("입력 좌표 검색", viewModel::searchManual, Modifier.fillMaxWidth(), !state.loading, true)
-        }
-    }
+    ParkingDeveloperCoordinates(state, viewModel)
 }
 
 @Composable
@@ -134,7 +126,7 @@ private fun ParkingResults(state: ParkingUiState, selectedId: String?, modifier:
             Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 StayIcon("PARKING", Modifier.size(42.dp), StayColors.Secondary)
                 Text("검색 결과가 없습니다.", fontSize = 23.sp)
-                Text("내 주변 검색을 누르거나 조건을 변경하세요.", color = StayColors.Secondary, fontSize = 19.sp)
+                Text("주변을 검색하거나 조건을 변경하세요.", color = StayColors.Secondary, fontSize = 19.sp)
             }
         }
         items(state.places, key = { it.id }) { place -> ParkingRow(place, place.id == selectedId) { select(place) } }

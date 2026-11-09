@@ -30,6 +30,37 @@ try{
   await pc.Download(id,Path.Combine(output,"original."+ext),sha,new Progress<double>(),default);last=id;
   Console.WriteLine($"PASS actual C# HTTP client {ext} original/revision/hash/idempotency");
  }
+ var exportPath = Path.Combine(args[1], "document.docx");
+ var exportBytes = await File.ReadAllBytesAsync(exportPath);
+ var exportSha = Convert.ToHexString(SHA256.HashData(exportBytes)).ToLowerInvariant();
+ var exportRequest = new {
+  connectionId = cid, fileName = "vehicle-export.docx",
+  mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  size = exportBytes.Length, sha256 = exportSha, idempotencyKey = Guid.NewGuid().ToString()
+ };
+ var export = await car.Send("POST", "uploads", exportRequest);
+ var exportId = export!["id"]!.GetValue<string>();
+ var exportFileId = export["fileId"]!.GetValue<string>();
+ await car.Put(exportId, exportPath, new Progress<double>(), default);
+ var ready = await car.Send("POST", $"uploads/{exportId}/complete");
+ Check(ready!["kind"]!.GetValue<string>() == "ORIGINAL" && ready["versionNo"]!.GetValue<int>() == 1,
+  "vehicle export must become an original");
+ Check((await car.Send("POST", "uploads", exportRequest))!["id"]!.GetValue<string>() == exportId,
+  "retry must reuse original vehicle upload");
+ var files = await pc.Send("GET", "files");
+ Check(files!["items"]!.AsArray().Any(file => file!["id"]!.GetValue<string>() == exportFileId),
+  "PC must list vehicle export");
+ var versions = await pc.Send("GET", $"files/{exportFileId}/versions");
+ Check(versions!["items"]!.AsArray().Single()!["id"]!.GetValue<string>() == exportId,
+  "PC must see exactly one original version");
+ var downloaded = Path.Combine(output, "vehicle-export.docx");
+ await pc.Download(exportId, downloaded, exportSha, new Progress<double>(), default);
+ Check((await File.ReadAllBytesAsync(downloaded)).SequenceEqual(exportBytes), "vehicle export bytes changed");
+ using (var docx = System.IO.Compression.ZipFile.OpenRead(downloaded)) {
+  using var xml = docx.GetEntry("word/document.xml")!.Open();
+  Check(System.Xml.Linq.XDocument.Load(xml).Root?.Name.LocalName == "document", "DOCX must reopen");
+ }
+ Console.WriteLine("PASS vehicle original DOCX, actual C# PC list/download/hash/XML reopen");
  await pc.Send("DELETE",$"connections/{cid}");try{await car.Download(last!,Path.Combine(output,"denied"),"",new Progress<double>(),default);throw new Exception("revocation bypass");}catch(InvalidOperationException e){Check(e.Message=="NO_CONNECTION","revocation status");}
  Console.WriteLine("PASS revoked connection denied");
 }finally{Directory.Delete(output,true);}

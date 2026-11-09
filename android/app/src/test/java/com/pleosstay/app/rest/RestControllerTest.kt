@@ -312,7 +312,8 @@ class RestControllerTest {
         f.now += REST_MINUTE
         f.rest.setForeground(true)
         runCurrent()
-        assertEquals(previous, f.store.saved)
+        assertEquals(previous.copy(soundPaused = true), f.store.saved)
+        assertFalse(f.player.playing)
         f.rest.extend(10)
         runCurrent()
         f.rest.resolve(WaitingChoice.EXTEND)
@@ -481,6 +482,28 @@ class RestControllerTest {
         assertNotNull(f.rest.state.value.message)
         assertTrue(f.store.savedPresets.isEmpty())
         assertEquals(WaitingStatus.ACTIVE,f.waiting.sessions.value.single().status)
+    }
+
+    @Test fun foregroundLossDoesNotRestartRainUntilUserResumes() = runTest {
+        val f = Fixture(this)
+        f.restore()
+        f.rest.start(rain)
+        runCurrent()
+        assertTrue(f.player.playing)
+        val before = checkNotNull(f.store.saved)
+
+        f.rest.setForeground(false)
+        assertFalse(f.player.playing)
+        f.rest.setForeground(true)
+        runCurrent()
+        assertFalse(f.player.playing)
+        assertEquals(before.copy(soundPaused = true), f.store.saved)
+        assertEquals(before.waitingId, f.waiting.sessions.value.single().id)
+
+        f.rest.pauseSound(false)
+        runCurrent()
+        assertTrue(f.player.playing)
+        assertEquals(before.preset, f.store.saved?.preset)
     }
 
     @Test fun permanentFocusLossIsNotDroppedWhileSavingPreset() = runTest {

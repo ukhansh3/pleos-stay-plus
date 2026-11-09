@@ -38,6 +38,8 @@ class AndroidKaraokeMicrophone internal constructor(
     constructor(context: Context, sampleRate: Int = 44_100) : this(AndroidMicrophonePlatform(context, sampleRate))
 
     private val running = AtomicBoolean(false)
+    private val captureLock = Any()
+    private var captureGeneration = 0L
     @Volatile private var recorder: MicrophoneRecorder? = null
     @Volatile private var reader: Job? = null
 
@@ -47,33 +49,44 @@ class AndroidKaraokeMicrophone internal constructor(
         MicrophoneSupport(false, "마이크 권한이 없거나 회수되었습니다.")
     }
 
-    override fun frames(): Flow<PcmChunk> = flow {
+    override fun frames(): Flow<PcmChunk> {
+        val generation = synchronized(captureLock) { captureGeneration }
+        return capture(generation)
+    }
+
+    private fun capture(generation: Long): Flow<PcmChunk> = flow {
         try {
             requirePermission()
             val support = platform.support()
             check(support.available) { support.reason }
-            check(running.compareAndSet(false, true)) { "마이크가 이미 사용 중입니다." }
             val job = currentCoroutineContext()[Job]!!
-            reader = job
+            synchronized(captureLock) {
+                if (captureGeneration != generation) return@flow
+                check(reader == null && running.compareAndSet(false, true)) { "마이크가 이미 사용 중입니다." }
+                reader = job
+            }
             var local: MicrophoneRecorder? = null
             try {
                 val sampleRate = platform.sampleRate
                 val frameSize = (sampleRate * 0.05).toInt()
                 requirePermission()
-                local = platform.createRecorder()
-                recorder = local
-                check(local.initialized) { "마이크 초기화 실패" }
-                if (!running.get()) return@flow
-                requirePermission()
-                local.start()
-                check(local.recording) { "마이크 녹음 시작 실패" }
+                val active = platform.createRecorder()
+                local = active
+                recorder = active
+                check(active.initialized) { "마이크 초기화 실패" }
+                synchronized(captureLock) {
+                    if (!running.get()) return@flow
+                    requirePermission()
+                    active.start()
+                    check(active.recording) { "마이크 녹음 시작 실패" }
+                }
                 val buffer = ShortArray(frameSize)
                 var frameCounter = 0L
                 while (currentCoroutineContext().isActive && running.get()) {
                     var read = 0
                     while (read < frameSize && running.get()) {
                         requirePermission()
-                        val count = local.read(buffer, read, frameSize - read)
+                        val count = active.read(buffer, read, frameSize - read)
                         check(count > 0) { "PCM 입력 오류: $count" }
                         read += count
                     }
@@ -81,7 +94,7 @@ class AndroidKaraokeMicrophone internal constructor(
                         // Never emit samples captured across a detected permission revocation.
                         requirePermission()
                         frameCounter += read
-                        val end = local.frameEndNanos(frameCounter) ?: System.nanoTime()
+                        val end = active.frameEndNanos(frameCounter) ?: System.nanoTime()
                         emit(PcmChunk(FloatArray(read) { buffer[it] / 32768f }, sampleRate,
                             end - read * 1_000_000_000L / sampleRate))
                     }
@@ -107,8 +120,11 @@ class AndroidKaraokeMicrophone internal constructor(
     }
 
     override fun interrupt() {
-        running.set(false)
-        runCatching { recorder?.stop() }
+        synchronized(captureLock) {
+            captureGeneration++
+            running.set(false)
+            runCatching { recorder?.stop() }
+        }
     }
 
     override suspend fun stop() {

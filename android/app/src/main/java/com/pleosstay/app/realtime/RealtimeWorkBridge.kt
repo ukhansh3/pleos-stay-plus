@@ -10,7 +10,20 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-data class WorkRevisionRequest(val originalFileId: String, val baseVersionId: String, val sourceUri: Uri, val fileName: String, val mimeType: String, val idempotencyKey: String)
+data class WorkRevisionRequest(
+    val originalFileId: String?,
+    val baseVersionId: String?,
+    val sourceUri: Uri,
+    val fileName: String,
+    val mimeType: String,
+    val idempotencyKey: String,
+    val exportOwner: String? = null,
+) {
+    init {
+        require((originalFileId == null) == (baseVersionId == null))
+        require(originalFileId != null || exportOwner != null)
+    }
+}
 data class StagedRevision(val transferId: String, val request: WorkRevisionRequest, val file: File, val size: Long, val sha256: String)
 interface RealtimeWorkBridge {
     suspend fun stageRevision(request: WorkRevisionRequest): StagedRevision
@@ -39,7 +52,7 @@ class LocalFileStore(private val context: Context, private val maxBytes: Long = 
     }
     override fun save(staged: StagedRevision, connection: String) {
         val r=staged.request
-        journal.write(org.json.JSONObject().put("connection",connection).put("id",staged.transferId).put("fileId",r.originalFileId).put("base",r.baseVersionId).put("name",r.fileName).put("mime",r.mimeType).put("key",r.idempotencyKey).put("size",staged.size).put("sha",staged.sha256).toString())
+        journal.write(org.json.JSONObject().put("connection",connection).put("id",staged.transferId).put("fileId",r.originalFileId).put("base",r.baseVersionId).put("name",r.fileName).put("mime",r.mimeType).put("key",r.idempotencyKey).put("size",staged.size).put("sha",staged.sha256).put("owner",r.exportOwner).toString())
     }
     override fun pending(connection: String): StagedRevision? {
         val text=journal.read() ?: return null
@@ -49,30 +62,43 @@ class LocalFileStore(private val context: Context, private val maxBytes: Long = 
         val id=java.util.UUID.fromString(j.getString("id")).toString()
         val file=File(context.noBackupFilesDir,"realtime/staged/$id")
         check(file.isFile) { "STAGED_FILE_MISSING" }
-        return StagedRevision(id,WorkRevisionRequest(j.getString("fileId"),j.getString("base"),Uri.EMPTY,j.getString("name"),j.getString("mime"),j.getString("key")),file,j.getLong("size"),j.getString("sha"))
+        fun optional(key: String): String? = if (j.isNull(key)) null else j.getString(key)
+        val request = WorkRevisionRequest(optional("fileId"), optional("base"), Uri.EMPTY, j.getString("name"),
+            j.getString("mime"), j.getString("key"), optional("owner"))
+        return StagedRevision(id, request, file, j.getLong("size"), j.getString("sha"))
     }
     override fun finish(staged: StagedRevision) { journal.write("{}"); staged.file.delete() }
     override fun clear() { journal.write("{}"); File(context.noBackupFilesDir,"realtime/staged").listFiles()?.forEach { it.delete() } }
-    override suspend fun stage(request: WorkRevisionRequest): StagedRevision = withContext(Dispatchers.IO) {
-        require(request.sourceUri.scheme == "content") { "CONTENT_URI_REQUIRED" }
-        require(documentMime(request.fileName) == request.mimeType) { "UNSUPPORTED_TYPE" }
-        val id = UUID.randomUUID().toString()
-        val directory = File(context.noBackupFilesDir, "realtime/staged").apply { mkdirs() }
-        val target = File(directory, id)
+    override suspend fun stage(request: WorkRevisionRequest): StagedRevision {
+        var stagedFile: File? = null
         try {
-            val hash = MessageDigest.getInstance("SHA-256"); var size = 0L
-            val source = context.contentResolver.openInputStream(request.sourceUri) ?: error("SOURCE_MISSING")
-            source.use { input -> target.outputStream().use { output ->
-                val buffer = ByteArray(65536)
-                while (true) {
-                    currentCoroutineContext().ensureActive()
-                    val count = input.read(buffer); if (count < 0) break
-                    size += count; require(size <= maxBytes) { "FILE_TOO_LARGE" }
-                    hash.update(buffer, 0, count); output.write(buffer, 0, count)
-                }
-            } }
-            require(size > 0) { "EMPTY_FILE" }
-            StagedRevision(id, request, target, size, hash.digest().joinToString("") { "%02x".format(it) })
-        } catch (e: Throwable) { target.delete(); throw e }
+            return withContext(Dispatchers.IO) {
+                require(request.sourceUri.scheme == "content") { "CONTENT_URI_REQUIRED" }
+                require(documentMime(request.fileName) == request.mimeType) { "UNSUPPORTED_TYPE" }
+                val id = UUID.randomUUID().toString()
+                val directory = File(context.noBackupFilesDir, "realtime/staged").apply { mkdirs() }
+                val target = File(directory, id).also { stagedFile = it }
+                val hash = MessageDigest.getInstance("SHA-256")
+                var size = 0L
+                val source = context.contentResolver.openInputStream(request.sourceUri) ?: error("SOURCE_MISSING")
+                source.use { input -> target.outputStream().use { output ->
+                    val buffer = ByteArray(65536)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        size += count
+                        require(size <= maxBytes) { "FILE_TOO_LARGE" }
+                        hash.update(buffer, 0, count)
+                        output.write(buffer, 0, count)
+                    }
+                } }
+                require(size > 0) { "EMPTY_FILE" }
+                StagedRevision(id, request, target, size, hash.digest().joinToString("") { "%02x".format(it) })
+            }
+        } catch (error: Throwable) {
+            stagedFile?.delete()
+            throw error
+        }
     }
 }

@@ -3,6 +3,9 @@ package com.pleosstay.app.work.docx
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.pleosstay.app.realtime.WorkExportCatalog
+import com.pleosstay.app.realtime.WorkExportProfile
+import com.pleosstay.app.work.DocxDraftInfo
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +19,7 @@ interface DocxFileGateway {
  suspend fun writeNew(uri:Uri,bytes:ByteArray,permitted:()->Boolean)
  suspend fun writePrivate(bytes:ByteArray,permitted:()->Boolean):Uri
  suspend fun writeDownload(name:String,bytes:ByteArray,permitted:()->Boolean):Uri
+ suspend fun rememberDownload(uri: Uri, bytes: ByteArray, info: DocxDraftInfo) {}
  fun clearPrivateExports()
  fun hasSystemPicker():Boolean
 }
@@ -43,6 +47,9 @@ class AndroidDocxFileGateway(context:Context):DocxFileGateway {
    check(resolver.update(uri,android.content.ContentValues().apply{put(android.provider.MediaStore.MediaColumns.IS_PENDING,0)},null,null)==1)
    uri
   }}catch(t:Throwable){created?.let{try{resolver.delete(it,null,null)}catch(_:Exception){}};throw t}
+ }
+ override suspend fun rememberDownload(uri: Uri, bytes: ByteArray, info: DocxDraftInfo) {
+  WorkExportCatalog(app).record(uri, bytes, WorkExportProfile(info.owner, info.connection), info.source)
  }
  override fun hasSystemPicker():Boolean {
   val intent=android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).addCategory(android.content.Intent.CATEGORY_OPENABLE).setType(DOCX_MIME)

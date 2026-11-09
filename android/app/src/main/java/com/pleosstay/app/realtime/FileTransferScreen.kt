@@ -20,6 +20,7 @@ import org.json.JSONObject
 /** The same authenticated transport and PIN gate supply every action on this screen. */
 @Composable
 fun FileTransferScreen(model: FileTransferViewModel) {
+    DisposableEffect(model) { onDispose { model.closeWorkTransferScreen() } }
     val liveState by model.state.collectAsState()
     val state = featureInspection()?.files ?: liveState
     var confirmSwitch by remember(state.allowed, state.unlocked) { mutableStateOf(false) }
@@ -128,13 +129,22 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         Text("선택한 버전 다운로드", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                         version?.let { Text("${it.getString("fileName")} · v${it.getInt("versionNo")}", color = StayColors.Secondary) }
                         PremiumAction("이 버전 다운로드", { version?.let { downloadUi = DownloadUiProgress(state.progress); model.download(it) } }, Modifier.fillMaxWidth(), version != null && !state.busy)
+                        if (model.supportsWorkTransfer || inspectionFiles != null) {
+                            HorizontalDivider(color = StayColors.Border)
+                            PremiumAction("차량 파일 보내기", { otherOperation(model::openWorkPicker) },
+                                Modifier.fillMaxWidth(), state.connectionId != null && !state.busy)
+                        }
                         HorizontalDivider(color = StayColors.Border)
                         Text("전송 진행 상태", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        if (state.busy && downloadUi?.freshSample == true) {
+                        if (state.busy && (state.sendingWork || downloadUi?.freshSample == true)) {
                             LinearProgressIndicator(progress = { state.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Purple)
                             Text("${(state.progress * 100).toInt()}%", fontSize = 26.sp, color = StayColors.Blue)
                         } else if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(if (state.busy) "처리 중…" else "진행 중인 작업 없음", color = StayColors.Secondary)
+                        Text(when {
+                            state.sendingWork -> "전송 중…"
+                            state.busy -> "처리 중…"
+                            else -> "진행 중인 작업 없음"
+                        }, color = StayColors.Secondary)
                         if (state.busy) PremiumAction("전송 중단", { otherOperation(model::cancel) }, Modifier.fillMaxWidth(), secondary = true)
                         PremiumAction("중단된 전송 재시도", { otherOperation(model::retryUpload) }, Modifier.fillMaxWidth(), !state.busy, true)
                     }
@@ -148,6 +158,9 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                 connection(Modifier.fillMaxWidth().height(800.dp)); library(Modifier.fillMaxWidth().height(700.dp)); transfer(Modifier.fillMaxWidth().height(650.dp))
             }
         }
+    }
+    state.workPicker?.let {
+        WorkTransferPickerDialog(it, model::selectWorkExport, model::confirmWorkTransfer, model::dismissWorkPicker)
     }
     if (confirmSwitch) AlertDialog(onDismissRequest = { confirmSwitch = false }, title = { Text("사용자 전환") },
         text = { Text("PC 연결을 해제하고 이 차량의 파일·인증정보·PIN을 지웁니다. 새 사용자는 다시 연결해야 합니다.") },

@@ -62,10 +62,11 @@ internal class RestController(
     private var alarmReady = false
     private var selectedMode = RestAlarmMode.SYSTEM_EXACT
     private var visibilityGeneration = 0
+    private var pendingSoundPause: Long? = null
 
     init {
-        audio.setResumeAllowed { restSoundAllowed(state.value.session, foreground, safety.restState.value.canUse, now(), state.value.ringing) }
-        audio.onPermanentLoss { pauseAfterFocusLoss() }
+        audio.setResumeAllowed { soundAllowed(state.value.session) }
+        audio.onPermanentLoss { pauseAfterSoundInterruption() }
         alarm.playback?.let { playback ->
             scope.launch {
                 playback.collect { result ->
@@ -113,10 +114,12 @@ internal class RestController(
 
     fun setForeground(value: Boolean) {
         if (foreground == value) return
+        val pauseSoundOnExit = !value && soundAllowed(active())
         val generation = ++visibilityGeneration
         foreground = value
         if (!value) {
             audio.stop()
+            if (pauseSoundOnExit) pauseAfterSoundInterruption()
             if (state.value.session?.alarmMode == RestAlarmMode.FOREGROUND_ONLY) {
                 stopAlarm()
                 mutable.update { it.copy(alarmLimitation = "앱이 화면에서 벗어나 알람 보장이 제한됐어요. 복귀 시 남은 시간을 다시 확인합니다.") }
@@ -301,17 +304,23 @@ internal class RestController(
         }
     }
 
-    private fun pauseAfterFocusLoss() {
-        val token = active()?.alarmToken ?: return
-        // A focus event must not be dropped by the user-command busy guard.
+    private fun pauseAfterSoundInterruption() {
+        val startedAt = active()?.startedAt ?: return
+        if (pendingSoundPause == startedAt) return
+        pendingSoundPause = startedAt
+        // Block focus and restoration immediately, even while a timer update holds the mutex.
         scope.launch {
             mutex.withLock {
-                runSafely {
-                    val current = active()?.takeIf { it.alarmToken == token } ?: return@runSafely
-                    val paused = current.copy(soundPaused = true)
-                    mutable.update { it.copy(session = paused) }
-                    updateAudio(paused)
-                    withContext(io) { store.saveSession(paused) }
+                try {
+                    runSafely {
+                        val current = active()?.takeIf { it.startedAt == startedAt } ?: return@runSafely
+                        val paused = current.copy(soundPaused = true)
+                        mutable.update { it.copy(session = paused) }
+                        updateAudio(paused)
+                        withContext(io) { store.saveSession(paused) }
+                    }
+                } finally {
+                    if (pendingSoundPause == startedAt) pendingSoundPause = null
                 }
             }
         }
@@ -543,9 +552,13 @@ internal class RestController(
     private fun canRun(session: RestSession) =
         session.alarmMode == RestAlarmMode.SYSTEM_EXACT || (session.alarmMode == RestAlarmMode.FOREGROUND_ONLY && foreground && alarmReady)
 
+    private fun soundAllowed(session: RestSession?): Boolean =
+        session != null && pendingSoundPause != session.startedAt &&
+            restSoundAllowed(session, foreground, safety.restState.value.canUse, now(), state.value.ringing)
+
     private fun updateAudio(session: RestSession) {
         audio.setVolume(session.preset.volume / 100f)
-        if (!restSoundAllowed(session, foreground, safety.restState.value.canUse, now(), state.value.ringing)) audio.stop()
+        if (!soundAllowed(session)) audio.stop()
         else if (!audio.play()) message("오디오 사용 권한을 확보하지 못했어요. 사운드 재개를 다시 시도해 주세요.")
     }
 
