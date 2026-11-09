@@ -22,7 +22,7 @@ import com.android.tools.screenshot.PreviewTest
 @Composable fun Responsive_catalogue_wide()=JourneyEntertainment("catalogue")
 
 @PreviewTest @Preview(name="game_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_wide()=JourneyEntertainment("game",1)
+@Composable fun Responsive_game_wide()=Journey2048()
 
 @PreviewTest @Preview(name="quiz_wide",widthDp=1682,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_quiz_wide()=JourneyEntertainment("quiz",1)
@@ -55,7 +55,7 @@ import com.android.tools.screenshot.PreviewTest
 @Composable fun Responsive_catalogue_small()=JourneyEntertainment("catalogue")
 
 @PreviewTest @Preview(name="game_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_small()=JourneyEntertainment("game",1)
+@Composable fun Responsive_game_small()=Journey2048()
 
 @PreviewTest @Preview(name="quiz_small",widthDp=960,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_quiz_small()=JourneyEntertainment("quiz",1)
@@ -88,7 +88,7 @@ import com.android.tools.screenshot.PreviewTest
 @Composable fun Responsive_catalogue_portrait()=JourneyEntertainment("catalogue")
 
 @PreviewTest @Preview(name="game_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_portrait()=JourneyEntertainment("game",1)
+@Composable fun Responsive_game_portrait()=Journey2048()
 
 @PreviewTest @Preview(name="quiz_portrait",widthDp=720,heightDp=1210,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_quiz_portrait()=JourneyEntertainment("quiz",1)
@@ -121,7 +121,7 @@ import com.android.tools.screenshot.PreviewTest
 @Composable fun Responsive_catalogue_narrow()=JourneyEntertainment("catalogue")
 
 @PreviewTest @Preview(name="game_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_narrow()=JourneyEntertainment("game",1)
+@Composable fun Responsive_game_narrow()=Journey2048()
 
 @PreviewTest @Preview(name="quiz_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_quiz_narrow()=JourneyEntertainment("quiz",1)
@@ -169,7 +169,7 @@ import com.android.tools.screenshot.PreviewTest
 @Composable fun Responsive_home_font130()=JourneyHome(true)
 
 @PreviewTest @Preview(name="game_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
-@Composable fun Responsive_game_font130()=JourneyEntertainment("game",1)
+@Composable fun Responsive_game_font130()=Journey2048()
 
 @PreviewTest @Preview(name="quiz_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_quiz_font130()=JourneyEntertainment("quiz",1)
@@ -182,3 +182,6 @@ import com.android.tools.screenshot.PreviewTest
 
 @PreviewTest @Preview(name="work_editor_font130",widthDp=720,heightDp=1210,fontScale=1.3f,apiLevel=34,locale="ko-rKR")
 @Composable fun Responsive_work_editor_font130()=JourneyWork(2)
+
+@PreviewTest @Preview(name="game_help_narrow",widthDp=600,heightDp=720,fontScale=1f,apiLevel=34,locale="ko-rKR")
+@Composable fun Responsive_game_help_narrow()=Journey2048(showHelp = true)

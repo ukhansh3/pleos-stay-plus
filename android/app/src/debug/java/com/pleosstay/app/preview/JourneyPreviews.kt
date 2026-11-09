@@ -145,3 +145,20 @@ internal fun journeyMatch(stage:Int):MatchState? {
         "match"->MatchPanel(journeyMatch(stage),true,{},{_,_->},{},{})
     }
 }
+
+@Composable
+internal fun Journey2048(showHelp: Boolean = false) = JourneyFrame(scroll = false) {
+    EntertainmentViewport(playing2048 = true) { fitGameToWindow ->
+        if (!fitGameToWindow) EntertainmentHeading({}, true)
+        EntertainmentSessionActions(true, {}, {}, onHome = if (fitGameToWindow) ({}) else null)
+        Box(if (fitGameToWindow) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth()) {
+            GamePanel(
+                Game2048State(listOf(2, 4, 8, 0, 16, 32, 64, 0, 128, 256, 512, 0, 0, 1024, 2048, 4096), 4280, 8192),
+                enabled = true,
+                move = {},
+                restart = {},
+                showHelpInPreview = showHelp,
+            )
+        }
+    }
+}

@@ -1,6 +1,9 @@
 package com.pleosstay.app.entertainment
 
 import android.content.ContextWrapper
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.*
@@ -32,6 +35,7 @@ class EntertainmentUiTest {
             runBlocking { value.runtime.controller.close() }
             value.scope.cancel()
             value.directory.deleteRecursively()
+            InstrumentationRegistry.getInstrumentation().targetContext.deleteSharedPreferences(value.helpPreferences)
         }
     }
 
@@ -43,11 +47,30 @@ class EntertainmentUiTest {
         ui.onNodeWithTag("ent_2048").performClick()
         ui.waitUntil(10_000) { value.runtime.game.resume() != null }
         awaitCommand()
-        ui.onNodeWithTag("ent_game_board").assertExists()
+        ui.onNodeWithText("2048 플레이 방법").assertIsDisplayed()
+        ui.onNodeWithTag("ent_game_help_start").performClick()
+        ui.onNodeWithTag("ent_game_help").performClick()
+        ui.onNodeWithText("2048 플레이 방법").assertIsDisplayed()
+        ui.onNodeWithTag("ent_game_help_start").performClick()
+
+        ui.onNodeWithText("콘텐츠 선택").performClick()
+        ui.waitUntil(10_000) { value.runtime.controller.state.value.content == null }
+        awaitCommand()
+        ui.onNodeWithTag("ent_2048").performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithTag("ent_game_board").fetchSemanticsNodes().isNotEmpty() }
+        awaitCommand()
+        ui.onNodeWithText("2048 플레이 방법").assertDoesNotExist()
+
         val before = checkNotNull(value.runtime.game.resume())
         val direction = MoveDirection.entries.first { Game2048Engine().slide(before.board, it).changed }
-        val label = when (direction) { MoveDirection.LEFT -> "←"; MoveDirection.RIGHT -> "→"; MoveDirection.UP -> "↑"; MoveDirection.DOWN -> "↓" }
-        ui.onNodeWithText(label).performScrollTo().performClick()
+        ui.onNodeWithTag("ent_game_board").assertIsDisplayed().performTouchInput {
+            when (direction) {
+                MoveDirection.LEFT -> swipeLeft()
+                MoveDirection.RIGHT -> swipeRight()
+                MoveDirection.UP -> swipeUp()
+                MoveDirection.DOWN -> swipeDown()
+            }
+        }
         ui.waitUntil(10_000) { value.runtime.game.resume()?.board != before.board }
         assertNotEquals(before.board, value.runtime.game.resume()!!.board)
         ui.runOnIdle { value.safety.state.value = WaitingSafety(message = "정차 상태 확인 필요") }
@@ -94,17 +117,27 @@ class EntertainmentUiTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val runtime = EntertainmentRuntime.create(context, scope, safe, waiting, admission, emptyList())
         runBlocking { runtime.controller.onHostForeground(true) }
-        return Fixture(runtime, safe, waiting, admission, scope, directory).also { value ->
+        val helpPreferences = "${directory.name}-2048-help"
+        return Fixture(runtime, safe, waiting, admission, scope, directory, helpPreferences).also { value ->
             fixture = value
             ui.setContent {
                 val safety by value.safety.state.collectAsState()
-                PleosStayPlusTheme { EntertainmentScreen(value.runtime, safety, {}) }
+                val base = LocalContext.current
+                val testContext = remember(base) {
+                    object : ContextWrapper(base) {
+                        override fun getSharedPreferences(name: String?, mode: Int) =
+                            super.getSharedPreferences(if (name == GAME_2048_HELP_PREFS) value.helpPreferences else name, mode)
+                    }
+                }
+                CompositionLocalProvider(LocalContext provides testContext) {
+                    PleosStayPlusTheme { EntertainmentScreen(value.runtime, safety, {}) }
+                }
             }
         }
     }
 
     private data class Fixture(val runtime: EntertainmentRuntime, val safety: TestOnlySafety,
-        val waiting: TestOnlyWaiting, val admission: TestOnlyAdmission, val scope: CoroutineScope, val directory: File)
+        val waiting: TestOnlyWaiting, val admission: TestOnlyAdmission, val scope: CoroutineScope, val directory: File, val helpPreferences: String)
     private class TestOnlyAdmission : EntertainmentActivityAdmission {
         var acquired = 0
         override suspend fun acquire(): String { acquired++; return "androidTest-only-$acquired" }

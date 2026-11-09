@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import com.pleosstay.app.ui.activity.*
 import com.pleosstay.app.modes.ActivityMode
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pleosstay.app.entertainment.games.Game2048State
-import com.pleosstay.app.entertainment.games.MoveDirection
 import com.pleosstay.app.entertainment.quiz.QuizState
 import com.pleosstay.app.entertainment.recommendation.EntertainmentContent
 import com.pleosstay.app.ui.premium.PremiumAction
@@ -73,13 +71,11 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
             quiz = withContext(Dispatchers.IO) { runCatching { runtime.quiz.resume() }.getOrNull() }
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("엔터테인먼트", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = home, enabled = !busy, modifier = Modifier.heightIn(min = 56.dp)) { Text("홈으로 이동") }
-        }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("ent_busy"))
+    val playing2048 = canUse && state.active && state.content == EntertainmentContent.GAME_2048 &&
+        state.phase == EntertainmentPhase.ACTIVE && game != null
+    EntertainmentViewport(playing2048) { fitGameToWindow ->
+        if (!fitGameToWindow) EntertainmentHeading(home, !busy)
+        if (busy && !fitGameToWindow) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("ent_busy"))
         if (!canUse) {
             Text(if (!safety.canUse) safety.message else "정차 상태를 확인해 주세요.", color = StayColors.Warning, fontSize = 24.sp)
         } else {
@@ -90,21 +86,24 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
                     modifier = Modifier.testTag("ent_start"))
                 EntertainmentCatalogue(false, {}, {}, {})
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    PremiumAction("콘텐츠 선택", { command { check(runtime.controller.catalogue().success) } }, enabled = !busy, secondary = true)
-                    PremiumAction("활동 종료", {
+                EntertainmentSessionActions(!busy,
+                    onCatalogue = { command { check(runtime.controller.catalogue().success) } },
+                    onEnd = {
                         if(match?.complete == false) confirmEnd = true
                         else if(actions!=null) actions.finish(ActivityMode.ENTERTAINMENT) else command { runtime.controller.end() }
-                    }, enabled = !busy, secondary = true)
-                }
+                    },
+                    onHome = if (fitGameToWindow) home else null)
                 if(state.content!=null && state.phase!=EntertainmentPhase.ACTIVE && state.phase!=EntertainmentPhase.EXTERNAL) {
                     PremiumAction("콘텐츠 재개", { command { check(runtime.controller.select(checkNotNull(state.content)).success) } }, enabled=!busy)
                 }
                 when (state.content) {
                     EntertainmentContent.GAME_2048 -> game?.let { value ->
-                        GamePanel(value, enabled = !busy && state.phase == EntertainmentPhase.ACTIVE,
-                            move = { direction -> command { runtime.move2048(direction) } },
-                            restart = { command { runtime.new2048() } })
+                        Box(if (fitGameToWindow) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth()) {
+                            GamePanel(value, enabled = !busy && state.phase == EntertainmentPhase.ACTIVE,
+                                move = { direction -> command { runtime.move2048(direction) } },
+                                restart = { command { runtime.new2048() } })
+                            if (busy && fitGameToWindow) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("ent_busy"))
+                        }
                     }
                     EntertainmentContent.QUIZ -> quiz?.let { value ->
                         QuizPanel(value, enabled = !busy && state.phase == EntertainmentPhase.ACTIVE,
@@ -131,62 +130,62 @@ fun EntertainmentScreen(runtime: EntertainmentRuntime, safety: WaitingSafety, on
 }
 
 
-internal val GameInk = Color(0xFF002C5F)
-internal val GamePaper = Color(0xFFF6F3F2)
-internal val GameSky = Color(0xFFAACAE6)
-internal fun tilePalette(tile: Int): Pair<Color,Color> = when(tile) {
-    0 -> StayColors.Background to StayColors.Text
-    2 -> GamePaper to GameInk
-    4 -> Color(0xFFE4DCD3) to GameInk
-    8 -> GameSky to GameInk
-    16 -> Color(0xFF7DAFD8) to GameInk
-    32 -> Color(0xFF00AAD2) to GameInk
-    64 -> GameInk to StayColors.Text
-    128 -> Color(0xFF493D78) to StayColors.Text
-    256 -> Color(0xFF6A452F) to StayColors.Text
-    512 -> Color(0xFF513721) to StayColors.Text
-    1024 -> Color(0xFF3D386A) to StayColors.Text
-    else -> Color(0xFF273550) to StayColors.Text
-}
-
 @Composable
-internal fun GamePanel(state: Game2048State, enabled: Boolean, move: (MoveDirection) -> Unit, restart: () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val wide = maxWidth >= 900.dp
-        val board: @Composable (Modifier) -> Unit = { modifier ->
-            Column(modifier.testTag("ent_game_board").background(StayColors.Surface, RoundedCornerShape(22.dp)).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                state.board.chunked(4).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    row.forEach { tile -> val (bg,fg)=tilePalette(tile)
-                        Box(Modifier.weight(1f).aspectRatio(1f).background(bg,RoundedCornerShape(14.dp)),contentAlignment=Alignment.Center) {
-                            if(tile!=0) Text(tile.toString(),fontSize=if(tile>=1024) 28.sp else 38.sp,fontWeight=FontWeight.Bold,color=fg)
-                        }
-                    }
-                } }
-            }
-        }
-        val controls: @Composable (Modifier) -> Unit = { modifier -> Column(modifier,verticalArrangement=Arrangement.spacedBy(22.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-            Text("점수 ${state.score}",fontSize=28.sp,color=StayColors.Text)
-            Text("최고 ${state.bestScore}",fontSize=22.sp,color=StayColors.Secondary)
-            PremiumAction("새 게임",restart,enabled=enabled,secondary=true)
-            @Composable fun direction(label:String,d:MoveDirection) {
-                Button(onClick={move(d)},enabled=enabled && !state.gameOver,modifier=Modifier.size(76.dp),
-                    colors=ButtonDefaults.buttonColors(containerColor=GameSky,contentColor=GameInk)) {Text(label,fontSize=32.sp)}
-            }
-            Column(verticalArrangement=Arrangement.spacedBy(8.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                direction("↑",MoveDirection.UP)
-                Row(horizontalArrangement=Arrangement.spacedBy(76.dp)) {direction("←",MoveDirection.LEFT);direction("→",MoveDirection.RIGHT)}
-                direction("↓",MoveDirection.DOWN)
-            }
-            if(state.gameOver) Text("게임이 끝났어요.",color=StayColors.Text,fontSize=22.sp)
-            else if(state.won) Text("2048 달성!",color=StayColors.Text,fontSize=22.sp)
-        } }
-        if(wide) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(32.dp)) {
-            board(Modifier.weight(1.5f).widthIn(max=700.dp));controls(Modifier.weight(1f))
-        } else Column(verticalArrangement=Arrangement.spacedBy(20.dp)) {board(Modifier.widthIn(max=680.dp).fillMaxWidth());controls(Modifier.fillMaxWidth())}
+internal fun EntertainmentViewport(
+    playing2048: Boolean,
+    content: @Composable ColumnScope.(fitGameToWindow: Boolean) -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val fitGame = playing2048 && maxHeight >= 520.dp && maxWidth >= 360.dp && fontScale <= 1.5f
+        val scroll = if (fitGame) Modifier else Modifier.verticalScroll(scrollState)
+        Column(
+            Modifier.fillMaxSize().then(scroll).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(if (fitGame) 12.dp else 24.dp),
+        ) { content(fitGame) }
     }
 }
 
+@Composable
+internal fun EntertainmentHeading(onHome: () -> Unit, enabled: Boolean) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("엔터테인먼트", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
+        TextButton(onClick = onHome, enabled = enabled, modifier = Modifier.heightIn(min = 56.dp)) { Text("홈으로 이동") }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun EntertainmentSessionActions(
+    enabled: Boolean,
+    onCatalogue: () -> Unit,
+    onEnd: () -> Unit,
+    onHome: (() -> Unit)? = null,
+) {
+    val actions: @Composable () -> Unit = {
+        PremiumAction("콘텐츠 선택", onCatalogue, enabled = enabled, secondary = true)
+        PremiumAction("활동 종료", onEnd, enabled = enabled, secondary = true)
+    }
+    if (onHome == null) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { actions() }
+    } else {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            actions()
+            TextButton(onClick = onHome, enabled = enabled, modifier = Modifier.heightIn(min = 56.dp)) {
+                Text("홈으로 이동")
+            }
+        }
+    }
+}
+
+internal val GameInk = Color(0xFF002C5F)
+internal val GamePaper = Color(0xFFF6F3F2)
+internal val GameSky = Color(0xFFAACAE6)
 @Composable
 internal fun QuizPanel(state: QuizState, enabled: Boolean, answer: (String, Int) -> Unit, next: () -> Unit, restart: () -> Unit) {
     Surface(color=GamePaper,shape=RoundedCornerShape(24.dp),modifier=Modifier.fillMaxWidth()) {
