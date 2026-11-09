@@ -12,6 +12,9 @@ fun localSetting(name: String): String = providers.gradleProperty(name).orNull
     ?: providers.environmentVariable(name).orNull
     ?: localProperties.getProperty(name, "")
 
+fun publicBuildString(name: String): String = "\"" +
+    localSetting(name).replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "") + "\""
+
 android {
     useLibrary("android.car", false)
     namespace = "com.pleosstay.app"
@@ -27,6 +30,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        require(localSetting("REALTIME_SUPABASE_PUBLIC_KEY").trim().let { it.isEmpty() || it.startsWith("sb_publishable_") }) {
+            "REALTIME_SUPABASE_PUBLIC_KEY must contain only a Supabase publishable key"
+        }
+        listOf("REALTIME_API_BASE_URL", "REALTIME_PAIRING_PAGE_URL", "REALTIME_SUPABASE_URL", "REALTIME_SUPABASE_PUBLIC_KEY")
+            .forEach { buildConfigField("String", it, publicBuildString(it)) }
         buildConfigField(
             "String",
             "PARKING_API_BASE_URL",

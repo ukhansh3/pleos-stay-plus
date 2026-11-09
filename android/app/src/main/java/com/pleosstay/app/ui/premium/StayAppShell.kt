@@ -36,6 +36,9 @@ fun StayAppShell(
     requestedRoute:StayRoute?=null,
     onRequestedRouteHandled:()->Unit={},
     navigationGuard:(StayRoute,StayRoute,()->Unit)->Unit={_,_,proceed->proceed()},
+    waitingShortcut: String? = null,
+    restActive: Boolean = false,
+    waitingDeadlineKey: String? = null,
     content:@Composable (StayRoute,(StayRoute)->Unit)->Unit,
 ) {
     var savedStack by rememberSaveable { mutableStateOf(listOf(StayRoute.HOME.name)) }
@@ -50,6 +53,11 @@ fun StayAppShell(
     BackHandler(stack.size>1) {
         val target=StayRoute.valueOf(popRoute(stack).last())
         navigationGuard(route,target) { savedStack=popRoute(stack);onEnter(target) }
+    }
+    val waitingNotice = remember { SnackbarHostState() }
+    LaunchedEffect(waitingDeadlineKey) {
+        waitingNotice.currentSnackbarData?.dismiss()
+        if (waitingDeadlineKey != null) waitingNotice.showSnackbar("대기 예정 시간이 지났습니다.")
     }
     val density=LocalDensity.current
     val context=LocalContext.current
@@ -68,10 +76,18 @@ fun StayAppShell(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 if(route!=StayRoute.HOME) StayBackBar(
                     onBack = { if(backDispatcher!=null) backDispatcher.onBackPressed() else savedStack=popRoute(stack) }) {
-                    if(route==StayRoute.PARKING) TextButton(onClick={navigate(StayRoute.WAITING)}) { Text(stringResource(R.string.stay_waiting)) }
+                    if(route!=StayRoute.WAITING && waitingShortcut!=null) TextButton(onClick={navigate(StayRoute.WAITING)}) {
+                        Text(waitingShortcut, color = StayColors.Blue)
+                    } else if(route==StayRoute.PARKING) TextButton(onClick={navigate(StayRoute.WAITING)}) { Text(stringResource(R.string.stay_waiting)) }
+                    if(route!=StayRoute.REST && restActive) TextButton(onClick={navigate(StayRoute.REST)}) {
+                        Text("진행 중인 휴식", color = StayColors.Blue)
+                    }
                     if(route==StayRoute.WAITING) TextButton(onClick={navigate(StayRoute.PARKING)}) { Text(stringResource(R.string.stay_parking_search)) }
                 }
-                Box(Modifier.weight(1f)) { content(route,navigate) }
+                Box(Modifier.weight(1f)) {
+                    content(route,navigate)
+                    SnackbarHost(waitingNotice, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+                }
             }
         }
     }

@@ -4,11 +4,16 @@ import { pickupProxyPath } from "../../../../lib/pickup-proxy";
 export const dynamic = "force-dynamic";
 
 function backendBase(): URL {
-  const configured = process.env.PICKUP_BACKEND_URL?.trim() || "http://127.0.0.1:3000/api/v1";
+  const configured = process.env.PICKUP_BACKEND_URL?.trim()
+    || (process.env.NODE_ENV === "development" ? "http://127.0.0.1:3000/api/v1" : "");
+  if (!configured) throw new Error("PICKUP_BACKEND_URL is required");
   const url = new URL(configured.endsWith("/") ? configured : `${configured}/`);
-  const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+  const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]";
   if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
     throw new Error("PICKUP_BACKEND_URL must use HTTPS unless it targets loopback");
+  }
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/api/v1/") {
+    throw new Error("PICKUP_BACKEND_URL must target the Pickup API base");
   }
   return url;
 }
@@ -41,6 +46,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       },
       body,
       cache: "no-store",
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
     return new NextResponse(response.body, {

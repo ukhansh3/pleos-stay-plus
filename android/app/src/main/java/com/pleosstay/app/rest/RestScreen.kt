@@ -143,6 +143,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                         RestPanel(modifier.height(if (wide) panelHeight else 620.dp)) {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                                 Text("휴식 설정", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                                if (active != null) Text("사용 중인 프리셋 · ${active.preset.name}", color = StayColors.Blue)
                                 state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                                 when {
                                     !state.ready -> {

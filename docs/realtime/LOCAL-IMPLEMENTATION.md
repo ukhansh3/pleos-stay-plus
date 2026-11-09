@@ -1,5 +1,7 @@
 # Realtime FileTransfer — 로컬 구현 및 인계
 
+2026-11-09 업데이트. 사용자가 주소를 입력하지 않는 배포 설정과 차량 발급 코드 흐름은 [PC 간편 연결 QA](../verification/2026-11-09-qa-pc-onboarding.md)에 기록했다.
+
 2026-11-04 기준. 자동 동기화가 아닌 수동 파일 전송 MVP다. 기존 Waiting Safety Gateway를 재사용하며 Work 편집기는 구현하지 않는다.
 
 ## 구현 범위

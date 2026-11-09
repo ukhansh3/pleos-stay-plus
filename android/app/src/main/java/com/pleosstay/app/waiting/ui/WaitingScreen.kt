@@ -92,7 +92,10 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
             }, right = {
                 FeaturePanel(Modifier.fillMaxWidth().heightIn(min = 540.dp)) {
                     Text("현재 대기 정보", fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                    InfoLine("장소", active?.place?.name ?: selectedPlace?.name ?: "직접 대기")
+                    InfoLine("선택한 대기 장소", if (active != null) active.place?.name ?: "직접 대기" else selectedPlace?.name ?: "직접 대기")
+                    if ((if (active != null) active.place else selectedPlace) != null) {
+                        Text("선택한 장소입니다. 차량의 도착 여부는 확인하지 않습니다.", color = StayColors.Secondary)
+                    }
                     if (active == null) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             policy.presets.forEach { value -> FilterChip(minutes == value.toString(), { minutes = value.toString() }, label = { Text("${value}분") }) }

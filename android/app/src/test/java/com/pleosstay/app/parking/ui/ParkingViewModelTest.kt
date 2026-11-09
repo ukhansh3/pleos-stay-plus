@@ -85,6 +85,42 @@ class ParkingViewModelTest {
     }
 
     @Test
+    fun foreignSdkCoordinatesDoNotStartDomesticSearchOrExposePreviousFix() = runTest(dispatcher) {
+        val repository = RecordingRepository()
+        val location = FakeLocationGateway(vehicleLocation())
+        val viewModel = createViewModel(repository, location)
+        viewModel.searchNearby()
+        advanceUntilIdle()
+        location.result = CurrentLocationResult.Success(VehicleLocation(37.4, -128.0, 1_000))
+        viewModel.searchNearby()
+        advanceUntilIdle()
+
+        assertEquals(LocationUiState.OUTSIDE_COVERAGE, viewModel.state.value.locationState)
+        assertNull(viewModel.state.value.lastLocationLabel)
+        assertNull(viewModel.state.value.appliedFilters)
+        assertFalse(viewModel.state.value.showDeveloperCoordinates)
+        assertEquals(1, repository.searches.size)
+    }
+
+    @Test
+    fun changedFiltersAreAppliedOnlyByNextSearch() = runTest(dispatcher) {
+        val repository = RecordingRepository()
+        val viewModel = createViewModel(repository, FakeLocationGateway(vehicleLocation()))
+        viewModel.searchNearby()
+        advanceUntilIdle()
+        viewModel.updateFilters(radius = "5000", freeOnly = true)
+
+        assertTrue(viewModel.state.value.filtersChanged)
+        assertEquals(1, repository.searches.size)
+        viewModel.searchNearby()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.filtersChanged)
+        assertEquals(5000, repository.searches.last().radius)
+        assertTrue(repository.searches.last().freeOnly)
+    }
+
+    @Test
     fun deniedPermissionCallbackAllowsRetryWithCurrentLocation() = runTest(dispatcher) {
         val repository = RecordingRepository()
         val location = FakeLocationGateway(vehicleLocation())
@@ -213,7 +249,7 @@ private class RecordingRepository : ParkingRepository {
     override suspend fun detail(placeId: String): ParkingPlace = error("Not used")
 }
 
-private class FakeLocationGateway(private val result: CurrentLocationResult) : CurrentLocationGateway {
+private class FakeLocationGateway(var result: CurrentLocationResult) : CurrentLocationGateway {
     var requests = 0
         private set
 

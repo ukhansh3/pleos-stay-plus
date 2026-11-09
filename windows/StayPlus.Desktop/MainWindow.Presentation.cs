@@ -56,9 +56,16 @@ public partial class MainWindow
         var peer = new[] { pair?["issuer"], pair?["claimant"] }.FirstOrDefault(n => Field(n, "kind") == "VEHICLE");
         vehicleId = peer?["id"]?.GetValue<string>();
         vehicleName = peer?["name"]?.GetValue<string>();
-        var state = Field(pair, "state") switch
+        var phase = Field(pair, "state");
+        var pc = new[] { pair?["issuer"], pair?["claimant"] }.FirstOrDefault(n => Field(n, "kind") == "WINDOWS");
+        var pcId = Field(pc, "id");
+        bool alreadyApproved = pcId != null && pair?["approvedDeviceIds"] is JsonArray approvals &&
+            approvals.Any(value => value?.GetValue<string>() == pcId);
+        ApproveVehicle.IsEnabled = phase == "CLAIMED" && vehicleName != null && !alreadyApproved;
+        var state = phase switch
         {
-            "CLAIMED" => "PC와 차량 양쪽에서 승인해 주세요.",
+            "CLAIMED" when alreadyApproved => "차량 승인을 기다리고 있습니다.",
+            "CLAIMED" => "차량을 확인한 뒤 승인해 주세요.",
             "CONNECTED" => "양쪽 기기의 승인이 완료됐습니다.",
             "EXPIRED" => "코드가 만료됐습니다. 새 코드를 발급해 주세요.",
             "CANCELLED" => "연결 요청이 취소됐습니다.",
@@ -92,7 +99,7 @@ public partial class MainWindow
         Connection.Text = linked ? (name ?? "차량") + " · 연결됨" : "차량 연결 안 됨";
         Connection.ToolTip = Connection.Text;
         VehicleTitle.Text = linked ? name ?? "연결된 차량" : "연결된 차량이 없습니다";
-        VehicleNote.Text = linked ? "이 PC와 파일을 주고받을 수 있습니다." : "아래에서 코드를 발급하거나 차량에 표시된 코드를 입력하세요.";
+        VehicleNote.Text = linked ? "이 PC와 파일을 주고받을 수 있습니다." : "차량에 표시된 코드를 입력하세요.";
         Unlink.IsEnabled = linked;
         EmptyTitle.Text = linked ? "보관함이 비어 있습니다" : "차량과 파일을 공유하세요";
         EmptyNote.Text = linked ? "새로 고침으로 보관함을 확인하거나 첫 문서를 올리세요." : "차량을 연결한 다음 문서를 보낼 수 있습니다.";
@@ -136,6 +143,8 @@ public partial class MainWindow
         if (local && string.IsNullOrWhiteSpace(Server.Text))
             Server.Text = "http://127.0.0.1:3010/api/v1/realtime/";
         if (!Uri.TryCreate(Server.Text.Trim(), UriKind.Absolute, out var endpoint)
+            || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0
+            || endpoint.AbsolutePath.TrimEnd('/') != "/api/v1/realtime"
             || (endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && endpoint.IsLoopback))
             || (local && (!endpoint.IsLoopback || Token.Password.Length == 0)))
         {
@@ -144,7 +153,8 @@ public partial class MainWindow
         }
         if (!local)
         {
-            if (!Uri.TryCreate(AuthUrl.Text, UriKind.Absolute, out var auth) || auth.Scheme != "https"
+            if (endpoint.Scheme != "https" || !Uri.TryCreate(AuthUrl.Text, UriKind.Absolute, out var auth) || auth.Scheme != "https"
+                || auth.UserInfo.Length != 0 || auth.Query.Length != 0 || auth.Fragment.Length != 0 || auth.AbsolutePath != "/"
                 || !IsPublishable(PublicKey.Text.Trim()))
             {
                 Status.Text = "인증 서비스의 공개 설정이 필요합니다. 설정 담당자에게 문의해 주세요.";

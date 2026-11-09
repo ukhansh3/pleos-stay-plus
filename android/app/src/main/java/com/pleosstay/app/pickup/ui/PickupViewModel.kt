@@ -118,8 +118,8 @@ class PickupViewModel(
     }
 
     fun issueInvitation() {
-        val sessionId = mutableState.value.session?.id ?: return
-        if (mutableState.value.busy) return
+        val sessionId = mutableState.value.session?.takeIf { it.status == PickupSessionStatus.ACTIVE }?.id ?: return
+        if (mutableState.value.busy || !safety.state.value.canUse) return
         val key = invitationKey ?: UUID.randomUUID().toString().also { invitationKey = it }
         viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
@@ -129,7 +129,10 @@ class PickupViewModel(
                     mutableState.update { it.copy(invitation = invitation, busy = false) }
                     syncOnce(sessionId)
                 }
-                .onFailure { failure -> mutableState.update { it.copy(busy = false, error = failure.message) } }
+                .onFailure { failure ->
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    mutableState.update { it.copy(busy = false, error = failure.message ?: "초대 링크를 발급하지 못했습니다.") }
+                }
         }
     }
 

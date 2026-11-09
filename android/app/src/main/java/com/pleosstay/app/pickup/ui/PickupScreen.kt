@@ -17,8 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.MultiFormatWriter
+import com.pleosstay.app.ui.publicHttpsLink
+import com.pleosstay.app.ui.qrBitmap
 import com.pleosstay.app.pickup.domain.*
 import com.pleosstay.app.ui.premium.*
 import kotlinx.coroutines.delay
@@ -38,7 +38,7 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
     val invite = state.invitation
     val active = session?.status == PickupSessionStatus.ACTIVE
     val inviteValid = active && invite != null && runCatching { Instant.parse(invite.expiresAt).toEpochMilli() > now }.getOrDefault(false)
-    val qr = remember(invite?.shareUrl, inviteValid) { if (inviteValid) invite?.let { runCatching { qrBitmap(it.shareUrl) }.getOrNull() } else null }
+    val qr = remember(invite?.shareUrl, inviteValid) { if (inviteValid) invite?.takeIf { publicHttpsLink(it.shareUrl) != null }?.let { runCatching { qrBitmap(it.shareUrl) }.getOrNull() } else null }
     if (largeQr && qr != null && !state.blocked) Dialog(onDismissRequest = { largeQr = false }) {
         GlassPanel {
             Text("초대 QR", fontSize = 27.sp, fontWeight = FontWeight.Bold)
@@ -103,7 +103,7 @@ private fun PickupInvitationPanel(state: PickupUiState, qr: Bitmap?, inviteValid
         if (qr != null) Image(qr.asImageBitmap(), "Pickup 공유 링크 QR", Modifier.size(minOf(maxWidth - 20.dp, 340.dp)).background(Color.White))
         else Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             StayIcon("PICKUP", Modifier.size(72.dp), StayColors.Secondary)
-            Text(when { state.session == null -> "초대 QR 발급 전"; !active -> "종료된 초대"; state.invitation != null && !inviteValid -> "초대가 만료되었습니다."; else -> "초대를 발급하세요." }, fontSize = 21.sp, color = StayColors.Secondary)
+            Text(when { state.session == null -> "초대 QR 발급 전"; !active -> "종료된 초대"; state.invitation != null && !inviteValid -> "초대가 만료되었습니다."; state.invitation != null -> "공유 링크를 사용할 수 없습니다. 다시 발급해 주세요."; else -> "초대를 발급하세요." }, fontSize = 21.sp, color = StayColors.Secondary)
         }
     }
     if (qr != null) {
@@ -164,9 +164,3 @@ private fun PickupParticipantStatus.label() = when (this) {
     PickupParticipantStatus.ARRIVED -> "도착함"; PickupParticipantStatus.CANCELLED -> "참가 취소"
 }
 private fun String.timeLabel() = runCatching { Instant.parse(this).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM.dd HH:mm")) }.getOrDefault("시간 확인 필요")
-private fun qrBitmap(value: String): Bitmap {
-    val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, 512, 512)
-    return Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888).also { bitmap ->
-        for (y in 0 until 512) for (x in 0 until 512) bitmap.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-    }
-}

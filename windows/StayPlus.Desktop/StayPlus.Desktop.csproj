@@ -1,3 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>Stay+</AssemblyName><RootNamespace>StayPlus.Desktop</RootNamespace></PropertyGroup>
+ <ItemGroup>
+  <AssemblyMetadata Include="RealtimeApi" Value="$(REALTIME_API_BASE_URL)"/>
+  <AssemblyMetadata Include="RealtimeAuth" Value="$(REALTIME_SUPABASE_URL)"/>
+  <AssemblyMetadata Include="RealtimePublicKey" Value="$(REALTIME_SUPABASE_PUBLIC_KEY)"/>
+ </ItemGroup>
+ <Target Name="ValidateRealtimePublicKey" BeforeTargets="GenerateAssemblyInfo">
+  <Error Condition="'$(REALTIME_SUPABASE_PUBLIC_KEY)' != '' And !$([System.String]::Copy('$(REALTIME_SUPABASE_PUBLIC_KEY)').StartsWith('sb_publishable_'))"
+    Text="REALTIME_SUPABASE_PUBLIC_KEY must contain only a Supabase publishable key."/>
+ </Target>
 </Project>

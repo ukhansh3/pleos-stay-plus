@@ -21,7 +21,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-enum class LocationUiState { IDLE, LOCATING, READY, PERMISSION_DENIED, DISABLED, UNSUPPORTED, FAILED }
+enum class LocationUiState { IDLE, LOCATING, READY, PERMISSION_DENIED, DISABLED, UNSUPPORTED, OUTSIDE_COVERAGE, FAILED }
+
+data class ParkingFilters(val radius: String, val minutes: String, val purpose: ParkingPurpose, val freeOnly: Boolean)
 
 data class ParkingUiState(
     val latitude: String = "",
@@ -41,7 +43,12 @@ data class ParkingUiState(
     val selected: ParkingPlace? = null,
     val error: String? = null,
     val navigationStatus: NavigationStatus = NavigationStatus.Initializing,
-)
+    val appliedFilters: ParkingFilters? = null,
+    val developerSearch: Boolean = false,
+) {
+    val filters get() = ParkingFilters(radiusMeters, plannedMinutes, purpose, freeOnly)
+    val filtersChanged get() = appliedFilters?.let { it != filters } == true
+}
 
 class ParkingViewModel internal constructor(
     private val repository: ParkingRepository,
@@ -81,6 +88,7 @@ class ParkingViewModel internal constructor(
     }
 
     fun updateFilters(radius: String? = null, minutes: String? = null, purpose: ParkingPurpose? = null, freeOnly: Boolean? = null) {
+        if (mutableState.value.loading) return
         mutableState.value = mutableState.value.copy(
             radiusMeters = radius ?: mutableState.value.radiusMeters,
             plannedMinutes = minutes ?: mutableState.value.plannedMinutes,
@@ -105,7 +113,8 @@ class ParkingViewModel internal constructor(
             mutableState.value = current.copy(error = "위도와 경도를 올바르게 입력해 주세요")
             return
         }
-        mutableState.value = current.copy(loading = true, error = null, selected = null)
+        mutableState.value = current.copy(loading = true, error = null, selected = null, developerSearch = true,
+            appliedFilters = null, places = emptyList(), total = 0)
         viewModelScope.launch { search(latitude, longitude) }
     }
 
@@ -115,7 +124,12 @@ class ParkingViewModel internal constructor(
         mutableState.value = current.copy(
             loading = true,
             locationState = LocationUiState.LOCATING,
+            developerSearch = false,
             locationMessage = "현재 위치를 확인하고 있습니다.",
+            lastLocationLabel = null,
+            places = emptyList(),
+            total = 0,
+            appliedFilters = null,
             error = null,
             selected = null,
         )
@@ -123,6 +137,11 @@ class ParkingViewModel internal constructor(
             when (val result = withContext(ioDispatcher) { locationGateway.getCurrentLocation() }) {
                 is CurrentLocationResult.Success -> {
                     val (latitude, longitude) = result.location
+                    // The configured public providers cover South Korea. Do not query them for a foreign fix.
+                    if (latitude !in 32.0..39.5 || longitude !in 123.0..133.0) {
+                        locationFailure(LocationUiState.OUTSIDE_COVERAGE, "국내 주차장 검색 범위 밖의 위치입니다. 차량 위치 설정을 확인해 주세요.")
+                        return@launch
+                    }
                     mutableState.value = mutableState.value.copy(
                         locationState = LocationUiState.READY,
                         locationMessage = "차량 위치를 확인했습니다",
@@ -162,6 +181,12 @@ class ParkingViewModel internal constructor(
             locationState = state,
             locationMessage = message,
             showDeveloperCoordinates = false,
+            developerSearch = false,
+            lastLocationLabel = null,
+            places = emptyList(),
+            selected = null,
+            total = 0,
+            appliedFilters = null,
         )
     }
 
@@ -183,10 +208,12 @@ class ParkingViewModel internal constructor(
                 places = result.places,
                 total = result.total,
                 dataFreshness = result.dataFreshness,
-                error = if (result.places.isEmpty()) "조건에 맞는 주차장을 찾지 못했습니다" else null,
+                appliedFilters = current.filters,
+                error = null,
             )
         }.onFailure { error ->
-            mutableState.value = mutableState.value.copy(loading = false, error = error.message ?: "검색 실패")
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            mutableState.value = mutableState.value.copy(loading = false, error = "주차장 검색에 실패했습니다. 연결을 확인하고 다시 검색해 주세요.")
         }
     }
 
@@ -194,8 +221,17 @@ class ParkingViewModel internal constructor(
         viewModelScope.launch {
             mutableState.value = mutableState.value.copy(loading = true, error = null)
             runCatching { withContext(ioDispatcher) { repository.detail(place.id) } }
-                .onSuccess { detail -> mutableState.value = mutableState.value.copy(loading = false, selected = detail) }
-                .onFailure { error -> mutableState.value = mutableState.value.copy(loading = false, error = error.message ?: "상세 조회 실패") }
+                .onSuccess { detail ->
+                    val searched = state.value.places.firstOrNull { it.id == detail.id }
+                    mutableState.value = mutableState.value.copy(loading = false, selected = detail.copy(
+                        estimatedFee = searched?.estimatedFee ?: detail.estimatedFee,
+                        feeEstimateStatus = searched?.feeEstimateStatus ?: detail.feeEstimateStatus,
+                    ))
+                }
+                .onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    mutableState.value = mutableState.value.copy(loading = false, error = "상세 정보를 불러오지 못했습니다. 다시 선택해 주세요.")
+                }
         }
     }
 

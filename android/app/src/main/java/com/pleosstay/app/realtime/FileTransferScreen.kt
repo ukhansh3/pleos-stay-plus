@@ -9,6 +9,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import android.content.ClipData
+import android.content.ClipboardManager
+import com.pleosstay.app.BuildConfig
+import com.pleosstay.app.ui.qrBitmap
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,7 +51,17 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     var selectedFile by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf(inspectionFiles?.files?.firstOrNull()?.optString("id")) }
     var selectedVersion by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf(inspectionFiles?.versions?.firstOrNull()?.optString("id")) }
     if (!state.allowed || !state.unlocked) { NoticePanel("파일 화면 잠김", "정차 상태와 PIN을 확인해 주세요.", true); return }
-    val pairing = runCatching { JSONObject(state.message) }.getOrNull()?.takeIf { it.has("issuer") && it.has("claimant") }
+    if (inspectionFiles == null) {
+        LaunchedEffect(model) { model.register() }
+        LaunchedEffect(model, state.pairingId, state.connectionId) {
+            while (state.pairingId != null || state.connectionId != null) {
+                delay(if (state.connectionId == null) 2500 else 10_000)
+                if (state.connectionId == null) model.pollPairing() else model.pollLinkedConnection()
+            }
+        }
+    }
+    val pairing = state.pairing
+    val filesReachable = state.connectionId != null && state.serverStatus != RealtimeServerStatus.UNAVAILABLE
     val version = state.versions.firstOrNull { it.optString("id") == selectedVersion }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("파일 작업 · Realtime", fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -60,24 +78,25 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                                 StayIcon("FILES", Modifier.size(54.dp), StayColors.Blue)
                             }
                         }
-                        Text(if (state.connectionId == null) "연결되지 않음" else "PC 연결됨", color = if (state.connectionId == null) StayColors.Secondary else StayColors.Success, fontSize = 20.sp)
-                        PremiumAction("연결 복원", { otherOperation(model::register) }, Modifier.fillMaxWidth(), !state.busy, true)
+                        val networkDown = state.serverStatus == RealtimeServerStatus.UNAVAILABLE
+                        val linked = state.connectionId != null && !networkDown
+                        Text(when {
+                            networkDown -> "서버에 연결할 수 없습니다"
+                            linked -> state.pcName?.let { "$it · 연결 완료" } ?: "PC 연결 완료"
+                            state.busy && pairing == null -> "연결 준비 중…"
+                            else -> "연결된 PC 없음"
+                        }, color = if (linked) StayColors.Success else StayColors.Secondary, fontSize = 20.sp)
+                        if (networkDown) PremiumAction("연결 다시 확인", { otherOperation(model::register) }, Modifier.fillMaxWidth(), !state.busy, true)
                         if (state.connectionId == null) {
-                            Text("8자리 페어링 코드", color = StayColors.Secondary)
-                            if (state.code.isNotBlank()) Text(state.code, fontSize = 30.sp, color = StayColors.Blue, fontWeight = FontWeight.SemiBold)
-                            PremiumAction("페어링 코드 발급", { otherOperation(model::issue) }, Modifier.fillMaxWidth(), !state.busy, true)
-                            OutlinedTextField(code, { code = it.filter(Char::isDigit).take(8) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                                label = { Text("상대 기기 코드") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !state.busy)
-                            PremiumAction("코드 입력", { otherOperation { model.claim(code) } }, Modifier.fillMaxWidth(), !state.busy && code.length == 8, true)
-                            if (state.pairingId != null) {
-                                PremiumAction("상대 기기 확인", { otherOperation(model::inspectPairing) }, Modifier.fillMaxWidth(), !state.busy, true)
-                                pairing?.let { p ->
-                                    listOf("issuer", "claimant").mapNotNull { p.optJSONObject(it) }.forEach { device ->
-                                        Text(device.optString("name"), fontSize = 19.sp)
-                                    }
-                                    Text(when (p.optString("state")) { "OPEN" -> "코드 입력 대기"; "CLAIMED" -> "양쪽 승인 대기"; "CONNECTED" -> "연결 승인됨"; "EXPIRED" -> "코드 만료"; "CANCELLED" -> "연결 취소됨"; else -> "상태 확인 필요" }, color = StayColors.Secondary)
+                            PcPairingContent(state, model)
+                            if (BuildConfig.DEBUG) {
+                                var showReverse by remember { mutableStateOf(false) }
+                                TextButton(onClick = { showReverse = !showReverse }) { Text("개발자용 PC 발급 코드 입력") }
+                                if (showReverse) {
+                                    OutlinedTextField(code, { code = it.filter { c -> c in '0'..'9' }.take(8) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                        label = { Text("PC의 8자리 코드") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !state.busy)
+                                    PremiumAction("코드 확인", { otherOperation { model.claim(code) } }, Modifier.fillMaxWidth(), !state.busy && code.length == 8, true)
                                 }
-                                PremiumAction("상대 승인", { otherOperation(model::approve) }, Modifier.fillMaxWidth(), !state.busy && pairing?.optString("state") == "CLAIMED", true)
                             }
                         } else {
                             HorizontalDivider(color = StayColors.Border)
@@ -95,10 +114,15 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                     }
                     Text("TXT · PDF · DOCX", color = StayColors.Secondary, fontSize = 17.sp)
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (state.files.isEmpty()) item { Text("파일이 없습니다.", color = StayColors.Secondary) }
+                        if (state.files.isEmpty()) item { Text(when {
+                            state.serverStatus == RealtimeServerStatus.UNAVAILABLE -> "서버 연결을 확인해 주세요."
+                            state.connectionId == null -> "PC를 연결하면 파일을 볼 수 있습니다."
+                            state.busy -> "파일을 불러오는 중…"
+                            else -> "파일이 없습니다."
+                        }, color = StayColors.Secondary) }
                         items(state.files, key = { it.getString("id") }) { file ->
                             val id = file.getString("id")
-                            Surface(onClick = { selectedFile = id; selectedVersion = null; otherOperation { model.versions(id) } }, enabled = !state.busy,
+                            Surface(onClick = { selectedFile = id; selectedVersion = null; otherOperation { model.versions(id) } }, enabled = !state.busy && filesReachable,
                                 color = if (selectedFile == id) StayColors.Purple.copy(alpha = .28f) else StayColors.Surface,
                                 shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, if (selectedFile == id) StayColors.Purple else StayColors.Border)) {
                                 Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -128,11 +152,11 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Text("선택한 버전 다운로드", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                         version?.let { Text("${it.getString("fileName")} · v${it.getInt("versionNo")}", color = StayColors.Secondary) }
-                        PremiumAction("이 버전 다운로드", { version?.let { downloadUi = DownloadUiProgress(state.progress); model.download(it) } }, Modifier.fillMaxWidth(), version != null && !state.busy)
+                        PremiumAction("이 버전 다운로드", { version?.let { downloadUi = DownloadUiProgress(state.progress); model.download(it) } }, Modifier.fillMaxWidth(), version != null && !state.busy && filesReachable)
                         if (model.supportsWorkTransfer || inspectionFiles != null) {
                             HorizontalDivider(color = StayColors.Border)
                             PremiumAction("차량 파일 보내기", { otherOperation(model::openWorkPicker) },
-                                Modifier.fillMaxWidth(), state.connectionId != null && !state.busy)
+                                Modifier.fillMaxWidth(), filesReachable && !state.busy)
                         }
                         HorizontalDivider(color = StayColors.Border)
                         Text("전송 진행 상태", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -188,6 +212,57 @@ private fun realtimeNotice(value: String): String? = when {
     value.contains("FAILED") || value == "ERROR" || value.contains("Exception") -> "파일 작업에 실패했습니다. 연결을 확인하고 다시 시도해 주세요."
     value.startsWith("수정본 v") -> "전송 완료"
     else -> value.takeIf { it.isNotBlank() }?.let { if (it.any { c -> c in '가'..'힣' }) it else "작업을 완료하지 못했습니다. 연결을 확인해 주세요." }
+}
+
+@Composable
+private fun PcPairingContent(state: FileTransferState, model: FileTransferViewModel) {
+    val pairing = state.pairing
+    var now by remember(pairing?.expiresAt) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(pairing?.expiresAt) {
+        while (pairing != null && now < pairing.expiresAt) {
+            delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val seconds = pairing?.let { ((it.expiresAt - now + 999) / 1000).coerceAtLeast(0) } ?: 0
+    val expired = pairing?.phase == "EXPIRED" || (pairing?.phase in setOf("OPEN", "CLAIMED") && seconds == 0L)
+    val phase = if (expired) "EXPIRED" else pairing?.phase
+    when (phase) {
+        "OPEN" -> {
+            Text("PC 연결 대기 중", color = StayColors.Blue)
+            Text(state.code, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
+            Text("Windows Stay+에서 이 8자리 코드를 입력하세요.")
+            val guide = RealtimeDeployment.guide
+            if (guide != null) {
+                val context = LocalContext.current
+                val bitmap = remember(guide) { runCatching { qrBitmap(guide).asImageBitmap() }.getOrNull() }
+                bitmap?.let { Image(it, "PC 연결 안내 페이지 QR", Modifier.size(168.dp).background(Color.White)) }
+                Text(guide, color = StayColors.Secondary)
+                TextButton(onClick = {
+                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("PC 연결 안내", guide))
+                }) { Text("안내 주소 복사") }
+            }
+        }
+        "CLAIMED" -> {
+            Text(if (pairing?.approvedHere == true) "PC 승인 대기 중" else "PC 연결 요청 도착", color = StayColors.Blue)
+            pairing?.pcName?.let { Text(it, fontWeight = FontWeight.SemiBold) }
+            if (pairing?.approvedHere == false) {
+                Text("이 PC의 이름을 확인한 뒤 승인하세요.")
+                PremiumAction("이 PC 승인", model::approve, Modifier.fillMaxWidth(), !state.busy && pairing.pcId != null)
+            }
+        }
+        "CONNECTED" -> Text("승인 완료 · 연결 확인 중…", color = StayColors.Blue)
+        "EXPIRED" -> Text("연결 코드가 만료되었습니다.", color = StayColors.Warning)
+        "CANCELLED" -> Text("연결 요청이 취소되었습니다.", color = StayColors.Secondary)
+    }
+    state.pairingError?.let { Text(it, color = StayColors.Warning) }
+    if (phase == "OPEN" || phase == "CLAIMED") {
+        Text("남은 시간 %d:%02d".format(seconds / 60, seconds % 60), color = StayColors.Secondary)
+        TextButton(onClick = model::cancelPairing, enabled = !state.busy) { Text("연결 취소") }
+    }
+    if (phase !in setOf("OPEN", "CLAIMED", "CONNECTED")) {
+        PremiumAction(if (expired) "새 코드 발급" else "PC 연결하기", model::issue, Modifier.fillMaxWidth(), !state.busy)
+    }
 }
 
 private data class DownloadUiProgress(val baseline: Float, val busySeen: Boolean = false, val freshSample: Boolean = false)

@@ -142,7 +142,8 @@ function feePolicy(item: PublicDataItem): FeePolicy {
   const additionalUnitFeeKrw = number(item.addUnitCharge);
   const dailyPassMinutes = number(item.dayCmmtktAdjTime);
   const dailyPassFeeKrw = number(item.dayCmmtkt);
-  const hasAmbiguousTerms = chargeInfo !== "유료" || text(item.spcmnt) !== null || dailyPassMinutes !== null || dailyPassFeeKrw !== null;
+  const hasDailyTerms = (dailyPassMinutes ?? 0) > 0 || (dailyPassFeeKrw ?? 0) > 0;
+  const hasAmbiguousTerms = chargeInfo !== "유료" || text(item.spcmnt) !== null || hasDailyTerms;
   const hasBase = basicMinutes !== null && basicMinutes > 0 && basicFeeKrw !== null && basicFeeKrw >= 0;
   const hasIncrement = additionalUnitMinutes !== null && additionalUnitMinutes > 0 && additionalUnitFeeKrw !== null && additionalUnitFeeKrw >= 0;
 

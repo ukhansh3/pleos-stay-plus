@@ -13,7 +13,7 @@ const config: AppConfig = {
   host: "127.0.0.1", port: 3000, providerBaseUrl: "https://example.test", providerApiKey: null,
   restAreaProviderBaseUrl: "https://example.test/rest", restAreaProviderApiKey: null,
   cacheTtlMs: 1_000, staleMaxAgeMs: 2_000, cacheFile: ".cache/test.json", requestTimeoutMs: 100, rateLimitPerMinute: 1_000,
-  pickupDevMode: false, supabaseUrl: null, supabasePublishableKey: null, supabaseSecretKey: null, pickupStorage: "disabled", publicWebBaseUrl: "http://localhost:3001",
+  pickupDevMode: false, supabaseUrl: null, supabasePublishableKey: null, supabaseSecretKey: null, pickupStorage: "disabled", publicWebBaseUrl: "https://pickup.example.test",
   pickupInvitationHmacSecret: null, pickupProximityMaxAccuracyMeters: null, pickupProximityMaxAgeMs: null,
   pickupSimulatorEnabled: false, pickupSimulatorToken: null,
 };
@@ -32,6 +32,21 @@ test("developer simulator configuration requires loopback and a separate token",
   assert.throws(() => loadConfig({ PICKUP_SIMULATOR_ENABLED: "true", PARKING_API_HOST: "127.0.0.1" }), /PICKUP_SIMULATOR_TOKEN/);
   const valid = loadConfig({ PICKUP_SIMULATOR_ENABLED: "true", PARKING_API_HOST: "127.0.0.1", PICKUP_SIMULATOR_TOKEN: "x".repeat(32) });
   assert.equal(valid.pickupSimulatorEnabled, true);
+});
+
+test("missing or private Pickup share origin fails before creating an invitation", async () => {
+  assert.equal(loadConfig({}).publicWebBaseUrl, null);
+  for (const origin of [null, "http://localhost:3001", "https://127.0.0.1", "https://pickup.local", "https://operator:secret@example.test"]) {
+    const repository = new InMemoryPickupRepository();
+    const service = new PickupService(repository, {
+      publicWebBaseUrl: origin,
+      invitationHmacSecret: "test-secret-that-is-at-least-thirty-two-characters",
+    });
+    const created = await service.createSession("driver", null, key(1));
+    await assert.rejects(service.issueInvitation("driver", created.id, key(2)), { code: "PICKUP_SHARE_NOT_CONFIGURED" });
+    const snapshot = await service.getSnapshot("driver", created.id);
+    assert.equal(snapshot.session.invitationExpiresAt, null);
+  }
 });
 
 test("independent Pickup enforces owner, one participant, revocation, and location cleanup", async () => {

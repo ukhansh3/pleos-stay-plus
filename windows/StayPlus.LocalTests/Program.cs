@@ -15,7 +15,21 @@ Console.WriteLine("PASS Windows Fake Auth signup/cache/refresh/failure identity 
 if(args.Length<2)return;
 using var pc=new RealtimeClient(args[0],"local-integration-pc-token-000000000000");using var car=new RealtimeClient(args[0],"local-integration-car-token-00000000000");
 await pc.Send("POST","devices",new{kind="WINDOWS",name="Windows actual client"});await car.Send("POST","devices",new{kind="VEHICLE",name="Vehicle contract test peer"});
-var pair=await pc.Send("POST","pairings");var pid=pair!["id"]!.GetValue<string>();await car.Send("POST","pairings/claim",new{code=pair["code"]!.GetValue<string>()});await pc.Send("POST",$"pairings/{pid}/approve");await car.Send("POST",$"pairings/{pid}/approve");
+var pair = await car.Send("POST", "pairings");
+var pid = pair!["id"]!.GetValue<string>();
+var code = pair["code"]!.GetValue<string>();
+Check(code.Length == 8 && code.All(c => c is >= '0' and <= '9'), "8-digit vehicle code");
+var claimed = await pc.Send("POST", "pairings/claim", new { code });
+Check(claimed!["id"]!.GetValue<string>() == pid, "Windows claimed the vehicle's code");
+var request = await car.Send("GET", $"pairings/{pid}");
+Check(request!["state"]!.GetValue<string>() == "CLAIMED" &&
+    request["claimant"]!["name"]!.GetValue<string>() == "Windows actual client", "vehicle can verify requesting PC");
+await pc.Send("POST", $"pairings/{pid}/approve");
+Check((await pc.Send("GET", "connections/current"))?["connection"] == null, "Windows approval alone must not connect");
+var beforeApproval = await pc.Send("GET", "files");
+Check(beforeApproval!["items"]!.AsArray().Count == 0, "no files are visible before vehicle approval");
+await car.Send("POST", $"pairings/{pid}/approve");
+Console.WriteLine("PASS vehicle-issued code, named PC, both approvals and files gated before approval");
 var current=await pc.Send("GET","connections/current");var cid=current!["connection"]!["id"]!.GetValue<string>();
 var output=Path.Combine(Path.GetTempPath(),"stay-client-test-"+Guid.NewGuid());Directory.CreateDirectory(output);string? last=null;
 try{

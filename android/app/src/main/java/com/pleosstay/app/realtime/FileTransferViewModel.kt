@@ -22,7 +22,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class FileTransferState(val allowed: Boolean = false, val unlocked: Boolean = false, val busy: Boolean = false, val message: String = "잠김", val pairingId: String? = null, val code: String = "", val connectionId: String? = null, val files: List<JSONObject> = emptyList(), val versions: List<JSONObject> = emptyList(), val progress: Float = 0f, val workPicker: WorkTransferPicker? = null, val sendingWork: Boolean = false)
+data class FileTransferState(val allowed: Boolean = false, val unlocked: Boolean = false, val busy: Boolean = false, val message: String = "잠김", val pairingId: String? = null, val code: String = "", val connectionId: String? = null, val files: List<JSONObject> = emptyList(), val versions: List<JSONObject> = emptyList(), val progress: Float = 0f, val workPicker: WorkTransferPicker? = null, val sendingWork: Boolean = false, val pairing: PcPairing? = null,
+    val serverStatus: RealtimeServerStatus = RealtimeServerStatus.UNCHECKED,
+    val pcName: String? = null, val pcDeviceId: String? = null, val pairingError: String? = null)
+
+enum class RealtimeServerStatus { UNCHECKED, AVAILABLE, UNAVAILABLE }
+
+data class PcPairing(val phase: String, val expiresAt: Long, val pcName: String? = null, val pcId: String? = null,
+    val approvedHere: Boolean = false)
 
 data class WorkTransferPicker(val target: WorkTransferTarget, val exports: List<WorkExportReceipt>, val selected: WorkExportReceipt? = null)
 data class WorkTransferTarget(val profile: WorkExportProfile, val pcId: String)
@@ -34,6 +41,7 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
     private val mutable = MutableStateFlow(FileTransferState()); val state: StateFlow<FileTransferState> = mutable.asStateFlow()
     private var operation: Job? = null
     private var loadingWorkPicker = false
+    private var vehicleId: String? = null
     private val bridgeMutex = Mutex()
     private val transport = RealtimeDocumentTransport(api, this)
     val supportsWorkTransfer: Boolean get() = workExports != null
@@ -59,6 +67,9 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
             } catch (e: Exception) {
                 if (safety.state.value.canUse && state.value.unlocked) {
                     val message = if (workTransfer) workTransferError(e) else e.message ?: "ERROR"
+                    if (e is java.io.IOException || e.message?.startsWith("HTTP_5") == true) {
+                        mutable.update { it.copy(serverStatus=RealtimeServerStatus.UNAVAILABLE) }
+                    }
                     mutable.update { it.copy(message=message) }
                 }
             } finally {
@@ -67,31 +78,154 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
         }
     }
     private fun items(json: JSONObject): List<JSONObject> { val a=json.getJSONArray("items"); return (0 until a.length()).map { a.getJSONObject(it) } }
-    fun register() = run { api.call("POST","devices",JSONObject().put("kind","VEHICLE").put("name","Stay+ 차량")); restore() }
+    private suspend fun ensureRegistered() {
+        vehicleId = api.call("POST", "devices", JSONObject().put("kind", "VEHICLE").put("name", "Stay+ 차량")).getString("id")
+        checkAccess()
+    }
+
+    fun register() = run {
+        ensureRegistered()
+        if (restore() != null) loadFiles()
+    }
     private suspend fun restore(): JSONObject? {
         val c = api.call("GET", "connections/current").optJSONObject("connection")
         checkAccess()
+        applyConnection(c)
+        return c
+    }
+
+    private fun applyConnection(c: JSONObject?) {
         val id = c?.getString("id")
         val connectionLost = id == null || (state.value.connectionId != null && state.value.connectionId != id)
         if (connectionLost) {
             downloadDirectory.listFiles()?.forEach { it.delete() }
             store.clear()
         }
-        mutable.update { it.copy(connectionId=id, message=c?.toString() ?: "연결 없음",
+        val pcId = c?.getString("pcDeviceId")
+        mutable.update { it.copy(connectionId=id, message=if(id == null) "연결 없음" else "",
+            serverStatus=RealtimeServerStatus.AVAILABLE, pcDeviceId=pcId,
+            pcName=when {
+                pcId == null -> null
+                it.pairing?.pcId == pcId -> it.pairing.pcName
+                it.pcDeviceId == pcId -> it.pcName
+                else -> null
+            },
             files=if(connectionLost) emptyList() else it.files,
             versions=if(connectionLost) emptyList() else it.versions,
             workPicker=if(connectionLost) null else it.workPicker) }
-        return c
     }
-    fun issue() = run { val p=api.call("POST","pairings"); mutable.update { it.copy(pairingId=p.getString("id"),code=p.getString("code"),message="상대 기기에서 코드 입력 후 양쪽 승인") } }
-    fun claim(code: String) = run { val p=api.call("POST","pairings/claim",JSONObject().put("code",code)); mutable.update { it.copy(pairingId=p.getString("id"),message=p.toString()) } }
-    fun inspectPairing() = run { val p=api.call("GET","pairings/${state.value.pairingId}"); mutable.update { it.copy(message=p.toString()) } }
-    fun approve() = run { api.call("POST","pairings/${state.value.pairingId}/approve"); restore() }
-    fun refresh() = run { restore(); val result=api.call("GET","files"); mutable.update { it.copy(files=items(result)) } }
+
+    suspend fun pollLinkedConnection() {
+        val before = state.value
+        if (before.connectionId == null || before.busy || !before.unlocked || !safety.state.value.canUse) return
+        try {
+            val connection = api.call("GET", "connections/current").optJSONObject("connection")
+            if (state.value !== before || !safety.state.value.canUse) return
+            val changed = connection?.optString("id") != before.connectionId
+            if (changed || before.serverStatus != RealtimeServerStatus.AVAILABLE) {
+                applyConnection(connection)
+                if (changed && connection == null) mutable.update {
+                    it.copy(pairingId=null, pairing=null, code="", message="PC 연결이 해제되었습니다. 새 코드로 연결해 주세요.")
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            if (state.value === before && safety.state.value.canUse) {
+                mutable.update { it.copy(serverStatus=RealtimeServerStatus.UNAVAILABLE) }
+            }
+        }
+    }
+
+    fun issue() = run {
+        ensureRegistered()
+        if (restore() != null) {
+            loadFiles()
+            return@run
+        }
+        val response = api.call("POST", "pairings")
+        checkAccess()
+        mutable.update { it.copy(pairingId=response.getString("id"), code=response.getString("code"),
+            pairing=PcPairing("OPEN", response.getLong("expiresAt")), pairingError=null, message="") }
+    }
+
+    fun claim(code: String) = run {
+        ensureRegistered()
+        val response = api.call("POST", "pairings/claim", JSONObject().put("code", code))
+        checkAccess()
+        applyPairing(response)
+    }
+
+    suspend fun pollPairing() {
+        val before = state.value
+        val id = before.pairingId ?: return
+        if (before.busy || !before.allowed || !before.unlocked || !safety.state.value.canUse ||
+            before.pairing?.phase !in setOf("OPEN", "CLAIMED", "CONNECTED") || before.connectionId != null) return
+        try {
+            val response = api.call("GET", "pairings/$id")
+            if (state.value !== before || !safety.state.value.canUse) return
+            applyPairing(response)
+            if (response.optString("state") == "CONNECTED") refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            if (state.value === before && safety.state.value.canUse) {
+                mutable.update { it.copy(pairingError="연결 요청을 확인하지 못했습니다. 네트워크를 확인해 주세요.") }
+            }
+        }
+    }
+
+    private fun applyPairing(response: JSONObject) {
+        val pc = listOf("issuer", "claimant").mapNotNull(response::optJSONObject)
+            .firstOrNull { it.optString("kind") == "WINDOWS" }
+        val approvals = response.optJSONArray("approvedDeviceIds")
+        val approvedHere = approvals != null && (0 until approvals.length()).any { approvals.optString(it) == vehicleId }
+        val phase = response.getString("state")
+        mutable.update { it.copy(pairingId=response.getString("id"), pairing=PcPairing(phase,
+            response.getLong("expiresAt"), pc?.optString("name"), pc?.optString("id"), approvedHere),
+            code=if(phase == "OPEN") it.code else "", pairingError=null, message="",
+            serverStatus=RealtimeServerStatus.AVAILABLE) }
+    }
+
+    fun approve() = run {
+        val pairing = state.value.pairing ?: return@run
+        val id = state.value.pairingId ?: return@run
+        if (pairing.phase != "CLAIMED" || pairing.approvedHere || pairing.pcId == null) return@run
+        val current = api.call("GET", "pairings/$id")
+        val peerMatches = listOf("issuer","claimant").any {
+            current.optJSONObject(it)?.let { peer ->
+                peer.optString("id") == pairing.pcId && peer.optString("name") == pairing.pcName
+            } == true
+        }
+        checkAccess()
+        if (current.optString("state") != "CLAIMED" || !peerMatches) {
+            applyPairing(current)
+            return@run
+        }
+        val response = api.call("POST", "pairings/$id/approve")
+        checkAccess()
+        applyPairing(response)
+        if (restore() != null) loadFiles()
+    }
+
+    fun cancelPairing() = run {
+        val id = state.value.pairingId ?: return@run
+        api.call("DELETE", "pairings/$id")
+        checkAccess()
+        mutable.update { it.copy(pairingId=null, pairing=null, code="", pairingError=null, message="연결 요청을 취소했습니다.") }
+    }
+
+    private suspend fun loadFiles() {
+        val result = api.call("GET", "files")
+        checkAccess()
+        mutable.update { it.copy(files=items(result)) }
+    }
+
+    fun refresh() = run { if (restore() != null) loadFiles() }
     fun versions(fileId: String) = run { val result=api.call("GET","files/$fileId/versions"); mutable.update { it.copy(versions=items(result)) } }
     private val progress: (Long,Long)->Unit = { done,total -> checkAccess(); mutable.update { it.copy(progress=if(total>0) done.toFloat()/total else 0f) } }
     fun download(version: JSONObject) = run { val file=api.download(version,downloadDirectory,progress); mutable.update { it.copy(message="다운로드 검증 완료: ${file.name}") } }
-    fun disconnect() = run { state.value.connectionId?.let { api.call("DELETE","connections/$it") }; downloadDirectory.listFiles()?.forEach { it.delete() }; store.clear(); mutable.update { it.copy(connectionId=null,files=emptyList(),versions=emptyList(),unlocked=false,workPicker=null) } }
+    fun disconnect() = run { state.value.connectionId?.let { api.call("DELETE","connections/$it") }; downloadDirectory.listFiles()?.forEach { it.delete() }; store.clear(); mutable.update { it.copy(connectionId=null,files=emptyList(),versions=emptyList(),unlocked=false,workPicker=null, pairingId=null,pairing=null,code="",pcName=null,pcDeviceId=null,pairingError=null,message="PC 연결을 해제했습니다.") } }
     fun uploadFakeWork(uri: android.net.Uri, version: JSONObject) = run {
         check(com.pleosstay.app.BuildConfig.DEBUG)
         val (name,mime)=store.describe(uri)

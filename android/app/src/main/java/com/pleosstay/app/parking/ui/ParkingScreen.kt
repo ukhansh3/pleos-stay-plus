@@ -13,6 +13,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -28,6 +30,14 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
     val state = featureInspection()?.parking ?: liveState
     val inspectionSelected = featureInspection()?.parking?.selected?.id
     var detailId by rememberSaveable { mutableStateOf(inspectionSelected) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val search = {
+        focus.clearFocus()
+        keyboard?.hide()
+        detailId = null
+        onNearbySearch()
+    }
     BackHandler(enabled = detailId != null) { detailId = null }
     val selected = state.selected?.takeIf { it.id == detailId }?.let { detail ->
         detail.copy(distanceMeters = detail.distanceMeters ?: state.places.firstOrNull { it.id == detail.id }?.distanceMeters)
@@ -43,7 +53,7 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     FeaturePanel(Modifier.weight(.88f).fillMaxHeight()) {
                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                            ParkingConditions(state, viewModel, onNearbySearch)
+                            ParkingConditions(state, viewModel, search)
                         }
                     }
                     FeaturePanel(Modifier.weight(1.72f).fillMaxHeight()) {
@@ -66,14 +76,14 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
                 }
             } else {
                 LazyColumn(Modifier.weight(1f), state = resultsScroll, verticalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item { FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, onNearbySearch) } }
+                    item { FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, search) } }
                     if (detailId != null) {
                         item { TextButton(onClick = { detailId = null }) { Text("검색 결과로 돌아가기") } }
                         if (selected != null) item { FeaturePanel(Modifier.fillMaxWidth()) { ParkingSelectedInfo(selected, state.navigationStatus, viewModel::navigate, onWaiting) } }
                     } else {
                         item { Text("검색 결과 · ${state.total}곳", fontSize = 27.sp, fontWeight = FontWeight.Bold) }
                         items(state.places, key = { it.id }) { place -> ParkingRow(place, false) { detailId = place.id; viewModel.select(place) } }
-                        if (state.places.isEmpty() && !state.loading) item { Text("검색 결과가 없습니다.", color = StayColors.Secondary) }
+                        if (state.places.isEmpty() && !state.loading && state.error == null) item { Text(state.emptyResultsLabel(), color = StayColors.Secondary) }
                     }
                     if (state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                     state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
@@ -89,31 +99,35 @@ private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: Park
     HorizontalDivider(color = StayColors.Border)
     Text("검색 위치", fontSize = 18.sp, color = StayColors.Secondary)
     val searchLabel = when (state.locationState) {
-        LocationUiState.IDLE, LocationUiState.READY -> "내 주변 검색"
+        LocationUiState.IDLE, LocationUiState.READY -> if (state.filtersChanged) "변경한 조건으로 검색" else "내 주변 검색"
         LocationUiState.LOCATING -> "위치 확인 중…"
         else -> "다시 검색"
     }
     PremiumAction(searchLabel, onNearbySearch, Modifier.fillMaxWidth(), !state.loading)
-    if (state.locationState !in listOf(LocationUiState.IDLE, LocationUiState.LOCATING, LocationUiState.READY)) {
+    if (state.developerSearch) Text("검색 기준 · 개발자 입력 위치", color = StayColors.Secondary)
+    if (state.filtersChanged) Text("검색 버튼을 누르면 변경한 조건이 적용됩니다.", color = StayColors.Secondary)
+    else if (state.appliedFilters != null) Text("검색 완료 · ${state.total}곳", color = StayColors.Secondary)
+    if (!state.developerSearch && state.locationState !in listOf(LocationUiState.IDLE, LocationUiState.LOCATING, LocationUiState.READY)) {
         Text(state.locationMessage, color = StayColors.Secondary, fontSize = 18.sp)
     }
     if (state.locationState == LocationUiState.PERMISSION_DENIED || state.locationState == LocationUiState.DISABLED) {
         TextButton(onClick = viewModel::showLocationAccessInformation) { Text("위치 사용 안내") }
     }
     OutlinedTextField(state.radiusMeters, { viewModel.updateFilters(radius = it) }, label = { Text("검색 반경(m)") },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
     OutlinedTextField(state.plannedMinutes, { viewModel.updateFilters(minutes = it) }, label = { Text("예상 이용 시간(분)") },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
     Text("대기 목적", color = StayColors.Secondary, fontSize = 18.sp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         ParkingPurpose.entries.forEach { purpose ->
-            FilterChip(state.purpose == purpose, { viewModel.updateFilters(purpose = purpose) }, label = { Text(purpose.label()) }, modifier = Modifier.weight(1f))
+            FilterChip(state.purpose == purpose, { viewModel.updateFilters(purpose = purpose) }, label = { Text(purpose.label()) }, modifier = Modifier.weight(1f), enabled = !state.loading)
         }
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("무료만 보기", Modifier.weight(1f), fontSize = 19.sp)
-        Switch(state.freeOnly, { viewModel.updateFilters(freeOnly = it) })
+        Switch(state.freeOnly, { viewModel.updateFilters(freeOnly = it) }, enabled = !state.loading)
     }
+    Text("반경은 현재 위치에서의 거리, 이용 시간은 요금 추정에 사용됩니다.", color = StayColors.Secondary)
     ParkingDeveloperCoordinates(state, viewModel)
 }
 
@@ -125,7 +139,7 @@ private fun ParkingResults(state: ParkingUiState, selectedId: String?, modifier:
         if (state.places.isEmpty() && !state.loading && state.error == null) item {
             Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 StayIcon("PARKING", Modifier.size(42.dp), StayColors.Secondary)
-                Text("검색 결과가 없습니다.", fontSize = 23.sp)
+                Text(state.emptyResultsLabel(), fontSize = 23.sp)
                 Text("주변을 검색하거나 조건을 변경하세요.", color = StayColors.Secondary, fontSize = 19.sp)
             }
         }
@@ -163,7 +177,14 @@ private fun ParkingSelectedInfo(place: ParkingPlace, navigationStatus: Navigatio
         InfoLine("주소", place.address ?: "정보 없음")
         Text("예상 이용요금", fontSize = 18.sp, color = StayColors.Secondary)
         Text(place.feeLabel(), fontSize = 30.sp, color = StayColors.Blue, fontWeight = FontWeight.Bold)
-        place.feePolicy.rawText?.let { Text(it, fontSize = 18.sp, color = StayColors.Secondary) }
+        val fee = place.feePolicy
+        if (fee.basicMinutes != null && fee.basicFeeKrw != null && fee.basicMinutes > 0) {
+            InfoLine("기본 요금", "${fee.basicMinutes}분 ${fee.basicFeeKrw}원")
+        }
+        if (fee.additionalUnitMinutes != null && fee.additionalUnitFeeKrw != null && fee.additionalUnitMinutes > 0) {
+            InfoLine("추가 요금", "${fee.additionalUnitMinutes}분당 ${fee.additionalUnitFeeKrw}원")
+        }
+        fee.rawText?.let { Text(it, fontSize = 18.sp, color = StayColors.Secondary) }
         InfoLine("운영시간", place.openingHoursText ?: "정보 없음")
         InfoLine("이용 상태", place.operatingStatus.label())
         InfoLine("허용 용도", place.allowedUse.allowedUseLabel())
@@ -185,11 +206,20 @@ private fun ParkingSelectedInfo(place: ParkingPlace, navigationStatus: Navigatio
         PremiumAction("이 장소에서 대기", onWaiting, Modifier.fillMaxWidth(), secondary = true)
     }
 }
+private fun ParkingUiState.emptyResultsLabel() = when {
+    appliedFilters != null -> "조건에 맞는 장소가 없습니다."
+    locationState !in listOf(LocationUiState.IDLE, LocationUiState.READY) -> "위치를 확인한 뒤 검색할 수 있습니다."
+    else -> "내 주변 검색을 시작하세요."
+}
 private fun ParkingPurpose.label() = when (this) { ParkingPurpose.PICKUP -> "픽업"; ParkingPurpose.SHORT_WAIT -> "단기"; ParkingPurpose.LONG_STAY -> "장기" }
 private fun ParkingPlace.feeLabel() = when (feeEstimateStatus) {
     FeeEstimateStatus.FREE -> "무료"
     FeeEstimateStatus.ESTIMATED -> estimatedFee?.let { "약 ${it}원" } ?: "요금 미확인"
-    FeeEstimateStatus.UNKNOWN -> "요금 미확인"
+    FeeEstimateStatus.UNKNOWN -> when {
+        feePolicy.rawText?.substringBefore(" / ") == "유료" -> "유료 · 예상 요금 미확인"
+        feePolicy.rawText?.substringBefore(" / ") == "혼합" -> "무료·유료 혼합 · 조건 확인"
+        else -> "요금 미확인"
+    }
 }
 private fun ParkingPlace.distanceLabel() = distanceMeters?.let { if (it < 1000) "${it}m" else String.format("%.1fkm", it / 1000.0) } ?: "거리 미확인"
 private fun ParkingType.label() = when (this) { ParkingType.PARKING_LOT -> "주차장"; ParkingType.ON_STREET_PARKING -> "노상주차장"; ParkingType.PUBLIC_REST_AREA -> "휴게소"; ParkingType.PICKUP_ZONE -> "승하차 구역"; ParkingType.TIME_LIMITED_ZONE -> "시간제 허용 구역" }

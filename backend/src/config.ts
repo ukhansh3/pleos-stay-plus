@@ -35,7 +35,7 @@ export interface AppConfig {
   supabasePublishableKey: string | null;
   supabaseSecretKey: string | null;
   pickupStorage: "disabled" | "memory" | "supabase";
-  publicWebBaseUrl: string;
+  publicWebBaseUrl: string | null;
   pickupInvitationHmacSecret: string | null;
   pickupProximityMaxAccuracyMeters: number | null;
   pickupProximityMaxAgeMs: number | null;
@@ -60,11 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   }
   const supabaseUrl = env.SUPABASE_URL?.trim() || null;
   if (supabaseUrl && new URL(supabaseUrl).protocol !== "https:") throw new Error("SUPABASE_URL must use HTTPS");
-  const publicWebBaseUrl = env.PUBLIC_WEB_BASE_URL?.trim() || "http://localhost:3001";
-  const publicWebUrl = new URL(publicWebBaseUrl);
-  if (publicWebUrl.protocol !== "https:" && publicWebUrl.hostname !== "localhost" && publicWebUrl.hostname !== "127.0.0.1") {
-    throw new Error("PUBLIC_WEB_BASE_URL must use HTTPS outside loopback development");
-  }
+  const publicWebBaseUrl = env.PUBLIC_WEB_BASE_URL?.trim() || null;
   const optionalPositive = (value: string | undefined, name: string): number | null =>
     value === undefined || value.trim() === "" ? null : positiveNumber(value, 1, name);
 

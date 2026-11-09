@@ -23,9 +23,10 @@ import org.json.JSONObject
 
 /** Memory-only connection UI state survives Activity recreation; credentials never enter SavedState. */
 class RealtimeUiSession:ViewModel() {
- var url by mutableStateOf(if(BuildConfig.DEBUG) "http://10.0.2.2:3010/api/v1/realtime/" else "")
- var credential by mutableStateOf("");var authUrl by mutableStateOf("");var publicKey by mutableStateOf("")
- var local by mutableStateOf(BuildConfig.DEBUG);var ready by mutableStateOf(false);var error by mutableStateOf("");var loaded=false
+ var url by mutableStateOf(RealtimeDeployment.endpoint)
+ var credential by mutableStateOf("");var authUrl by mutableStateOf(RealtimeDeployment.auth);var publicKey by mutableStateOf(RealtimeDeployment.key)
+ var local by mutableStateOf(false);var ready by mutableStateOf(false);var error by mutableStateOf("");var loaded by mutableStateOf(false)
+ var developerSettings by mutableStateOf(false)
 }
 @Composable fun RealtimeEntry(context: Context, safety: WaitingSafetyGateway,
  foreground: Boolean = true,
@@ -39,21 +40,39 @@ class RealtimeUiSession:ViewModel() {
  var url by session::url;var credential by session::credential;var authUrl by session::authUrl
  var publicKey by session::publicKey;var local by session::local;var ready by session::ready;var error by session::error
  val scope=rememberCoroutineScope()
- LaunchedEffect(Unit){if(session.loaded)return@LaunchedEffect;session.loaded=true;try{val saved=withContext(Dispatchers.IO){
+ LaunchedEffect(Unit){if(session.loaded)return@LaunchedEffect;try{val saved=withContext(Dispatchers.IO){
   // Completed downloads are a cache, never a cross-session authority grant.
   File(app.noBackupFilesDir,"realtime/downloads").listFiles()?.forEach{it.delete()}
   configStore.read()
- };if(saved!=null){val j=JSONObject(saved);url=j.getString("url");credential=j.optString("token");authUrl=j.optString("authUrl");publicKey=j.optString("publicKey");local=BuildConfig.DEBUG && j.optBoolean("local",true)}}catch(e:Exception){error="연결 설정 복원 실패"}}
+ };if(saved!=null){
+  val j=JSONObject(saved)
+  val savedLocal=j.optBoolean("local",true)
+  if ((BuildConfig.DEBUG && savedLocal) || (!savedLocal &&
+      (!RealtimeDeployment.configured(url,authUrl,publicKey) || j.optString("url").trimEnd('/') == url.trimEnd('/')))) {
+   url=j.getString("url");credential=j.optString("token");authUrl=j.optString("authUrl");publicKey=j.optString("publicKey");local=savedLocal
+  }
+ }
+ }catch(c:kotlinx.coroutines.CancellationException){throw c}
+ catch(_:Exception){error="저장한 연결 설정을 불러오지 못했습니다."}
+ session.ready=if(local) validLocalRealtime(url,credential) else RealtimeDeployment.configured(url,authUrl,publicKey)
+ session.loaded=true
+ }
  val safetyState by safety.state.collectAsState()
  if(!safetyState.canUse){if(visible) presentation {Column(Modifier.fillMaxSize().padding(28.dp)){
   Text("자료함 연결",fontSize=38.sp)
   NoticePanel("정차 확인 필요", "정차 상태 확인 후 연결할 수 있습니다.",true)
  }};return}
+ if(!session.loaded){if(visible) presentation { NoticePanel("PC 연결 준비 중", "서비스 설정을 확인하고 있습니다.") };return}
  if(!ready){if(visible) presentation {Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),verticalArrangement=Arrangement.spacedBy(22.dp)){
   Text("자료함 연결",fontSize=38.sp)
   FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth()) {
-  Text("PC 연결 설정",fontSize=28.sp)
-  if(BuildConfig.DEBUG){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(local,{local=it});Text("로컬 서버 연결")}}
+  if(!BuildConfig.DEBUG || !session.developerSettings) {
+   NoticePanel("PC 연결을 준비할 수 없습니다", "서비스 주소가 준비되면 PC 연결 코드를 발급할 수 있습니다.", true)
+   if(BuildConfig.DEBUG) TextButton(onClick={session.developerSettings=true}) { Text("개발자 연결 설정") }
+   return@FeaturePanel
+  }
+  Text("개발자 연결 설정",fontSize=28.sp)
+  if(BuildConfig.DEBUG){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(local,{ local=it; if(it && url.isBlank()) url="http://10.0.2.2:3010/api/v1/realtime/" });Text("로컬 서버 연결")}}
   OutlinedTextField(url,{url=it},label={Text("서버 주소")},modifier=Modifier.fillMaxWidth(),singleLine=true)
   if(local) OutlinedTextField(credential,{credential=it},label={Text("로컬 연결 토큰")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
   else {
@@ -62,11 +81,10 @@ class RealtimeUiSession:ViewModel() {
   }
   if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
   Button(onClick={scope.launch{try{
-   if(local){require(BuildConfig.DEBUG && credential.length>=32);require(java.net.URI(url).host in listOf("10.0.2.2","127.0.0.1","localhost"))}
-   else {require(java.net.URI(url).scheme=="https" && java.net.URI(authUrl).scheme=="https");require(publicKey.isNotBlank())}
+   require(if(local) validLocalRealtime(url,credential) else RealtimeDeployment.configured(url,authUrl,publicKey))
    RealtimeApi(url){credential}
    withContext(Dispatchers.IO){configStore.write(JSONObject().put("url",url).put("token",if(local)credential else "").put("local",local).put("authUrl",authUrl).put("publicKey",publicKey).toString())};ready=true
-  }catch(e:Exception){error="서버 주소와 연결 정보를 확인해 주세요."}}}){Text("연결")}
+  }catch(c:kotlinx.coroutines.CancellationException){throw c}catch(_:Exception){error="서버 주소와 연결 정보를 확인해 주세요."}}}){Text("연결")}
  }}};return}
  val provider=remember(authUrl,publicKey,local){if(local)null else RealtimeIdentityProvider(authUrl,publicKey,RealtimeTokenStore(app,"realtime-auth-"+java.security.MessageDigest.getInstance("SHA-256").digest(authUrl.toByteArray()).joinToString(""){"%02x".format(it)}+".bin"))}
  val modelKey=remember(url,authUrl,local,credential){java.security.MessageDigest.getInstance("SHA-256").digest((url+authUrl+local+credential).toByteArray()).joinToString(""){"%02x".format(it)}}
@@ -86,3 +104,10 @@ class RealtimeUiSession:ViewModel() {
  }
 }
 }
+
+private fun validLocalRealtime(url: String, credential: String): Boolean = BuildConfig.DEBUG && credential.length >= 32 &&
+    runCatching {
+        val uri = java.net.URI(url)
+        uri.scheme == "http" && uri.host in listOf("10.0.2.2", "127.0.0.1", "localhost") &&
+            uri.path.trimEnd('/') == "/api/v1/realtime" && uri.userInfo == null && uri.query == null && uri.fragment == null
+    }.getOrDefault(false)

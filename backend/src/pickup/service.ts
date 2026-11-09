@@ -4,7 +4,7 @@ import { PickupApiError } from "./domain.js";
 import type { PickupRepository, ProximityPolicy } from "./repository.js";
 
 export interface PickupServiceOptions {
-  publicWebBaseUrl: string;
+  publicWebBaseUrl: string | null;
   invitationHmacSecret: string;
   invitationTtlMs?: number;
   proximityPolicy?: ProximityPolicy | null;
@@ -32,10 +32,12 @@ export class PickupService {
   }
 
   async issueInvitation(ownerUid: string, sessionId: string, idempotencyKey: string): Promise<{ invitationId: string; shareUrl: string; expiresAt: string }> {
+    const base = publicPickupBase(this.options.publicWebBaseUrl);
+    if (!base) throw new PickupApiError(503, "PICKUP_SHARE_NOT_CONFIGURED", "픽업 공유 주소가 설정되지 않았습니다. 앱 관리자에게 문의해 주세요.");
     const token = createHmac("sha256", this.options.invitationHmacSecret).update(`${sessionId}:${idempotencyKey}`).digest("base64url");
     const expiresAt = new Date(this.now().getTime() + this.invitationTtlMs).toISOString();
     const issued = await this.repository.issueInvitation({ ownerUid, sessionId, idempotencyKey, tokenHash: hashToken(token), expiresAt, now: this.isoNow() });
-    const shareUrl = new URL(`/share/${encodeURIComponent(token)}`, this.options.publicWebBaseUrl).toString();
+    const shareUrl = new URL(`/share/${encodeURIComponent(token)}`, base).toString();
     return { invitationId: issued.invitationId, shareUrl, expiresAt: issued.expiresAt };
   }
 
@@ -83,6 +85,20 @@ export class PickupService {
   }
 
   private isoNow(): string { return this.now().toISOString(); }
+}
+
+function publicPickupBase(value: string | null): URL | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/\.$/, "").toLowerCase();
+    const publicName = /^[a-z0-9.-]+\.[a-z][a-z0-9-]*$/.test(host)
+      && ![".localhost", ".local", ".internal", ".home.arpa"].some(suffix => host.endsWith(suffix));
+    return url.protocol === "https:" && publicName && !url.username && !url.password
+      && !url.search && !url.hash && url.pathname === "/" ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 export function hashToken(token: string): string {

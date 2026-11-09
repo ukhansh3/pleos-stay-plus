@@ -28,7 +28,7 @@ Pickup v0.3 is independent from Waiting and uses `/api/v1/pickup/**`. Driver and
 
 The versioned schema/RLS migrations are under `../supabase/migrations/` and must be applied in filename order. Migrations through `20261103002000` were applied to the approved Supabase project on 2026-11-03 and verified with temporary anonymous users. The atomic-command migration `20261103003000` requires a separate reviewed application before live verification.
 
-For Supabase persistence, set `PICKUP_STORAGE=supabase` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, server-only `SUPABASE_SECRET_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. The secret key is sent only through Supabase's `apikey` header and never as a bearer token.
+For Supabase persistence, set `PICKUP_STORAGE=supabase` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, server-only `SUPABASE_SECRET_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. Set PUBLIC_WEB_BASE_URL to the approved HTTPS web origin without a path. If it is missing or local, invitation creation returns PICKUP_SHARE_NOT_CONFIGURED before storing a new invitation. The secret key is sent only through Supabase's `apikey` header and never as a bearer token.
 
 For loopback development only, `PICKUP_DEV_MODE=true` or `PICKUP_STORAGE=memory` selects the process-memory adapter. It is refused on non-loopback hosts and still validates real Supabase JWTs. Do not expose it through a public tunnel.
 

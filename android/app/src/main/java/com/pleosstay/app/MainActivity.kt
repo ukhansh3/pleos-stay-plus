@@ -164,6 +164,10 @@ class MainActivity : ComponentActivity() {
                 val parkingState by parkingViewModel.state.collectAsState()
                 val waitingState by waitingModel.state.collectAsState()
                 val pickupState by pickupViewModel.state.collectAsState()
+                val restState by waitingDependencies.rest.state.collectAsState()
+                val waitingShortcut = waitingState.active?.takeIf { waitingState.canUse }?.let {
+                    if (waitingState.now >= it.plannedEndAt) "대기 예정 시간 지남" else "진행 중인 대기"
+                }
                 LaunchedEffect(waitingState.sessions, pickupState.session) {
                     val linkedId = pickupState.session?.waitingSessionId
                     if (hasEndedLinkedWaiting(linkedId, waitingState.sessions)) pickupViewModel.endLinkedWaiting()
@@ -173,6 +177,11 @@ class MainActivity : ComponentActivity() {
                 StayAppShell(
                     onEnter = { route -> if (route != StayRoute.HOME) requestVehicleInformation() },
                     requestedRoute = activityUi.destination,
+                    waitingShortcut = waitingShortcut,
+                    waitingDeadlineKey = waitingState.active?.takeIf {
+                        waitingState.canUse && documentVisible && waitingState.now >= it.plannedEndAt
+                    }?.let { it.id + ":" + it.plannedEndAt },
+                    restActive = safety.canUse && restState.session?.end == null && restState.session != null,
                     onRequestedRouteHandled = host.ui::handledNavigation,
                     navigationGuard = { from, to, proceed ->
                         if(host.ui.takeNavigationPermit(to))proceed()

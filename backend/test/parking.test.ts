@@ -79,7 +79,7 @@ const config = (cacheFile: string): AppConfig => ({
   supabasePublishableKey: null,
   supabaseSecretKey: null,
   pickupStorage: "disabled",
-  publicWebBaseUrl: "http://localhost:3001",
+  publicWebBaseUrl: "https://pickup.example.test",
   pickupInvitationHmacSecret: null,
   pickupProximityMaxAccuracyMeters: null,
   pickupProximityMaxAgeMs: null,
@@ -163,6 +163,15 @@ test("provider reads paginated public data JSON and deduplicates by provider id"
   assert.equal(calls.length, 2);
   assert.equal(calls[0]?.searchParams.get("serviceKey"), "test-key");
   assert.equal(result.places.length, 1);
+});
+
+test("zero daily-ticket placeholders do not suppress documented parking rates", () => {
+  const record = normalizePublicDataItem({
+    prkplceNo: "qa-paid", prkplceNm: "QA", latitude: "37.5", longitude: "127.0",
+    parkingchrgeInfo: "유료", basicTime: "30", basicCharge: "1000",
+    addUnitTime: "10", addUnitCharge: "300", dayCmmtktAdjTime: "0", dayCmmtkt: "0",
+  })!;
+  assert.equal(estimateFee(record, 45).estimatedFeeKrw, 1600);
 });
 
 test("fee estimate is conservative for complex terms and calculates clear linear terms", () => {
