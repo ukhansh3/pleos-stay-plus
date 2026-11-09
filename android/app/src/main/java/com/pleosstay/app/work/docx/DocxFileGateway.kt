@@ -28,6 +28,8 @@ class AndroidDocxFileGateway(context:Context):DocxFileGateway {
   check(android.os.Build.VERSION.SDK_INT>=29){"Downloads export requires API29"}
   var created:Uri?=null
   return try{withContext(Dispatchers.IO){
+   // Keep the API guard in the coroutine containing the MediaStore access.
+   if(android.os.Build.VERSION.SDK_INT<29) error("Downloads export requires API29")
    check(permitted());OoxmlDocxEngine.open(bytes)
    val leaf=name.substringAfterLast('/').substringAfterLast('\\').filterNot{it.isISOControl()}.take(80).trim().ifBlank{"문서.docx"}
    val filename=if(leaf.endsWith(".docx",true))leaf else "$leaf.docx"

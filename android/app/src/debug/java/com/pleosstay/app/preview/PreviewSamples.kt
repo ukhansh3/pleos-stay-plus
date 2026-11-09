@@ -74,7 +74,14 @@ internal fun previewSample(screen: PreviewScreen, resources: Resources): Feature
         PreviewScreen.WORK_EDITOR -> {
             fun p(id: Int, text: String, bold: Boolean = false, points: Float = 16f) =
                 DocxParagraph(id, listOf(DocxRun(text, "Noto Sans CJK KR", points, bold, false, false, "273B63")), "left", true)
-            val image = resources.openRawResource(R.drawable.work_laptop).use { it.readBytes() }
+            // Decode the drawable through its typed API; retain the same source artwork.
+            val bitmap = checkNotNull(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.work_laptop, android.graphics.BitmapFactory.Options().apply { inScaled = false }))
+            val image = try {
+                java.io.ByteArrayOutputStream().use { output ->
+                    check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output))
+                    output.toByteArray()
+                }
+            } finally { bitmap.recycle() }
             FeatureInspectionState(docx = DocxEditorState(draft = draft, dirty = true, canUndo = true, message = "",
                 view = DocxView(listOf(p(0, "예시 프로젝트 제안서", true, 24f), p(1, "주요 기능과 작업 계획을 정리합니다."),
                     p(2, "기능", true), p(3, "설명", true), p(4, "Study"), p(5, "자료 열람과 메모"), p(6, "Work"), p(7, "문서 작성과 편집")),

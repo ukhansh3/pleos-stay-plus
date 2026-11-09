@@ -61,19 +61,22 @@ fun StayHomeScreen(waiting: WaitingUiState, pickup: PickupUiState, navigate: (St
 @Composable
 private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigate: (StayRoute) -> Unit) {
     Box(Modifier.fillMaxWidth().heightIn(min = height)) {
-        Box(Modifier.matchParentSize().fillMaxWidth()) {
+        // Reserve the narrow photo band above status cards so the original car stays visible.
+        Box(if (wide) Modifier.matchParentSize().fillMaxWidth()
+            else Modifier.fillMaxWidth().height(360.dp).align(Alignment.TopCenter)) {
             Image(painterResource(R.drawable.hero_daylight_expanded), null,
                 Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alignment = Alignment.BottomEnd, alpha = .82f)
+                alignment = if (wide) Alignment.BottomEnd else Alignment.BottomCenter, alpha = .82f)
             // Match the surrounding navy at every edge, with a gradual falloff
             // into the photograph. Foreground text and status cards stay unmasked.
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(
                 0f to StayColors.Background,
                 .04f to StayColors.Background.copy(alpha = .92f),
-                .12f to StayColors.Background.copy(alpha = .58f),
-                .24f to StayColors.Background.copy(alpha = .28f),
-                .48f to StayColors.Background.copy(alpha = .12f),
+                .12f to StayColors.Background.copy(alpha = .82f),
+                .24f to StayColors.Background.copy(alpha = .78f),
+                .46f to StayColors.Background.copy(alpha = .72f),
+                .56f to StayColors.Background.copy(alpha = .12f),
                 .70f to StayColors.Background.copy(alpha = .10f),
                 .82f to StayColors.Background.copy(alpha = .38f),
                 .94f to StayColors.Background.copy(alpha = .88f),
@@ -98,7 +101,7 @@ private fun HomeHero(waiting: WaitingUiState, height: Dp, wide: Boolean, navigat
             }
         } else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { BrandHeading() }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(200.dp))
             HomeStatus(waiting, navigate)
         }
     }

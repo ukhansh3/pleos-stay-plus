@@ -54,20 +54,23 @@ internal fun PreviewFeature(screen: PreviewScreen, sampleOverride: FeatureInspec
         LocalOnBackPressedDispatcherOwner provides owners, LocalActivityResultRegistryOwner provides owners) {
         PleosStayPlusTheme {
             // Reuse the actual rail and screens. Only the host framing is inspection-specific.
-            Row(Modifier.fillMaxSize().background(StayColors.Background)) {
-                StayNavigationRail(route.group, {}, 180.dp)
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    StayBackBar({})
-                    Box(Modifier.weight(1f)) {
-                        when (screen) {
-                            PreviewScreen.PARKING -> ParkingScreen(models.parking, {})
-                            PreviewScreen.WAITING -> WaitingScreen(models.waiting, null, onRest = {}, onStudy = {}, onWork = {})
-                            PreviewScreen.PICKUP -> PickupScreen(models.pickup, {})
-                            PreviewScreen.REALTIME -> FileTransferScreen(models.files)
-                            PreviewScreen.REST -> RestScreen(models.rest, {}, {})
-                            PreviewScreen.STUDY -> StudyScreen(models.study, {})
-                            PreviewScreen.WORK_LIBRARY -> WorkScreen(models.work, {}, {}, {})
-                            PreviewScreen.WORK_EDITOR -> DocxEditorPanel(models.work.docx, { _, _ -> }, {})
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val railWidth = if (maxWidth >= 1300.dp) 180.dp else 112.dp
+                Row(Modifier.fillMaxSize().background(StayColors.Background)) {
+                    StayNavigationRail(route.group, {}, railWidth)
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        StayBackBar({})
+                        Box(Modifier.weight(1f)) {
+                            when (screen) {
+                                PreviewScreen.PARKING -> ParkingScreen(models.parking, {})
+                                PreviewScreen.WAITING -> WaitingScreen(models.waiting, null, onRest = {}, onStudy = {}, onWork = {})
+                                PreviewScreen.PICKUP -> PickupScreen(models.pickup, {})
+                                PreviewScreen.REALTIME -> FileTransferScreen(models.files)
+                                PreviewScreen.REST -> RestScreen(models.rest, {}, {})
+                                PreviewScreen.STUDY -> StudyScreen(models.study, {})
+                                PreviewScreen.WORK_LIBRARY -> WorkScreen(models.work, {}, {}, {})
+                                PreviewScreen.WORK_EDITOR -> DocxEditorPanel(models.work.docx, { _, _ -> }, {})
+                            }
                         }
                     }
                 }

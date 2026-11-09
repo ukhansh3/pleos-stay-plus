@@ -211,7 +211,7 @@ internal fun QuizPanel(state: QuizState, enabled: Boolean, answer: (String, Int)
 
 @Composable
 internal fun QuizQuestionPanel(question:QuizQuestion,selected:Int?,enabled:Boolean,choose:(Int)->Unit) {
-    Text(question.prompt,fontSize=32.sp,color=GameInk,fontWeight=FontWeight.Bold,modifier=Modifier.padding(vertical=20.dp))
+    Text(question.prompt,fontSize=32.sp,lineHeight=44.sp,color=GameInk,fontWeight=FontWeight.Bold,modifier=Modifier.padding(vertical=20.dp))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns=if(maxWidth>=700.dp)2 else 1
         Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {

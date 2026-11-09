@@ -30,7 +30,7 @@ internal interface MicrophoneRecorder {
     fun release()
 }
 
-/** Standard Android API only. RECORD_AUDIO is requested by the host's explicit user flow. */
+/** Standard Android API only. The host must obtain explicit RECORD_AUDIO consent before capture. */
 class AndroidKaraokeMicrophone internal constructor(
     private val platform: MicrophonePlatform,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -139,10 +139,14 @@ private class AndroidMicrophonePlatform(context: Context, override val sampleRat
             throw MicrophonePermissionException()
         val minimum = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val frameSize = (sampleRate * 0.05).toInt()
-        val record = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.MIC)
+        val builder = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.MIC)
             .setAudioFormat(AudioFormat.Builder().setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-            .setBufferSizeInBytes(maxOf(minimum, frameSize * 4)).build()
+            .setBufferSizeInBytes(maxOf(minimum, frameSize * 4))
+        // Recheck immediately before allocation; Android can still revoke permission after this.
+        val record = if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            try { builder.build() } catch (error: SecurityException) { throw MicrophonePermissionException(error) }
+        } else throw MicrophonePermissionException()
         return AndroidMicrophoneRecorder(context, record, sampleRate)
     }
 }
