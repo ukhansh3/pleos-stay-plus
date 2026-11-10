@@ -20,11 +20,41 @@ import kotlinx.coroutines.withContext
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),verticalArrangement=Arrangement.spacedBy(22.dp)) {
   Text("자료함 PIN",style=MaterialTheme.typography.headlineLarge)
   FeaturePanel(Modifier.widthIn(max=640.dp).fillMaxWidth()) {
-  Text(if(pins.isConfigured())"파일 화면 PIN 잠금" else "PIN 설정 · 6~12자리")
+  val configured = pins.isConfigured()
+  Text(if (configured) "자료함 PIN을 입력해 주세요." else "숫자 6~12자리로 PIN을 만들어 주세요.")
   OutlinedTextField(pin,{pin=it},visualTransformation=PasswordVisualTransformation(),label={Text("PIN")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(keyboardType=androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-  if(!pins.isConfigured())OutlinedTextField(confirm,{confirm=it},visualTransformation=PasswordVisualTransformation(),label={Text("PIN 확인")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(keyboardType=androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+  if(!configured)OutlinedTextField(confirm,{confirm=it},visualTransformation=PasswordVisualTransformation(),label={Text("PIN 확인")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(keyboardType=androidx.compose.ui.text.input.KeyboardType.NumberPassword))
   if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error)
-  Button(enabled=!busy,onClick={busy=true;scope.launch{try{val accepted=withContext(Dispatchers.IO){if(!pins.isConfigured()){require(pin==confirm){"PIN_MISMATCH"};pins.configure(pin)};pins.verify(pin)};if(accepted)model.unlockAfterUserVerification() else message="PIN이 일치하지 않습니다"}catch(e:Exception){message=if(e.message=="PIN_MISMATCH")"PIN이 일치하지 않습니다." else "PIN을 확인해 주세요. 6~12자리를 입력할 수 있습니다."}finally{pin="";confirm="";busy=false}}}){Text("잠금 해제")}
+  Button(enabled = !busy, onClick = {
+   val submittedPin = pin
+   val repeatedPin = confirm
+   busy = true
+   scope.launch {
+    try {
+     val accepted = withContext(Dispatchers.IO) {
+      if (!pins.isConfigured()) {
+       require(submittedPin == repeatedPin) { "PIN_MISMATCH" }
+       require(submittedPin.matches(Regex("[0-9]{6,12}"))) { "PIN_FORMAT" }
+       pins.configure(submittedPin)
+      }
+      pins.verify(submittedPin)
+     }
+     if (accepted) model.unlockAfterUserVerification()
+     else message = "PIN이 맞지 않아요. 다시 입력해 주세요."
+    } catch (e: kotlinx.coroutines.CancellationException) {
+     throw e
+    } catch (e: Exception) {
+     message = when (e.message) {
+      "PIN_MISMATCH" -> "두 PIN이 달라요. 다시 입력해 주세요."
+      "PIN_FORMAT" -> "숫자 6~12자리를 입력해 주세요."
+      "PIN_RATE_LIMITED" -> "입력이 여러 번 틀렸어요. 잠시 후 다시 시도해 주세요."
+      else -> "PIN을 확인할 수 없어요. 다시 시도해 주세요."
+     }
+    } finally {
+     pin = ""; confirm = ""; busy = false
+    }
+   }
+  }) { Text(if (configured) "잠금 해제" else "PIN 설정") }
   }
  }
 }

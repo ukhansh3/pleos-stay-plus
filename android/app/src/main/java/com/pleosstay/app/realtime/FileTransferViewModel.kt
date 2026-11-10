@@ -293,7 +293,7 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
     private fun finishWorkTransfer(result: JSONObject) {
         checkAccess()
         val version = result.getInt("versionNo")
-        mutable.update { it.copy(message="업로드 완료 · v$version · PC에서 다운로드하세요.") }
+        mutable.update { it.copy(message="자료함에 버전 ${version}을 올렸어요. PC에서 내려받을 수 있어요.") }
     }
 
     private suspend fun workTarget(): WorkTransferTarget {

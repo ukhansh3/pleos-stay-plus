@@ -53,7 +53,7 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
         confirmButton = { TextButton(onClick = { guide = false }) { Text("확인") } })
     if (confirmation != null && !state.blocked && active) AlertDialog(onDismissRequest = { confirmation = null },
         title = { Text(when (confirmation) { "reissue" -> "QR을 다시 발급할까요?"; "complete" -> "합류를 완료할까요?"; else -> "픽업을 취소할까요?" }) },
-        text = { Text(if (confirmation == "reissue") "기존 초대 링크와 참가자 연결이 해제됩니다." else "위치 공유와 참가자 연결이 종료됩니다.") },
+        text = { Text(if (confirmation == "reissue") "기존 링크를 쓸 수 없게 되고, 참가자 연결도 끊겨요." else "위치 공유와 참가자 연결이 종료됩니다.") },
         confirmButton = { TextButton(onClick = {
             val action = confirmation; confirmation = null
             when (action) { "reissue" -> viewModel.issueInvitation(); "complete" -> viewModel.complete(); else -> viewModel.cancel() }
@@ -108,20 +108,20 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
 @Composable
 private fun PickupInvitationPanel(state: PickupUiState, qr: Bitmap?, inviteValid: Boolean, enlarge: () -> Unit, guide: () -> Unit, issue: () -> Unit, compact: Boolean) {
     val active = state.session?.status == PickupSessionStatus.ACTIVE
-    Text("Pickup 초대", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+    Text("픽업 초대", fontSize = 27.sp, fontWeight = FontWeight.Bold)
     Text("참가자 1명 · 60분 유효", color = StayColors.Secondary, fontSize = 18.sp)
     BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = if (compact) 180.dp else 300.dp).background(StayColors.Background), contentAlignment = Alignment.Center) {
         if (qr != null) Image(qr.asImageBitmap(), "Pickup 공유 링크 QR", Modifier.size(minOf((maxWidth - 20.dp).coerceAtLeast(0.dp), if (compact) 230.dp else 340.dp)).background(Color.White))
         else Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             StayIcon("PICKUP", Modifier.size(72.dp), StayColors.Secondary)
-            Text(when { state.session == null -> "초대 QR 발급 전"; !active -> "종료된 초대"; state.invitation != null && !inviteValid -> "초대가 만료되었습니다."; state.invitation != null -> "공유 링크를 사용할 수 없습니다. 다시 발급해 주세요."; else -> "초대를 발급하세요." }, fontSize = 21.sp, color = StayColors.Secondary)
+            Text(when { state.session == null -> "픽업을 시작하면 초대 QR을 만들 수 있어요."; !active -> "종료된 초대"; state.invitation != null && !inviteValid -> "초대가 만료됐어요. QR을 다시 만들어 주세요."; state.invitation != null -> "공유 링크를 사용할 수 없습니다. 다시 발급해 주세요."; else -> "초대를 발급하세요." }, fontSize = 21.sp, color = StayColors.Secondary)
         }
     }
     if (qr != null) {
         Text("유효기한 ${state.invitation?.expiresAt?.timeLabel()}", color = StayColors.Secondary, fontSize = 18.sp)
         PremiumAction("QR 크게 보기", enlarge, Modifier.fillMaxWidth(), secondary = true)
     }
-    if (active) PremiumAction(if (state.invitation == null) "QR 발급" else "QR 재발급", issue, Modifier.fillMaxWidth(), !state.busy, true)
+    if (active) PremiumAction(if (state.invitation == null) "QR 발급" else "QR 다시 만들기", issue, Modifier.fillMaxWidth(), !state.busy, true)
     TextButton(onClick = guide, modifier = Modifier.heightIn(min = 56.dp)) { Text("QR 공유 안내", fontSize = 20.sp) }
 }
 
@@ -144,12 +144,12 @@ private fun PickupStatusPanel(state: PickupUiState, start: () -> Unit, complete:
             InfoLine("위치 공유", if (state.sharingLocation) "공유 중" else "공유 중지")
             if (state.syncing) Text("참가자 상태 확인 중…", color = StayColors.Secondary, fontSize = 19.sp)
             state.lastLocationAt?.let { InfoLine("최근 갱신", it.timeLabel()) }
-            if (state.proximityCandidate && active) Text("픽업 대상이 가까이 있습니다. 합류를 확인하세요.", color = StayColors.Blue, fontSize = 22.sp)
+            if (state.proximityCandidate && active) Text("참가자가 가까이 있어요. 만나면 ‘합류 완료’를 눌러 주세요.", color = StayColors.Blue, fontSize = 22.sp)
             if (active) {
                 PremiumAction("합류 완료", complete, Modifier.fillMaxWidth(), !state.busy)
-                PremiumAction("Pickup 취소", cancel, Modifier.fillMaxWidth(), !state.busy, true)
+                PremiumAction("픽업 취소", cancel, Modifier.fillMaxWidth(), !state.busy, true)
             }
-        } else PremiumAction(if (state.busy) "시작 중…" else "현재 위치로 Pickup 시작", start, Modifier.fillMaxWidth(), !state.busy)
+        } else PremiumAction(if (state.busy) "시작 중…" else "차량 위치에서 픽업 시작", start, Modifier.fillMaxWidth(), !state.busy)
     }
 }
 

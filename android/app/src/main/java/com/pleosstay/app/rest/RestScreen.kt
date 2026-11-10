@@ -136,7 +136,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                         if (active.preset.sound != RestSound.SILENT && !active.targetPrompt) {
                                             OutlinedButton(onClick = { controller.pauseSound(!active.soundPaused) },
                                                 enabled = !state.busy, modifier = Modifier.heightIn(min = 60.dp)) {
-                                                Text(if (active.soundPaused) "사운드 재개" else "사운드 일시정지",fontSize=20.sp)
+                                                Text(if (active.soundPaused) "배경음 다시 재생" else "배경음 일시 정지",fontSize=20.sp)
                                             }
                                         }
                                         OutlinedButton(onClick = { extend = true }, enabled = !state.busy,
@@ -172,7 +172,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                             RestSettingLine("종료 알람", active.preset.alert.label)
                                             if (active.preset.ev) {
                                                 HorizontalDivider(color = StayColors.Border)
-                                                Text("EV 배터리", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                                                Text("차량 배터리", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                                                 Text(evText(state.ev, active.preset.target), fontSize = 20.sp)
                                                 if (state.ev.percent == null) TextButton(onClick = controller::retryEv) { Text("배터리 정보 다시 확인") }
                                             }
@@ -199,7 +199,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                             }
                                         }
                                         HorizontalDivider(color = StayColors.Border)
-                                        if (state.presets.isNotEmpty()) Text("내 프리셋", color = StayColors.Secondary, fontSize = 18.sp)
+                                        if (state.presets.isNotEmpty()) Text("내 휴식 설정", color = StayColors.Secondary, fontSize = 18.sp)
                                         state.presets.forEach { preset ->
                                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 TextButton(onClick = { editingId = preset.id; editor = preset },
@@ -223,7 +223,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                                 enabled = !state.busy && safety.canUse && preset.valid &&
                                                     (!preset.ev || state.ev.percent?.let { it < preset.target } == true))
                                             TextButton(onClick = { controller.savePreset(preset, editingId) }, enabled = !state.busy && preset.valid) {
-                                                Text(if (editingId == null) "내 프리셋으로 저장" else "프리셋 수정 저장")
+                                                Text(if (editingId == null) "내 휴식 설정에 저장" else "변경 사항 저장")
                                             }
                                             TextButton(onClick = { editor = null }) { Text("프리셋 목록") }
                                         }

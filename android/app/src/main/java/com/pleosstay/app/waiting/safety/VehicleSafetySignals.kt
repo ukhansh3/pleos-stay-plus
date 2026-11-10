@@ -54,12 +54,12 @@ internal class VehicleSafetySignals {
         return WaitingSafety(motion, restricted || (requireForeground && !foreground),
             observedAt = if (motion == VehicleMotion.DRIVING) drivingObservedAt else null,
             message = when {
-                requireForeground && !foreground -> "화면이 비활성 상태입니다"
-                restricted -> "플랫폼 주행 제한 중이거나 제한 상태를 확인 중입니다"
-                motion == VehicleMotion.DRIVING -> "차량 이동 확인: Waiting 사용 불가"
-                motion == VehicleMotion.PARKED -> "P 기어 및 정지 상태 확인"
-                park == false -> "P 기어가 아닙니다: Waiting 사용 불가"
-                else -> "차량 정보 미수신·오류·갱신 지연: 주차 상태 확인 불가"
+                requireForeground && !foreground -> "Stay+ 화면으로 돌아와 주세요."
+                restricted -> "주행 제한이 적용됐거나 제한 상태를 확인 중이에요."
+                motion == VehicleMotion.DRIVING -> "차량이 움직이고 있어요. 주차한 뒤 이용해 주세요."
+                motion == VehicleMotion.PARKED -> "주차 상태를 확인했어요."
+                park == false -> "이용하려면 차량을 세우고 기어를 P에 놓아 주세요."
+                else -> "차량 상태를 확인할 수 없어요."
             })
     }
 

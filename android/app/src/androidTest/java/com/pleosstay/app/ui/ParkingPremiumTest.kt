@@ -3,6 +3,8 @@ package com.pleosstay.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
@@ -60,13 +62,14 @@ class ParkingPremiumTest {
         val repository = TestRepository(fail = true)
         compose.setContent {
             model = remember { ParkingViewModel(repository, RecordingNavigation(), TestLocation()) }
-            PleosStayPlusTheme { ParkingScreen(model, model::searchNearby) }
+            PleosStayPlusTheme { Box(Modifier.width(480.dp)) { ParkingScreen(model, model::searchNearby) } }
         }
         compose.onNodeWithText("내 주변 검색").performScrollTo().performClick()
         compose.waitUntil(10_000) { model.state.value.error != null }
-        compose.onNodeWithText("테스트 네트워크 실패").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("주차장 검색 오류").assertIsDisplayed()
+        compose.onNodeWithText("검색 결과 · 0곳").assertIsSelected()
         repository.fail = false
-        compose.onNodeWithText("내 주변 검색").performScrollTo().performClick()
+        compose.onNodeWithTag("parking-retry").performScrollTo().performClick()
         compose.waitUntil(10_000) { model.state.value.places.isNotEmpty() }
         compose.onNodeWithText("테스트 전용 장소").performScrollTo().assertIsDisplayed()
     }

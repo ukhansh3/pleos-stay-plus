@@ -25,15 +25,16 @@ import com.pleosstay.app.parking.navigation.NavigationStatus
 import com.pleosstay.app.ui.premium.*
 
 @Composable
-fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modifier: Modifier = Modifier, onWaiting: () -> Unit = {}) {
+fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modifier: Modifier = Modifier, permissionPending: Boolean = false, onWaiting: () -> Unit = {}) {
     val liveState by viewModel.state.collectAsState()
     val state = featureInspection()?.parking ?: liveState
     val inspectionSelected = featureInspection()?.parking?.selected?.id
     var detailId by rememberSaveable { mutableStateOf(inspectionSelected) }
-    var searchPane by rememberSaveable { mutableIntStateOf(if (state.places.isEmpty() && !state.loading) 0 else 1) }
+    var searchPane by rememberSaveable { mutableIntStateOf(if (state.resultsStatus(permissionPending) == ParkingResultsStatus.IDLE) 0 else 1) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val search = {
+    val search: () -> Unit = search@{
+        if (state.loading || permissionPending) return@search
         focus.clearFocus()
         keyboard?.hide()
         detailId = null
@@ -50,12 +51,12 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
     BoxWithConstraints(modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 16.dp)) {
         val wide = maxWidth >= 1000.dp
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            Text("주차·대기 장소 검색", fontSize = 38.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
+            Text("주차장 검색", fontSize = 38.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold)
             if (wide) {
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     FeaturePanel(Modifier.weight(.88f).fillMaxHeight()) {
                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                            ParkingConditions(state, viewModel, search)
+                            ParkingConditions(state, viewModel, permissionPending, search)
                         }
                     }
                     FeaturePanel(Modifier.weight(1.72f).fillMaxHeight()) {
@@ -64,14 +65,15 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
                             Spacer(Modifier.weight(1f))
                             Text("${state.total}곳", color = StayColors.Blue, fontSize = 22.sp)
                         }
-                        ParkingResults(state, detailId, Modifier.weight(1f), resultsScroll) { place ->
+                        ParkingResults(state, detailId, Modifier.weight(1f), resultsScroll, permissionPending) { place ->
                             detailId = place.id; viewModel.select(place)
                         }
                     }
                     FeaturePanel(Modifier.weight(1.08f).fillMaxHeight()) {
                         Column(Modifier.verticalScroll(detailScroll), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                            Text("선택한 장소", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                            Text("주차장 정보", fontSize = 27.sp, fontWeight = FontWeight.Bold)
                             if (selected != null) ParkingSelectedInfo(selected, state.navigationStatus, viewModel::navigate, onWaiting)
+                            else if (detailId != null && state.detailError != null) Text(state.detailError, color = MaterialTheme.colorScheme.error)
                             else Text(if (detailId != null && state.loading) "상세정보 확인 중…" else "목록에서 장소를 선택하세요.", color = StayColors.Secondary, fontSize = 20.sp)
                         }
                     }
@@ -84,13 +86,14 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
                         ParkingSelectedInfo(selected, state.navigationStatus, viewModel::navigate, onWaiting)
                     }
                     if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    state.detailError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             } else {
                 CompactPanelSelector(listOf("검색 조건", "검색 결과 · ${state.total}곳"), searchPane) { searchPane = it }
                 if (searchPane == 0) Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, search) }
-                } else ParkingResults(state, null, Modifier.weight(1f), resultsScroll) { place ->
+                    FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, permissionPending, search) }
+                } else ParkingResults(state, null, Modifier.weight(1f), resultsScroll, permissionPending,
+                    retry = search, editFilters = { searchPane = 0 }) { place ->
                     detailId = place.id; viewModel.select(place)
                 }
             }
@@ -99,24 +102,28 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
 }
 
 @Composable
-private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: ParkingViewModel, onNearbySearch: () -> Unit) {
+private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: ParkingViewModel, permissionPending: Boolean, onNearbySearch: () -> Unit) {
     Text("검색 조건", fontSize = 27.sp, fontWeight = FontWeight.Bold)
     HorizontalDivider(color = StayColors.Border)
-    Text("검색 위치", fontSize = 18.sp, color = StayColors.Secondary)
+    Text(if (state.locationState == LocationUiState.IDLE) state.locationMessage else "검색 위치", fontSize = 18.sp, color = StayColors.Secondary)
     val searchLabel = when (state.locationState) {
-        LocationUiState.IDLE, LocationUiState.READY -> if (state.filtersChanged) "변경한 조건으로 검색" else "내 주변 검색"
+        LocationUiState.IDLE, LocationUiState.READY -> if (state.loading) "주변 주차장 검색 중…" else if (state.filtersChanged) "변경한 조건으로 검색" else "내 주변 검색"
         LocationUiState.LOCATING -> "위치 확인 중…"
         else -> "다시 검색"
     }
-    PremiumAction(searchLabel, onNearbySearch, Modifier.fillMaxWidth(), !state.loading)
+    PremiumAction(if (permissionPending) "위치 권한 확인 중…" else searchLabel, onNearbySearch,
+        Modifier.fillMaxWidth(), !state.loading && !permissionPending)
     if (state.developerSearch) Text("검색 기준 · 개발자 입력 위치", color = StayColors.Secondary)
     if (state.filtersChanged) Text("검색 버튼을 누르면 변경한 조건이 적용됩니다.", color = StayColors.Secondary)
     else if (state.appliedFilters != null) Text("검색 완료 · ${state.total}곳", color = StayColors.Secondary)
     if (!state.developerSearch && state.locationState !in listOf(LocationUiState.IDLE, LocationUiState.LOCATING, LocationUiState.READY)) {
         Text(state.locationMessage, color = StayColors.Secondary, fontSize = 18.sp)
     }
-    if (state.locationState == LocationUiState.PERMISSION_DENIED || state.locationState == LocationUiState.DISABLED) {
+    if (state.locationState == LocationUiState.DISABLED) {
         TextButton(onClick = viewModel::showLocationAccessInformation) { Text("위치 사용 안내") }
+    }
+    if (state.resultsStatus(permissionPending) == ParkingResultsStatus.SEARCH_FAILED) {
+        Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 18.sp)
     }
     OutlinedTextField(state.radiusMeters, { viewModel.updateFilters(radius = it) }, label = { Text("검색 반경(m)") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
@@ -136,17 +143,64 @@ private fun ColumnScope.ParkingConditions(state: ParkingUiState, viewModel: Park
     ParkingDeveloperCoordinates(state, viewModel)
 }
 
+internal enum class ParkingResultsStatus { IDLE, PERMISSION, LOCATING, SEARCHING, LOCATION_FAILED, SEARCH_FAILED, EMPTY, FOUND }
+
+internal fun ParkingUiState.resultsStatus(permissionPending: Boolean = false): ParkingResultsStatus = when {
+    permissionPending -> ParkingResultsStatus.PERMISSION
+    loading && locationState == LocationUiState.LOCATING -> ParkingResultsStatus.LOCATING
+    loading && places.isEmpty() -> ParkingResultsStatus.SEARCHING
+    !developerSearch && locationState !in setOf(LocationUiState.IDLE, LocationUiState.READY) ->
+        ParkingResultsStatus.LOCATION_FAILED
+    error != null -> ParkingResultsStatus.SEARCH_FAILED
+    places.isNotEmpty() -> ParkingResultsStatus.FOUND
+    appliedFilters != null -> ParkingResultsStatus.EMPTY
+    else -> ParkingResultsStatus.IDLE
+}
+
 @Composable
-private fun ParkingResults(state: ParkingUiState, selectedId: String?, modifier: Modifier, scroll: androidx.compose.foundation.lazy.LazyListState, select: (ParkingPlace) -> Unit) {
+private fun ParkingResults(
+    state: ParkingUiState, selectedId: String?, modifier: Modifier, scroll: androidx.compose.foundation.lazy.LazyListState,
+    permissionPending: Boolean, retry: (() -> Unit)? = null, editFilters: (() -> Unit)? = null,
+    select: (ParkingPlace) -> Unit,
+) {
+    val status = state.resultsStatus(permissionPending)
     LazyColumn(modifier, state = scroll, verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-        if (state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, fontSize = 20.sp) } }
-        if (state.places.isEmpty() && !state.loading && state.error == null) item {
-            Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                StayIcon("PARKING", Modifier.size(42.dp), StayColors.Secondary)
-                Text(state.emptyResultsLabel(), fontSize = 23.sp)
-                Text("주변을 검색하거나 조건을 변경하세요.", color = StayColors.Secondary, fontSize = 19.sp)
+        when (status) {
+            ParkingResultsStatus.PERMISSION, ParkingResultsStatus.LOCATING, ParkingResultsStatus.SEARCHING -> item {
+                val message = when (status) {
+                    ParkingResultsStatus.PERMISSION -> "위치 권한을 확인하고 있어요."
+                    ParkingResultsStatus.LOCATING -> "차량의 현재 위치를 확인하고 있어요."
+                    else -> "주변 주차장을 찾고 있어요."
+                }
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                Text(message, color = StayColors.Secondary)
             }
+            ParkingResultsStatus.LOCATION_FAILED, ParkingResultsStatus.SEARCH_FAILED -> item {
+                val title = when {
+                    status == ParkingResultsStatus.SEARCH_FAILED -> "주차장 검색 오류"
+                    state.locationState == LocationUiState.PERMISSION_DENIED -> "위치 권한이 필요해요"
+                    else -> "현재 위치를 확인하지 못했어요"
+                }
+                NoticePanel(title, if (status == ParkingResultsStatus.LOCATION_FAILED) state.locationMessage else state.error.orEmpty(), true)
+                if (retry != null) {
+                    Spacer(Modifier.height(12.dp))
+                    PremiumAction("다시 검색", retry, Modifier.fillMaxWidth().testTag("parking-retry"))
+                    if (status == ParkingResultsStatus.SEARCH_FAILED && editFilters != null) {
+                        TextButton(onClick = editFilters) { Text("검색 조건 보기") }
+                    }
+                }
+            }
+            ParkingResultsStatus.IDLE, ParkingResultsStatus.EMPTY -> item {
+                val empty = status == ParkingResultsStatus.EMPTY
+                NoticePanel(
+                    if (empty) "조건에 맞는 주차장이 없어요" else "아직 검색하지 않았어요",
+                    if (empty) "검색 반경을 넓히거나 다른 조건으로 검색해 보세요."
+                    else "검색 조건에서 내 주변 검색을 눌러 주세요.",
+                )
+                if (editFilters != null) TextButton(onClick = editFilters) { Text("검색 조건 보기") }
+            }
+            ParkingResultsStatus.FOUND -> Unit
         }
         items(state.places, key = { it.id }) { place -> ParkingRow(place, place.id == selectedId) { select(place) } }
     }
@@ -210,11 +264,6 @@ private fun ParkingSelectedInfo(place: ParkingPlace, navigationStatus: Navigatio
         }
         PremiumAction("이 장소에서 대기", onWaiting, Modifier.fillMaxWidth(), secondary = true)
     }
-}
-private fun ParkingUiState.emptyResultsLabel() = when {
-    appliedFilters != null -> "조건에 맞는 장소가 없습니다."
-    locationState !in listOf(LocationUiState.IDLE, LocationUiState.READY) -> "위치를 확인한 뒤 검색할 수 있습니다."
-    else -> "내 주변 검색을 시작하세요."
 }
 private fun ParkingPurpose.label() = when (this) { ParkingPurpose.PICKUP -> "픽업"; ParkingPurpose.SHORT_WAIT -> "단기"; ParkingPurpose.LONG_STAY -> "장기" }
 private fun ParkingPlace.feeLabel() = when (feeEstimateStatus) {

@@ -48,12 +48,12 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
     var pane by rememberSaveable(state.allowed) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("업무 · Work", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
+            Text("업무", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRealtime) { Text("자료함 연결") }
         }
         if (!state.allowed) {
             NoticePanel("업무 문서 잠김", "정차 상태와 자료함 PIN을 확인해 주세요.", true)
-            PremiumAction("연결·PIN 확인", onRealtime, secondary = true)
+            PremiumAction("자료함 열기", onRealtime, secondary = true)
             return@Column
         }
         recovery()
@@ -98,7 +98,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                             }
                             state.selected?.takeIf { it.source.mimeType != DOCX_MIME }?.let { draft -> item { Text("${draft.source.name} · PDF 편집은 지원하지 않습니다.", color = StayColors.Secondary) } }
                         } else {
-                            if (editor.drafts.isEmpty()) item { Text("보관한 DOCX 초안이 없습니다.", color = StayColors.Secondary) }
+                            if (editor.drafts.isEmpty()) item { Text("아직 저장한 DOCX 초안이 없어요.", color = StayColors.Secondary) }
                             items(editor.drafts, key = { it.id }) { draft ->
                                 Surface(color = StayColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, StayColors.Border)) {
                                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -112,7 +112,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                             }
                         }
                         if (tab == 1 && state.drafts.isNotEmpty()) {
-                            item { HorizontalDivider(color = StayColors.Border); Text("원본 보관본", fontSize = 22.sp) }
+                            item { HorizontalDivider(color = StayColors.Border); Text("보관한 원본", fontSize = 22.sp) }
                             items(state.drafts, key = { it.id }) { draft ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = { model.open(draft.source) }, enabled = !state.busy && state.session != null, modifier = Modifier.weight(1f)) { Text("${draft.source.name} · v${draft.source.versionNo}") }
@@ -121,7 +121,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                             }
                         }
                     }
-                    PremiumAction(if (selectedVersion?.mimeType == DOCX_MIME) "선택한 DOCX 편집" else "선택한 원본 보관",
+                    PremiumAction(if (selectedVersion?.mimeType == DOCX_MIME) "선택한 DOCX 편집" else "원본 보관",
                         { selectedVersion?.let(model::open) }, Modifier.fillMaxWidth(), selectedVersion != null && state.session != null && !state.busy && !editor.busy)
                 }
             }
@@ -130,7 +130,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Text("업무 시간", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                         if (state.session == null) {
-                            OutlinedTextField(state.minutes, model::setMinutes, label = { Text("시간 · 분") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            OutlinedTextField(state.minutes, model::setMinutes, label = { Text("업무 시간(분)") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), singleLine = true)
                             PremiumAction("업무 시작", {if(actions!=null)actions.startWork() else model.start()}, Modifier.fillMaxWidth(), !state.busy)
                         } else {
                             Text(duration(state.remainingMillis), fontSize = 44.sp, color = StayColors.Text, fontWeight = FontWeight.SemiBold)
@@ -193,8 +193,8 @@ private fun workMessage(value: String): String? = when {
     value.startsWith("원본 바이트와 해시를 확인해") -> "원본 보관 완료"
     value.startsWith("기존 엔진 초안이 있습니다.") -> "보관한 PDF가 있습니다. PDF 편집은 지원하지 않습니다."
     value.startsWith("자료함이 비어 있습니다.") -> null
-    value.startsWith("업무를 종료했습니다.") -> "업무 종료 · 대기는 계속됩니다."
-    value.startsWith("업무 시간이 끝났습니다.") -> "업무 시간 종료 · 대기는 계속됩니다."
+    value.startsWith("업무를 종료했습니다.") -> "업무를 끝냈어요. 대기 중이라면 타이머는 계속 돌아가요."
+    value.startsWith("업무 시간이 끝났습니다.") -> "업무 시간이 끝났어요. 대기 중이라면 타이머는 계속 돌아가요."
     value.startsWith("DOCX 구조 기반 편집") -> null
     value == "마지막 작업 순으로 표시합니다." -> null
     value.startsWith("자동 초안 저장됨") -> "초안 저장됨"

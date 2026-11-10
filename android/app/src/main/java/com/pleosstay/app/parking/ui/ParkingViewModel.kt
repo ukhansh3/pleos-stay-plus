@@ -34,7 +34,7 @@ data class ParkingUiState(
     val freeOnly: Boolean = false,
     val showDeveloperCoordinates: Boolean = false,
     val locationState: LocationUiState = LocationUiState.IDLE,
-    val locationMessage: String = "차량 현재 위치로 주변 주차장을 검색할 수 있습니다",
+    val locationMessage: String = "차량의 현재 위치를 기준으로 검색해요.",
     val lastLocationLabel: String? = null,
     val loading: Boolean = false,
     val places: List<ParkingPlace> = emptyList(),
@@ -45,6 +45,7 @@ data class ParkingUiState(
     val navigationStatus: NavigationStatus = NavigationStatus.Initializing,
     val appliedFilters: ParkingFilters? = null,
     val developerSearch: Boolean = false,
+    val detailError: String? = null,
 ) {
     val filters get() = ParkingFilters(radiusMeters, plannedMinutes, purpose, freeOnly)
     val filtersChanged get() = appliedFilters?.let { it != filters } == true
@@ -114,7 +115,7 @@ class ParkingViewModel internal constructor(
             return
         }
         mutableState.value = current.copy(loading = true, error = null, selected = null, developerSearch = true,
-            appliedFilters = null, places = emptyList(), total = 0)
+            appliedFilters = null, places = emptyList(), total = 0, detailError = null)
         viewModelScope.launch { search(latitude, longitude) }
     }
 
@@ -132,6 +133,7 @@ class ParkingViewModel internal constructor(
             appliedFilters = null,
             error = null,
             selected = null,
+            detailError = null,
         )
         viewModelScope.launch {
             when (val result = withContext(ioDispatcher) { locationGateway.getCurrentLocation() }) {
@@ -160,7 +162,7 @@ class ParkingViewModel internal constructor(
                 )
                 CurrentLocationResult.Timeout, is CurrentLocationResult.Failed -> locationFailure(
                     LocationUiState.FAILED,
-                    "위치를 확인할 수 없습니다. 다시 시도해 주세요.",
+                    "차량 위치를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
                 )
             }
         }
@@ -169,7 +171,7 @@ class ParkingViewModel internal constructor(
     fun onLocationPermissionDenied() {
         locationFailure(
             LocationUiState.PERMISSION_DENIED,
-            "위치 권한을 허용한 뒤 다시 검색해 주세요.",
+            "위치 권한을 허용한 뒤 다시 검색해 주세요. 권한 창이 뜨지 않으면 Android 설정에서 Stay+의 위치 권한을 확인해 주세요.",
         )
     }
 
@@ -187,6 +189,7 @@ class ParkingViewModel internal constructor(
             selected = null,
             total = 0,
             appliedFilters = null,
+            detailError = null,
         )
     }
 
@@ -195,7 +198,7 @@ class ParkingViewModel internal constructor(
         val radius = current.radiusMeters.toIntOrNull()
         val minutes = current.plannedMinutes.toIntOrNull()
         if (radius == null || radius !in 1..10_000 || minutes == null || minutes !in 1..1_440) {
-            mutableState.value = current.copy(loading = false, error = "검색 조건을 올바르게 입력해 주세요")
+            mutableState.value = current.copy(loading = false, error = "반경은 1~10,000m, 이용 시간은 1~1,440분으로 입력해 주세요.")
             return
         }
         runCatching {
@@ -213,13 +216,13 @@ class ParkingViewModel internal constructor(
             )
         }.onFailure { error ->
             if (error is kotlinx.coroutines.CancellationException) throw error
-            mutableState.value = mutableState.value.copy(loading = false, error = "주차장 검색에 실패했습니다. 연결을 확인하고 다시 검색해 주세요.")
+            mutableState.value = mutableState.value.copy(loading = false, error = "검색을 완료하지 못했어요. 연결을 확인한 뒤 다시 검색해 주세요.")
         }
     }
 
     fun select(place: ParkingPlace) {
         viewModelScope.launch {
-            mutableState.value = mutableState.value.copy(loading = true, error = null)
+            mutableState.value = mutableState.value.copy(loading = true, error = null, detailError = null)
             runCatching { withContext(ioDispatcher) { repository.detail(place.id) } }
                 .onSuccess { detail ->
                     val searched = state.value.places.firstOrNull { it.id == detail.id }
@@ -230,7 +233,7 @@ class ParkingViewModel internal constructor(
                 }
                 .onFailure { error ->
                     if (error is kotlinx.coroutines.CancellationException) throw error
-                    mutableState.value = mutableState.value.copy(loading = false, error = "상세 정보를 불러오지 못했습니다. 다시 선택해 주세요.")
+                    mutableState.value = mutableState.value.copy(loading = false, detailError = "상세 정보를 불러오지 못했어요. 목록에서 주차장을 다시 선택해 주세요.")
                 }
         }
     }

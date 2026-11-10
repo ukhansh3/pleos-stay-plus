@@ -129,6 +129,6 @@ fun StayNavigationRail(selected:NavigationGroup,navigate:(StayRoute)->Unit,width
 fun StaySettingsScreen() {
     Column(Modifier.fillMaxSize().padding(32.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
         Text(stringResource(R.string.stay_settings),style=MaterialTheme.typography.headlineLarge)
-        Text("설정할 항목이 없습니다.", color = StayColors.Secondary)
+        Text("아직 설정할 항목이 없어요.", color = StayColors.Secondary)
     }
 }

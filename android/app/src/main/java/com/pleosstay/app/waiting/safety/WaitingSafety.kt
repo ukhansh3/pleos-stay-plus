@@ -7,7 +7,7 @@ data class WaitingSafety(
     val motion: VehicleMotion = VehicleMotion.UNKNOWN,
     val uxRestricted: Boolean = true,
     val observedAt: Long? = null,
-    val message: String = "주차 상태를 확인 중입니다: Waiting 조작을 허용하지 않습니다",
+    val message: String = "주차 상태를 확인하고 있어요.",
 ) {
     val canUse: Boolean get() = motion == VehicleMotion.PARKED && !uxRestricted
 }
@@ -25,7 +25,7 @@ interface WaitingSafetyGateway : AutoCloseable {
 
 class UnavailableWaitingSafetyGateway : WaitingSafetyGateway {
     override val drivingEvents = DrivingEventBuffer()
-    override val state = kotlinx.coroutines.flow.MutableStateFlow(WaitingSafety(message = "차량 플랫폼 연결 불가: Waiting 사용 불가"))
+    override val state = kotlinx.coroutines.flow.MutableStateFlow(WaitingSafety(message = "차량에 연결할 수 없어 주차 상태를 확인할 수 없어요."))
     override fun start() = Unit
     override fun stop() = Unit
     override fun close() = Unit

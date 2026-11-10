@@ -27,18 +27,31 @@ import com.pleosstay.app.ui.premium.*
   }
  }
 }
-@Composable internal fun ActivityRecoveryPanel(message:String,busy:Boolean,retry:()->Unit,back:()->Unit) {
+@Composable internal fun ActivityRecoveryPanel(message:String,busy:Boolean,retry:()->Unit,back:()->Unit, backLabel:String = "문서로 돌아가기") {
  FeaturePanel(Modifier.fillMaxWidth().testTag("activity_recovery")) {
-  Text("저장을 완료하지 못했습니다",fontSize=25.sp,color=StayColors.Warning)
   Text(message,color=StayColors.Secondary,fontSize=20.sp)
-  PremiumAction("저장 재시도",retry,enabled=!busy)
-  PremiumAction("작업으로 돌아가기",back,enabled=!busy,secondary=true)
+  PremiumAction("다시 저장",retry,enabled=!busy)
+  PremiumAction(backLabel,back,enabled=!busy,secondary=true)
  }
 }
+internal fun activitySwitchTitle(source: ActivityMode, target: ActivityMode): String {
+    val finish = when (source) {
+        ActivityMode.REST -> "휴식을"
+        ActivityMode.STUDY -> "공부를"
+        ActivityMode.WORK -> "업무를"
+    }
+    val start = when (target) {
+        ActivityMode.REST -> "휴식을"
+        ActivityMode.STUDY -> "공부를"
+        ActivityMode.WORK -> "업무를"
+    }
+    return "$finish 끝내고 $start 시작할까요?"
+}
+
 @Composable internal fun ActivitySwitchPanel(source:ActivityMode,target:ActivityMode,busy:Boolean,cancel:()->Unit,confirm:()->Unit) {
- Text(if(busy) "작성한 내용과 활동을 정리하고 있어요." else "진행 중인 활동을 종료한 뒤 ${target.label()} 활동을 시작합니다. 대기는 계속 유지됩니다.",color=StayColors.Secondary)
+ Text(if(busy) "작성한 내용과 활동을 정리하고 있어요." else "대기 중이라면 대기 타이머는 계속 돌아가요.",color=StayColors.Secondary)
  PremiumAction("취소",cancel,enabled=!busy,secondary=true)
- PremiumAction("종료 후 전환",confirm,enabled=!busy)
+ PremiumAction("${target.label()} 시작",confirm,enabled=!busy)
 }
 @Composable internal fun ActivityPrompts(host:PremiumActivityHost,visible:Boolean,onRecoverWaiting:()->Unit) {
  val state by host.ui.state.collectAsState()
@@ -46,7 +59,7 @@ import com.pleosstay.app.ui.premium.*
  val study=host.studyOwner?.study?.state?.collectAsState()?.value
  val work=host.workOwner?.work?.state?.collectAsState()?.value
  if(!visible || state.preparing)return
- if(state.confirmation!=null)ActivityModal(if(state.busy) "활동을 정리하고 있어요" else "${state.source?.label()} 종료 후 ${state.target?.label()} 전환",state.busy,{host.ui.confirmSwitch(false)}) {
+ if(state.confirmation!=null)ActivityModal(if(state.busy) "활동을 정리하고 있어요" else activitySwitchTitle(checkNotNull(state.source), checkNotNull(state.target)),state.busy,{host.ui.confirmSwitch(false)}) {
   ActivitySwitchPanel(checkNotNull(state.source),checkNotNull(state.target),state.busy,{host.ui.confirmSwitch(false)},{host.ui.confirmSwitch(true)})
  }
  else if(state.error!=null)ActivityModal("활동을 처리하지 못했습니다",state.busy,host.ui::dismissError) {
@@ -55,7 +68,7 @@ import com.pleosstay.app.ui.premium.*
   PremiumAction("작업으로 돌아가기",host.ui::returnToWork,enabled=!state.busy,secondary=true)
  }
  else if(state.leavePrompt!=null)ActivityModal("초안을 보관하고 이동할까요?",state.busy,{host.ui.confirmLeaving(false)}) {
-  Text("암호화 초안을 보관한 뒤 이동합니다. Work 타이머와 대기는 계속 유지됩니다.",color=StayColors.Secondary)
+  Text("초안을 저장한 뒤 이동해요. 업무 타이머와 진행 중인 대기 타이머는 계속 돌아가요.",color=StayColors.Secondary)
   PremiumAction("초안 보관 후 이동",{host.ui.confirmLeaving(true)},enabled=!state.busy)
   PremiumAction("작업으로 돌아가기",{host.ui.confirmLeaving(false)},enabled=!state.busy,secondary=true)
  }

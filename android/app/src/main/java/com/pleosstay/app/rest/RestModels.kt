@@ -9,7 +9,7 @@ internal const val REST_MINUTE = 60_000L
 internal enum class RestDisplay(val label: String) { DARK("어두운 화면"), MINIMAL("최소 정보"), CALM("차분한 화면") }
 internal enum class RestSound(val label: String) { SILENT("무음"), RAIN("빗소리") }
 internal enum class RestAlert(val label: String) { SOFT("부드러운 알림"), WAKE("기상 알람") }
-internal enum class RestEnd(val label: String) { TIME("휴식 시간이 끝났어요"), MANUAL("휴식을 종료했어요"), SAFETY("차량 안전 조건으로 휴식을 중단했어요"), TARGET("목표 충전율에 도달했어요") }
+internal enum class RestEnd(val label: String) { TIME("휴식 시간이 끝났어요"), MANUAL("휴식을 종료했어요"), SAFETY("차량 상태 때문에 휴식을 중단했어요."), TARGET("목표 충전율에 도달했어요") }
 
 internal data class RestPreset(
     val id: String = UUID.randomUUID().toString(),

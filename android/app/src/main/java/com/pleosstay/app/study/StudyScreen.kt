@@ -48,12 +48,12 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
     LaunchedEffect(state.document) { if (state.document != null && pane == 0) pane = 1 }
     Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("공부 · Study", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
+            Text("공부", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
             if (state.active) Text(studyDuration(state.remainingMillis), fontSize = 28.sp, color = StayColors.Blue)
             TextButton(onClick = onOpenFiles) { Text("자료함 연결") }
         }
         if (!state.allowed) {
-            NoticePanel("학습자료 잠김", state.message, true)
+            NoticePanel("학습 자료를 열 수 없어요", state.message, true)
             return@Column
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -67,8 +67,8 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
         }
         studyMessage(state.message)?.let { Text(it, color = StayColors.Secondary, fontSize = 18.sp) }
         LaunchedEffect(state.busy,state.noteSaveFailed){if(state.noteSaveFailed && !state.busy)recoveryDismissed=false}
-        if(state.noteSaveFailed && !recoveryDismissed)ActivityModal("메모를 저장하지 못했어요",state.busy,{recoveryDismissed=true}) { ActivityRecoveryPanel("메모 입력을 유지하고 있습니다. 저장을 다시 시도해 주세요.",state.busy,
-            {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true}) }
+        if(state.noteSaveFailed && !recoveryDismissed)ActivityModal("메모를 저장하지 못했어요",state.busy,{recoveryDismissed=true}) { ActivityRecoveryPanel("작성 중인 메모는 그대로 있어요. 다시 저장해 주세요.",state.busy,
+            {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true}, backLabel = "메모로 돌아가기") }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 1000.dp
@@ -101,7 +101,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                     Text(state.selected?.name ?: "문서 열람", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
                     val document = state.document
                     if (document == null) {
-                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("자료를 선택해 주세요.", color = StayColors.Secondary) }
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("읽을 자료를 선택해 주세요.", color = StayColors.Secondary) }
                     } else {
                         state.record?.progress?.fraction?.let { fraction ->
                             LinearProgressIndicator(progress = { fraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Accent)
@@ -199,9 +199,9 @@ private fun StudyPanel(modifier: Modifier, content: @Composable ColumnScope.() -
 }
 private fun studyDuration(millis: Long) = "%02d:%02d".format(millis / 60000, millis / 1000 % 60)
 private fun studyMessage(message: String): String? = if (message.startsWith("DOCX 재배치 열람:")) "일부 문서 서식은 다르게 표시될 수 있습니다." else when (message) {
-    "학습 시간을 선택하고 시작해 주세요.", "자료함에서 자료를 선택해 주세요.", "파일과 버전을 선택해 주세요.", "열 버전을 선택해 주세요.", "자료를 열었습니다.", "자료함이 비어 있습니다." -> null
+    "학습 시간을 선택하고 시작해 주세요.", "자료함에서 읽을 자료를 선택해 주세요.", "파일과 버전을 선택해 주세요.", "열 버전을 선택해 주세요.", "자료를 열었습니다.", "자료함이 비어 있습니다." -> null
     "학습 기록을 저장했습니다." -> "저장 완료"
-    "학습을 종료했습니다. 기존 Waiting은 유지됩니다." -> "학습 종료 · 대기는 계속됩니다."
+    "학습을 종료했습니다. 기존 Waiting은 유지됩니다." -> "공부를 끝냈어요. 대기 중이라면 타이머는 계속 돌아가요."
     else -> message.replace("Waiting", "대기").takeIf { it.isNotBlank() }
 }
 

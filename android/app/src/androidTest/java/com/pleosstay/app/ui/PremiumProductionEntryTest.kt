@@ -18,7 +18,7 @@ class PremiumProductionEntryTest {
         ui.onNodeWithTag("nav_HOME").assertIsSelected()
         ui.onNodeWithTag("home_PARKING").performScrollTo().assertExists()
         // Save a visual proof ONLY if there is no active Waiting/place to expose.
-        val empty = ui.onAllNodesWithText("대기 세션 없음").fetchSemanticsNodes().isNotEmpty()
+        val empty = ui.onAllNodesWithText("현재 대기 중이 아니에요").fetchSemanticsNodes().isNotEmpty()
         if (empty) {
             val target = InstrumentationRegistry.getInstrumentation().targetContext
             val directory = File(target.cacheDir, "premium-ui-proof").apply { mkdirs() }

@@ -264,7 +264,7 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
     }
     }
  if(tableDialog)AlertDialog(onDismissRequest={tableDialog=false},title={Text("표 삽입")},text={Column{OutlinedTextField(rows,{rows=it.take(2)},label={Text("행 1~20")});OutlinedTextField(columns,{columns=it.take(2)},label={Text("열 1~10")})}},confirmButton={TextButton(onClick={controller.edit{it.addTable(rows.toIntOrNull() ?: 2,columns.toIntOrNull() ?: 2)};tableDialog=false}){Text("삽입")}},dismissButton={TextButton(onClick={tableDialog=false}){Text("취소")}})
- if(state.confirmDownloads)AlertDialog(onDismissRequest=controller::dismissDownloads,title={Text("다운로드 폴더에 DOCX 내보내기")},text={Column{
+ if(state.confirmDownloads)AlertDialog(onDismissRequest=controller::dismissDownloads,title={Text("다운로드 폴더에 DOCX를 저장할까요?")},text={Column{
   Text("Download/StayPlus에 새 DOCX를 저장합니다. 앱 밖에서도 접근할 수 있으며 잠금·앱 삭제 후에도 남습니다. 원본은 덮어쓰지 않습니다.")
   OutlinedTextField(exportName,{exportName=it.take(80)},label={Text("DOCX 파일 이름")})
  }},confirmButton={TextButton(onClick={controller.exportDownloads(exportName)},enabled=!state.busy&&exportName.isNotBlank()){Text("공개 저장 위치 확인·내보내기")}},dismissButton={Row{TextButton(onClick={controller.dismissDownloads();controller.exportPrivate()},enabled=!state.busy){Text("앱 전용 임시 파일")};TextButton(onClick=controller::dismissDownloads){Text("취소")}}})
@@ -280,7 +280,7 @@ private fun EditorPanel(modifier: Modifier, content: @Composable ColumnScope.() 
 private fun editorStatus(message: String): String = when {
     message.startsWith("DOCX 구조 기반 편집") -> ""
     message.startsWith("자동 초안 저장됨") -> "초안 저장됨"
-    message.startsWith("암호화 DOCX 초안 저장 완료") -> "초안 저장 완료"
+    message.startsWith("암호화 DOCX 초안 저장 완료") -> "이 차량에 초안을 저장했어요."
     message.startsWith("변경 이력 복원") -> "변경 복원됨"
     message.startsWith("Download/StayPlus에 새 DOCX 저장") -> "Download/StayPlus에 저장 완료"
     message.startsWith("DOCX 파일 저장·해시") -> "DOCX 저장 완료"

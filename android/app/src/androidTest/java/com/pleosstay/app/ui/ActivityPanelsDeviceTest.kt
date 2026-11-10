@@ -17,16 +17,16 @@ class ActivityPanelsDeviceTest {
   var cancel=0;var confirm=0
   ui.setContent{PleosStayPlusTheme{Column{ActivitySwitchPanel(ActivityMode.REST,ActivityMode.STUDY,false,{cancel++},{confirm++})}}}
   ui.onNodeWithText("취소").performClick();assertEquals(1,cancel)
-  ui.onNodeWithText("종료 후 전환").performClick();assertEquals(1,confirm)
+  ui.onNodeWithText("공부 시작").performClick();assertEquals(1,confirm)
  }
  @Test fun busyTransitionDisablesBothButtons(){
   ui.setContent{PleosStayPlusTheme{Column{ActivitySwitchPanel(ActivityMode.WORK,ActivityMode.STUDY,true,{},{})}}}
-  ui.onNodeWithText("취소").assertIsNotEnabled();ui.onNodeWithText("종료 후 전환").assertIsNotEnabled()
+  ui.onNodeWithText("취소").assertIsNotEnabled();ui.onNodeWithText("공부 시작").assertIsNotEnabled()
  }
  @Test fun recoveryOffersRetryAndReturnWithoutDiscard(){
   var retry=0;var back=0
   ui.setContent{PleosStayPlusTheme{ActivityRecoveryPanel("메모 입력 유지",false,{retry++},{back++})}}
-  ui.onNodeWithText("저장 재시도").performClick();ui.onNodeWithText("작업으로 돌아가기").performClick()
+  ui.onNodeWithText("다시 저장").performClick();ui.onNodeWithText("문서로 돌아가기").performClick()
   assertEquals(1,retry);assertEquals(1,back);ui.onNodeWithText("삭제").assertDoesNotExist()
  }
 }

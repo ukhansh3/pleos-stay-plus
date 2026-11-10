@@ -141,9 +141,12 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private var parkingPermissionPending by mutableStateOf(false)
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
+        parkingPermissionPending = false
         if (granted) parkingViewModel.searchNearby() else parkingViewModel.onLocationPermissionDenied()
     }
     private val pickupLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -201,7 +204,7 @@ class MainActivity : ComponentActivity() {
                     }
                     when (route) {
                         StayRoute.HOME -> StayHomeScreen(waitingState, pickupState, navigate)
-                        StayRoute.PARKING -> ParkingScreen(parkingViewModel, ::requestNearbySearch,
+                        StayRoute.PARKING -> ParkingScreen(parkingViewModel, ::requestNearbySearch, permissionPending = parkingPermissionPending,
                             onWaiting = { navigate(StayRoute.WAITING) })
                         StayRoute.WAITING -> WaitingScreen(waitingModel,
                             parkingState.selected?.let { WaitingPlace(it.id, it.name) },
@@ -220,7 +223,9 @@ class MainActivity : ComponentActivity() {
                         foreground=documentVisible && (filesVisible || activityUi.documentLease),
                         visible=documentVisible && (filesVisible || activityUi.preparing),
                         presentation={ body ->
-                            if(activityUi.preparing)ActivityModal("자료함 연결 및 활동 준비",activityUi.busy,host.ui::cancelPreparation) {
+                            if(activityUi.preparing)ActivityModal(
+                                if (activityUi.target == ActivityMode.STUDY) "공부 자료를 준비하고 있어요"
+                                else "업무 문서를 준비하고 있어요",activityUi.busy,host.ui::cancelPreparation) {
                                 PremiumAction("취소",host.ui::cancelPreparation,enabled=!activityUi.busy,secondary=true)
                                 Box(Modifier.fillMaxWidth().height(820.dp)){body()}
                             } else body()
@@ -250,9 +255,11 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun requestNearbySearch() {
+        if (parkingPermissionPending) return
         if (ContextCompat.checkSelfPermission(this, FUSED_LOCATION_PERMISSION) == PackageManager.PERMISSION_GRANTED) {
             parkingViewModel.searchNearby()
         } else {
+            parkingPermissionPending = true
             locationPermissionLauncher.launch(FUSED_LOCATION_PERMISSION)
         }
     }

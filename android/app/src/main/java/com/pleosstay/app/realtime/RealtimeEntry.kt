@@ -60,14 +60,14 @@ class RealtimeUiSession:ViewModel() {
  val safetyState by safety.state.collectAsState()
  if(!safetyState.canUse){if(visible) presentation {Column(Modifier.fillMaxSize().padding(28.dp)){
   Text("자료함 연결",fontSize=38.sp)
-  NoticePanel("정차 확인 필요", "정차 상태 확인 후 연결할 수 있습니다.",true)
+  NoticePanel("주차 상태를 확인해 주세요", "정차 상태 확인 후 연결할 수 있습니다.",true)
  }};return}
- if(!session.loaded){if(visible) presentation { NoticePanel("PC 연결 준비 중", "서비스 설정을 확인하고 있습니다.") };return}
+ if(!session.loaded){if(visible) presentation { NoticePanel("PC 연결 준비 중", "PC 연결을 준비하고 있어요.") };return}
  if(!ready){if(visible) presentation {Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),verticalArrangement=Arrangement.spacedBy(22.dp)){
   Text("자료함 연결",fontSize=38.sp)
   FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth()) {
   if(!BuildConfig.DEBUG || !session.developerSettings) {
-   NoticePanel("PC 연결을 준비할 수 없습니다", "서비스 주소가 준비되면 PC 연결 코드를 발급할 수 있습니다.", true)
+   NoticePanel("PC 연결을 준비할 수 없습니다", "지금은 PC에 연결할 수 없어요. 문제가 계속되면 관리자에게 문의해 주세요.", true)
    if(BuildConfig.DEBUG) TextButton(onClick={session.developerSettings=true}) { Text("개발자 연결 설정") }
    return@FeaturePanel
   }

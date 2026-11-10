@@ -66,7 +66,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     val version = state.versions.firstOrNull { it.optString("id") == selectedVersion }
     var pane by rememberSaveable(state.connectionId, state.allowed, state.unlocked) { mutableIntStateOf(if (state.connectionId == null) 0 else 1) }
     Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Text("파일 작업 · Realtime", fontSize = 38.sp, fontWeight = FontWeight.Bold)
+        Text("파일 작업", fontSize = 38.sp, fontWeight = FontWeight.Bold)
         realtimeNotice(state.message)?.let { Text(it, color = StayColors.Secondary, fontSize = 18.sp) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 1000.dp
@@ -84,7 +84,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         val networkDown = state.serverStatus == RealtimeServerStatus.UNAVAILABLE
                         val linked = state.connectionId != null && !networkDown
                         Text(when {
-                            networkDown -> "서버에 연결할 수 없습니다"
+                            networkDown -> "서버에 연결할 수 없어요. ‘연결 다시 확인’을 눌러 주세요."
                             linked -> state.pcName?.let { "$it · 연결 완료" } ?: "PC 연결 완료"
                             state.busy && pairing == null -> "연결 준비 중…"
                             else -> "연결된 PC 없음"
@@ -162,7 +162,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                                 Modifier.fillMaxWidth(), filesReachable && !state.busy)
                         }
                         HorizontalDivider(color = StayColors.Border)
-                        Text("전송 진행 상태", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text("전송 상태", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         if (state.busy && (state.sendingWork || downloadUi?.freshSample == true)) {
                             LinearProgressIndicator(progress = { state.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Accent)
                             Text("${(state.progress * 100).toInt()}%", fontSize = 26.sp, color = StayColors.Blue)
@@ -173,9 +173,9 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                             else -> "진행 중인 작업 없음"
                         }, color = StayColors.Secondary)
                         if (state.busy) PremiumAction("전송 중단", { otherOperation(model::cancel) }, Modifier.fillMaxWidth(), secondary = true)
-                        PremiumAction("중단된 전송 재시도", { otherOperation(model::retryUpload) }, Modifier.fillMaxWidth(), !state.busy, true)
+                        PremiumAction("전송 다시 시도", { otherOperation(model::retryUpload) }, Modifier.fillMaxWidth(), !state.busy, true)
                     }
-                    TextButton(onClick = { confirmClear = true }, enabled = !state.busy) { Text("로컬 파일 삭제") }
+                    TextButton(onClick = { confirmClear = true }, enabled = !state.busy) { Text("차량에 저장된 파일 삭제") }
                     PremiumAction("화면 잠금", { otherOperation(model::lock) }, Modifier.fillMaxWidth(), secondary = true)
                 }
             }
@@ -198,7 +198,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     if (confirmSwitch) AlertDialog(onDismissRequest = { confirmSwitch = false }, title = { Text("사용자 전환") },
         text = { Text("PC 연결을 해제하고 이 차량의 파일·인증정보·PIN을 지웁니다. 새 사용자는 다시 연결해야 합니다.") },
         confirmButton = { TextButton(onClick = { confirmSwitch = false; otherOperation(model::switchUserAfterConfirmation) }) { Text("지우고 전환") } }, dismissButton = { TextButton(onClick = { confirmSwitch = false }) { Text("취소") } })
-    if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("로컬 파일 삭제") },
+    if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("차량에 저장된 파일 삭제") },
         text = { Text("이 차량의 다운로드와 중단된 전송 파일을 지우고 화면을 잠급니다. 서버 원본은 유지됩니다.") },
         confirmButton = { TextButton(onClick = { confirmClear = false; otherOperation(model::clearLocalFiles) }) { Text("삭제 후 잠금") } }, dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("취소") } })
 }
@@ -212,7 +212,7 @@ private fun TransferPanel(modifier: Modifier, content: @Composable ColumnScope.(
 private fun realtimeNotice(value: String): String? = when {
     value.startsWith("{") -> if (runCatching { JSONObject(value).has("error") }.getOrDefault(false)) "요청을 처리하지 못했습니다. 연결을 확인해 주세요." else null
     value == "잠김" || value == "연결 없음" -> null
-    value.startsWith("다운로드 검증 완료:") -> "다운로드 완료"
+    value.startsWith("다운로드 검증 완료:") -> "${value.substringAfter(':').trim()}을 차량에 다운로드했어요."
     value == "NO_CONNECTION" -> "PC 연결을 확인해 주세요."
     value == "NO_PENDING_UPLOAD" -> "재시도할 전송이 없습니다."
     value.contains("INTEGRITY_MISMATCH") || value.contains("SIZE_MISMATCH") -> "파일 검증에 실패했습니다. 다시 다운로드해 주세요."
@@ -238,7 +238,7 @@ private fun PcPairingContent(state: FileTransferState, model: FileTransferViewMo
     val phase = if (expired) "EXPIRED" else pairing?.phase
     when (phase) {
         "OPEN" -> {
-            Text("PC 연결 대기 중", color = StayColors.Blue)
+            Text("PC에서 코드 입력을 기다리고 있어요.", color = StayColors.Blue)
             Text(state.code, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
             Text("Windows Stay+에서 이 8자리 코드를 입력하세요.")
             val guide = RealtimeDeployment.guide
@@ -253,7 +253,7 @@ private fun PcPairingContent(state: FileTransferState, model: FileTransferViewMo
             }
         }
         "CLAIMED" -> {
-            Text(if (pairing?.approvedHere == true) "PC 승인 대기 중" else "PC 연결 요청 도착", color = StayColors.Blue)
+            Text(if (pairing?.approvedHere == true) "PC에서 연결을 승인해 주세요." else "PC에서 연결을 요청했어요.", color = StayColors.Blue)
             pairing?.pcName?.let { Text(it, fontWeight = FontWeight.SemiBold) }
             if (pairing?.approvedHere == false) {
                 Text("이 PC의 이름을 확인한 뒤 승인하세요.")
@@ -261,7 +261,7 @@ private fun PcPairingContent(state: FileTransferState, model: FileTransferViewMo
             }
         }
         "CONNECTED" -> Text("승인 완료 · 연결 확인 중…", color = StayColors.Blue)
-        "EXPIRED" -> Text("연결 코드가 만료되었습니다.", color = StayColors.Warning)
+        "EXPIRED" -> Text("코드가 만료됐어요. 새 코드를 받아 주세요.", color = StayColors.Warning)
         "CANCELLED" -> Text("연결 요청이 취소되었습니다.", color = StayColors.Secondary)
     }
     state.pairingError?.let { Text(it, color = StayColors.Warning) }
@@ -270,7 +270,7 @@ private fun PcPairingContent(state: FileTransferState, model: FileTransferViewMo
         TextButton(onClick = model::cancelPairing, enabled = !state.busy) { Text("연결 취소") }
     }
     if (phase !in setOf("OPEN", "CLAIMED", "CONNECTED")) {
-        PremiumAction(if (expired) "새 코드 발급" else "PC 연결하기", model::issue, Modifier.fillMaxWidth(), !state.busy)
+        PremiumAction(if (expired) "새 코드 받기" else "PC 연결하기", model::issue, Modifier.fillMaxWidth(), !state.busy)
     }
 }
 

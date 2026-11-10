@@ -104,7 +104,7 @@ internal class ActivityUiController(
             TransitionStatus.NEEDS_INPUT->mutable.update{it.copy(input=true,confirmation=null,error=null)}
             TransitionStatus.CANCELLED->{retry=null;mutable.value=ActivityUiState(active=coordinator.currentState().active)}
             TransitionStatus.BUSY->Unit
-            else->fail(result.message.ifBlank{if(result.status==TransitionStatus.STALE)"전환 확인이 만료되었습니다. 다시 선택해 주세요." else "활동을 시작하지 못했습니다. 현재 작업과 권한을 확인해 주세요."},Retry.Switch(target,result.status==TransitionStatus.STOP_FAILED))
+            else->fail(result.message.ifBlank{if(result.status==TransitionStatus.STALE)"전환을 다시 확인해야 해요. 시작할 활동을 다시 선택해 주세요." else "활동을 시작하지 못했습니다. 현재 작업과 권한을 확인해 주세요."},Retry.Switch(target,result.status==TransitionStatus.STOP_FAILED))
         }
     }
     fun confirmSwitch(accepted:Boolean) {

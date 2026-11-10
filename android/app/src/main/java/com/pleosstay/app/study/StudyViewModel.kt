@@ -219,7 +219,7 @@ class StudyViewModel(
             is ModeStartResult.NeedsChoice -> mutable.update { it.copy(prompt = result, message = "Waiting 시간보다 학습 시간이 깁니다. 연장 또는 단축을 선택해 주세요.") }
             is ModeStartResult.SafetyBlocked -> mask(result.message)
             is ModeStartResult.RecoveryRequired -> mutable.update { it.copy(prompt = null, message = result.message) }
-            is ModeStartResult.StorageError -> mutable.update { it.copy(prompt = null, message = "Waiting 저장에 실패했습니다. Waiting 화면에서 복구 후 다시 시도해 주세요.") }
+            is ModeStartResult.StorageError -> mutable.update { it.copy(prompt = null, message = "대기 기록을 저장하지 못했어요. 대기 관리에서 기록을 다시 불러온 뒤 시도해 주세요.") }
             is ModeStartResult.InvalidDuration -> mutable.update { it.copy(prompt = null, message = "허용 학습 시간: ${result.allowedMinutes.first}~${result.allowedMinutes.last}분") }
             is ModeStartResult.WaitingChanged -> mutable.update { it.copy(prompt = null, message = "Waiting이 변경되었습니다. 다시 시작해 주세요.") }
             is ModeStartResult.Cancelled -> mutable.update { it.copy(prompt = null, message = "학습 시작을 취소했습니다.") }
@@ -273,7 +273,7 @@ class StudyViewModel(
                     noteText=draft?.body.orEmpty(),editId=draft?.id, message = document.warning ?: "자료를 열었습니다.") }
             }
             is DocumentOpenResult.Blocked -> mask("자료 접근 권한이 없습니다. 자료함을 확인해 주세요.")
-            is DocumentOpenResult.Failed -> mutable.update { it.copy(message = "파일 다운로드 또는 해시 검증에 실패했습니다.") }
+            is DocumentOpenResult.Failed -> mutable.update { it.copy(message = "자료를 불러오지 못했어요. 다시 열어 주세요.") }
         }
     }
     fun restoreLast() = operation { ticket ->

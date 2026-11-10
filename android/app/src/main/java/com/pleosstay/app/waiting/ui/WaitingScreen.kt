@@ -44,13 +44,13 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
     if (historyOpen && state.canUse) AlertDialog(onDismissRequest = { historyOpen = false }, title = { Text("지난 대기 기록") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                if (history.isEmpty()) item { Text("대기 기록이 없습니다.") }
+                if (history.isEmpty()) item { Text("아직 대기 기록이 없어요.") }
                 items(history, key = { it.id }) { session ->
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(session.place?.name ?: "직접 대기", fontWeight = FontWeight.SemiBold)
                         Text(session.startedAt.dateLabel(), color = StayColors.Secondary)
                         Text(WaitingTime.calculate(session, state.now).elapsedMillis.durationLabel(), color = StayColors.Blue)
-                        Text(if (session.endReason == EndReason.DRIVING) "주행 확인으로 종료" else "직접 종료", color = StayColors.Secondary)
+                        Text(if (session.endReason == EndReason.DRIVING) "주행을 감지해 자동 종료" else "직접 종료", color = StayColors.Secondary)
                         HorizontalDivider(color = StayColors.Border)
                     }
                 }
@@ -65,20 +65,20 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
         if (!state.canUse) {
             FeaturePanel(Modifier.fillMaxWidth()) {
                 Text("정차 확인이 필요합니다", fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text(if (!state.ready) "대기 기록을 확인하고 있습니다." else state.safety.message, color = StayColors.Secondary, fontSize = 21.sp)
+                Text(if (!state.ready) "대기 기록을 불러오고 있어요." else state.safety.message, color = StayColors.Secondary, fontSize = 21.sp)
             }
         } else {
             val sessionActions: @Composable () -> Unit = {
                 if (active != null) {
                     OutlinedTextField(extension, { extension = it }, label = { Text("추가 대기 시간(분)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
-                    PremiumAction("대기시간 연장", { viewModel.extend(active.id, extension.toIntOrNull() ?: 0) }, Modifier.fillMaxWidth(), !state.busy, true)
+                    PremiumAction("대기 연장", { viewModel.extend(active.id, extension.toIntOrNull() ?: 0) }, Modifier.fillMaxWidth(), !state.busy, true)
                     PremiumAction("대기 종료", { endConfirm = true }, Modifier.fillMaxWidth(), !state.busy)
                 }
             }
             ResponsivePanels(leftWeight = 1.18f, left = {
                 FeaturePanel(Modifier.fillMaxWidth().heightIn(min = if (compact) 0.dp else 540.dp)) {
-                    Text(if (active == null) "새 대기" else "대기 세션 진행 중", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (active == null) "대기 시작하기" else "대기 중", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
                     val time = active?.let { WaitingTime.calculate(it, state.now) }
                     val total = active?.let { (it.plannedEndAt - it.startedAt).coerceAtLeast(1L) } ?: 1L
                     val timerModifier = if (compact) Modifier.height(230.dp) else Modifier.weight(1f).heightIn(min = 380.dp)
@@ -94,7 +94,7 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
                                 style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(if (time == null) "대기 예정 시간" else "남은 예정 시간", color = StayColors.Secondary, fontSize = 21.sp)
+                            Text(if (time == null) "대기 예정 시간" else "남은 대기 시간", color = StayColors.Secondary, fontSize = 21.sp)
                             Text(time?.remainingMillis?.durationLabel() ?: "${minutes.toIntOrNull() ?: 0}분", fontSize = if (compact) 36.sp else 46.sp, fontWeight = FontWeight.Bold)
                             if (time != null) Text("경과 ${time.elapsedMillis.durationLabel()}", color = StayColors.Secondary, fontSize = 20.sp)
                         }
@@ -107,7 +107,7 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
                     Text("현재 대기 정보", fontSize = 27.sp, fontWeight = FontWeight.Bold)
                     InfoLine("선택한 대기 장소", if (active != null) active.place?.name ?: "직접 대기" else selectedPlace?.name ?: "직접 대기")
                     if ((if (active != null) active.place else selectedPlace) != null) {
-                        Text("선택한 장소입니다. 차량의 도착 여부는 확인하지 않습니다.", color = StayColors.Secondary)
+                        Text("선택한 장소예요. 실제로 도착했는지는 확인할 수 없어요.", color = StayColors.Secondary)
                     }
                     if (active == null) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -119,7 +119,7 @@ fun WaitingScreen(viewModel: WaitingViewModel, selectedPlace: WaitingPlace?, mod
                         PremiumAction("대기 시작", { viewModel.start(minutes.toIntOrNull() ?: 0, selectedPlace) }, Modifier.fillMaxWidth(), !state.busy)
                     } else {
                         InfoLine("시작", active.startedAt.dateLabel())
-                        InfoLine("예정 종료", active.plannedEndAt.dateLabel())
+                        InfoLine("대기 종료 예정", active.plannedEndAt.dateLabel())
                         if (!compact) sessionActions()
                     }
                 }

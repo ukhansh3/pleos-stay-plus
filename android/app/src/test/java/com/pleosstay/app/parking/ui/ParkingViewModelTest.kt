@@ -141,6 +141,29 @@ class ParkingViewModelTest {
     }
 
     @Test
+    fun failedRequestAndSuccessfulRetryKeepFiltersAndDoNotDuplicateWork() = runTest(dispatcher) {
+        val repository = RecordingRepository().apply { fail = true }
+        val viewModel = createViewModel(repository, FakeLocationGateway(vehicleLocation()))
+        viewModel.updateFilters(radius = "3500", minutes = "25", purpose = ParkingPurpose.LONG_STAY, freeOnly = true)
+        val filters = viewModel.state.value.filters
+
+        viewModel.searchNearby()
+        viewModel.searchNearby()
+        advanceUntilIdle()
+        assertEquals(1, repository.searches.size)
+        assertEquals(ParkingResultsStatus.SEARCH_FAILED, viewModel.state.value.resultsStatus())
+        assertEquals(filters, viewModel.state.value.filters)
+
+        repository.fail = false
+        viewModel.searchNearby()
+        advanceUntilIdle()
+        assertEquals(2, repository.searches.size)
+        assertEquals(repository.searches.first(), repository.searches.last())
+        assertEquals(ParkingResultsStatus.EMPTY, viewModel.state.value.resultsStatus())
+        assertEquals(filters, viewModel.state.value.appliedFilters)
+    }
+
+    @Test
     fun manualEntryRequiresExplicitOptInAndDoesNotReplaceLiveVehicleCoordinates() = runTest(dispatcher) {
         assumeTrue(BuildConfig.DEBUG)
         val repository = RecordingRepository()
@@ -233,6 +256,7 @@ private data class Search(
 
 private class RecordingRepository : ParkingRepository {
     val searches = mutableListOf<Search>()
+    var fail = false
 
     override suspend fun search(
         latitude: Double,
@@ -243,6 +267,7 @@ private class RecordingRepository : ParkingRepository {
         freeOnly: Boolean,
     ): ParkingSearchResult {
         searches += Search(latitude, longitude, radiusMeters, plannedMinutes, purpose, freeOnly)
+        if (fail) throw java.io.IOException("test connection failure")
         return ParkingSearchResult(emptyList(), 0, "FRESH")
     }
 

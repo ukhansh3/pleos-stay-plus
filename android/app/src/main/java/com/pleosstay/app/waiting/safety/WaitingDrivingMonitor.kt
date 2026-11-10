@@ -34,7 +34,7 @@ class WaitingDrivingMonitor(
                 mutableState.value = DrivingRecoveryState()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
-                mutableState.value = DrivingRecoveryState(true, "주행 종료 기록 저장 실패: 자동 재시도 중입니다")
+                mutableState.value = DrivingRecoveryState(true, "주행으로 끝난 대기의 기록을 다시 저장하고 있어요.")
                 break
             }
         }

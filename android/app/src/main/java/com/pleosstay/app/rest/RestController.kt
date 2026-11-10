@@ -168,7 +168,7 @@ internal class RestController(
         val updated = state.value.presets.filterNot { it.id == editingId } +
             value.copy(id = editingId ?: UUID.randomUUID().toString(), name = value.name.trim())
         withContext(io) { store.savePresets(updated) }
-        mutable.update { it.copy(presets = updated, message = "프리셋을 저장했어요.") }
+        mutable.update { it.copy(presets = updated, message = "휴식 설정을 저장했어요.") }
     }
 
     fun deletePreset(id: String) = command {
@@ -437,7 +437,7 @@ internal class RestController(
             }
             is ModeStartResult.SafetyBlocked -> message(result.message)
             is ModeStartResult.RecoveryRequired -> message(result.message)
-            is ModeStartResult.WaitingChanged -> message("연결된 대기 세션이 변경됐습니다. 다시 확인해 주세요.")
+            is ModeStartResult.WaitingChanged -> message("대기 정보가 바뀌었어요. 남은 대기 시간을 확인해 주세요.")
             is ModeStartResult.InvalidDuration -> message("허용 시간은 ${result.allowedMinutes.first}~${result.allowedMinutes.last}분입니다.")
             is ModeStartResult.Cancelled, is ModeStartResult.DecisionAlreadyHandled -> Unit
         }
