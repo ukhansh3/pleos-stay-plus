@@ -32,6 +32,7 @@ fun StayBackBar(onBack: () -> Unit, modifier: Modifier = Modifier,
 
 @Composable
 fun StayBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val arrowColor = StayColors.Text
     Surface(onClick = onClick,
         modifier = modifier.size(64.dp).testTag("back").semantics { contentDescription = "뒤로 가기" },
         shape = RoundedCornerShape(18.dp),
@@ -48,7 +49,7 @@ fun StayBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
                     lineTo(size.width * .20f, size.height * .5f)
                     lineTo(size.width * .47f, size.height * .78f)
                 }
-                drawPath(arrow, StayColors.Text,
+                drawPath(arrow, arrowColor,
                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }

@@ -26,21 +26,88 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.pleosstay.app.waiting.ui.WaitingUiState
 import com.pleosstay.app.pickup.ui.PickupUiState
 
-object StayColors {
-    val Background = Color(0xFF081323)
-    val Rail = Color(0xFF0A172B)
-    val Surface = Color(0xFF15263F)
-    val Text = Color(0xFFF5F7FC)
-    val Secondary = Color(0xFFABBAD1)
-    val Border = Color(0xFF304463)
-    val Blue = Color(0xFF75A7FF)
-    val Purple = Color(0xFF7963D8)
-    val Warning = Color(0xFFFFCB76)
-    val Success = Color(0xFF61DDB0)
-    val Action = Color(0xFF315B88)
-    val Hero = Brush.linearGradient(listOf(Color(0xFF172D46), Color(0xFF172337), Background))
-    val Active = Brush.horizontalGradient(listOf(Purple, Color(0xFF34326C)))
-}
+internal data class StayPalette(
+    val Background: Color,
+    val Rail: Color,
+    val Surface: Color,
+    val Text: Color,
+    val Secondary: Color,
+    val Border: Color,
+    val Blue: Color,
+    val Accent: Color,
+    val Warning: Color,
+    val Success: Color,
+    val Error: Color,
+    val Action: Color,
+    val OnAction: Color,
+    val Selected: Color,
+    val OnSelected: Color,
+    val SelectionOutline: Color,
+    val PanelStart: Color,
+    val PanelEnd: Color,
+    val GlassStart: Color,
+    val GlassEnd: Color,
+    val Ring: Color,
+    val RingTrack: Color,
+    val isDark: Boolean,
+)
+
+internal val StayDayPalette = StayPalette(
+    Background = Color(0xFFE6ECF4),
+    Rail = Color(0xFFC5D8EB),
+    Surface = Color(0xFFEDF3FB),
+    Text = Color(0xFF12253D),
+    Secondary = Color(0xFF3B536E),
+    Border = Color(0xFF738DA8),
+    Blue = Color(0xFF1C4A77),
+    Accent = Color(0xFF365F84),
+    Warning = Color(0xFF754600),
+    Success = Color(0xFF13604D),
+    Error = Color(0xFFA12E3F),
+    Action = Color(0xFF26527E),
+    OnAction = Color(0xFFF8FBFF),
+    Selected = Color(0xFFB5D0E8),
+    OnSelected = Color(0xFF183A59),
+    SelectionOutline = Color(0xFF476F93),
+    PanelStart = Color(0xFFF3F7FC),
+    PanelEnd = Color(0xFFE6EEF7),
+    GlassStart = Color(0xFFEDF3FA),
+    GlassEnd = Color(0xFFDFEBF7),
+    Ring = Color(0xFF214B77),
+    RingTrack = Color(0xFFB1C4D7),
+    isDark = false,
+)
+
+internal val StayNightPalette = StayPalette(
+    Background = Color(0xFF071322),
+    Rail = Color(0xFF0B192C),
+    Surface = Color(0xFF14253A),
+    Text = Color(0xFFECF3FD),
+    Secondary = Color(0xFFB8CCE3),
+    Border = Color(0xFF3A526D),
+    Blue = Color(0xFFA3CAFA),
+    Accent = Color(0xFF9CBFE2),
+    Warning = Color(0xFFFFCD86),
+    Success = Color(0xFF7DDBB7),
+    Error = Color(0xFFFFAAB5),
+    Action = Color(0xFF284665),
+    OnAction = Color(0xFFF1F6FC),
+    Selected = Color(0xFF284665),
+    OnSelected = Color(0xFFF1F6FC),
+    SelectionOutline = Color(0xFF6485A7),
+    PanelStart = Color(0xFF16283E),
+    PanelEnd = Color(0xFF0E1E31),
+    GlassStart = Color(0xFF182A41),
+    GlassEnd = Color(0xFF112134),
+    Ring = Color(0xFFC5D8F1),
+    RingTrack = Color(0xFF3C536D),
+    isDark = true,
+)
+
+internal val LocalStayPalette = staticCompositionLocalOf { StayNightPalette }
+
+internal val StayColors: StayPalette
+    @Composable get() = LocalStayPalette.current
 
 @Composable
 fun StayCard(modifier: Modifier=Modifier, brush: Brush=Brush.linearGradient(listOf(StayColors.Surface, StayColors.Surface)), content:@Composable ColumnScope.()->Unit) {

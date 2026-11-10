@@ -6,9 +6,11 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pleosstay.app.ui.premium.*
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind, Int?) -> Unit, onClose: () -> Unit) {
     val liveState by controller.state.collectAsState()
@@ -59,8 +62,43 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
     var offset = 0
     val selectedRuns = paragraph?.runs?.filter { run -> val from = offset; offset += run.text.length; (offset > a && from < b) || (a == b && run.text.isEmpty()) }.orEmpty()
     val formatEnabled = !state.busy && editable && paragraph?.editable == true
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text("업무 · DOCX 편집기", fontSize = 36.sp, fontWeight = FontWeight.Bold)
+    var pane by rememberSaveable(state.draft?.id) { mutableIntStateOf(0) }
+    var more by remember { mutableStateOf(false) }
+    val tableParagraphIds = view.tables.flatMap { it.rows.flatten().flatten() }.toSet()
+    val bodyParagraphs = view.paragraphs.filter { it.id !in tableParagraphIds }
+    val documentScroll = rememberLazyListState()
+    var revealItem by remember { mutableStateOf<Int?>(null) }
+    BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
+    val compact = maxWidth < 1098.dp
+    LaunchedEffect(revealItem) {
+        revealItem?.let { documentScroll.scrollToItem(it) }
+        revealItem = null
+    }
+    Column(Modifier.fillMaxSize().padding(if (compact) 16.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 18.dp)) {
+        Text("업무 · DOCX 편집기", fontSize = if (compact) 26.sp else 36.sp, fontWeight = FontWeight.Bold)
+        if (compact) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(state.draft?.name ?: "DOCX", Modifier.weight(1f), maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                Box {
+                    TextButton(onClick = { more = true }, enabled = !state.busy) { Text("더보기") }
+                    DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                        DropdownMenuItem(text = { Text("DOCX 내보내기") }, onClick = { more = false; onPicker(DocxPickerKind.EXPORT, null) })
+                        if (state.exportUri != null) DropdownMenuItem(text = { Text("저장 파일 열기") }, onClick = { more = false; controller.reopenExport() })
+                        DropdownMenuItem(text = { Text("문서 목록") }, onClick = { more = false; onClose() })
+                    }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(controller::undo, enabled = !state.busy && state.canUndo && editable,
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("실행 취소") }
+                OutlinedButton(controller::redo, enabled = !state.busy && state.canRedo && editable,
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("다시 실행") }
+                Button(controller::save, enabled = !state.busy, modifier = Modifier.heightIn(min = 48.dp).testTag("docx-save")) { Text("초안 저장") }
+            }
+            CompactPanelSelector(listOf("본문", "문단·구성", "서식·도구"), pane) { pane = it }
+        } else
         Surface(shape = RoundedCornerShape(20.dp), color = StayColors.Surface.copy(alpha = .72f), border = BorderStroke(1.dp, StayColors.Border)) {
             Row(Modifier.fillMaxWidth().padding(16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(state.draft?.name ?: "DOCX", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.widthIn(min = 180.dp, max = 350.dp))
@@ -79,16 +117,32 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
                     Text("문단·구성", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(view.paragraphs, key = { it.id }) { p ->
-                            Surface(onClick = { selected = p.id; field = TextFieldValue(p.text); selectedImage = null }, enabled = !state.busy,
-                                shape = RoundedCornerShape(14.dp), color = if (paragraph?.id == p.id) StayColors.Purple.copy(alpha = .45f) else StayColors.Surface,
-                                border = BorderStroke(1.dp, if (paragraph?.id == p.id) StayColors.Purple else StayColors.Border)) {
+                            Surface(onClick = { selected = p.id; field = TextFieldValue(p.text); selectedImage = null
+                                if (compact) {
+                                    pane = 0
+                                    val index = bodyParagraphs.indexOfFirst { it.id == p.id }
+                                    if (index >= 0) revealItem = index
+                                }
+                            }, enabled = !state.busy,
+                                shape = RoundedCornerShape(14.dp), color = if (paragraph?.id == p.id) StayColors.Selected else StayColors.Surface,
+                                border = BorderStroke(1.dp, if (paragraph?.id == p.id) StayColors.SelectionOutline else StayColors.Border)) {
                                 Text("${p.id + 1}. ${p.text.ifBlank { "빈 문단" }.take(50)}", Modifier.fillMaxWidth().padding(16.dp), fontSize = 18.sp)
                             }
                         }
                         items(view.tables, key = { "table-${it.id}" }) { table -> TextButton(onClick = {
                             table.rows.firstOrNull()?.firstOrNull()?.firstOrNull()?.let { id -> selected = id; view.paragraphs.firstOrNull { it.id == id }?.let { field = TextFieldValue(it.text) } }
+                            if (compact) {
+                                pane = 0
+                                revealItem = bodyParagraphs.size + view.tables.indexOf(table)
+                            }
                         }, enabled = !state.busy) { Text("표 ${table.id + 1}") } }
-                        items(view.images, key = { "image-${it.id}" }) { image -> TextButton(onClick = { selectedImage = image.id }, enabled = !state.busy) { Text("이미지 ${image.id + 1}") } }
+                        items(view.images, key = { "image-${it.id}" }) { image -> TextButton(onClick = {
+                            selectedImage = image.id
+                            if (compact) {
+                                pane = 0
+                                revealItem = bodyParagraphs.size + view.tables.size + view.images.indexOf(image)
+                            }
+                        }, enabled = !state.busy) { Text("이미지 ${image.id + 1}") } }
                     }
                     PremiumAction("+ 문단 추가", { controller.edit { it.addParagraph(paragraph?.id) } }, Modifier.fillMaxWidth(), !state.busy && editable, true)
                     PremiumAction("+ 표 삽입", { tableDialog = true }, Modifier.fillMaxWidth(), !state.busy && editable, true)
@@ -101,17 +155,19 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
                         Text(if (state.dirty) "편집 중" else "저장됨", color = StayColors.Blue)
                     }
                     Surface(Modifier.weight(1f).fillMaxWidth(), shape = RoundedCornerShape(10.dp), color = Color.White, contentColor = Color(0xFF273B63)) {
-                        LazyColumn(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            val tableParagraphIds = view.tables.flatMap { it.rows.flatten().flatten() }.toSet()
-                            items(view.paragraphs.filter { it.id !in tableParagraphIds }, key = { it.id }) { p ->
+                        LazyColumn(Modifier.fillMaxSize(), state = documentScroll,
+                            contentPadding = PaddingValues(if (compact) 12.dp else 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(bodyParagraphs, key = { it.id }) { p ->
+                                if (compact) Text("문단 ${p.id + 1}", color = Color(0xFF415675), fontWeight = FontWeight.SemiBold)
                                 if (p.id == paragraph?.id) {
                                     OutlinedTextField(field, { next -> field = next; if (next.text != p.text) controller.setText(p.id, next.text) },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp).testTag("docx-body"), enabled = editable && p.editable,
                                         textStyle = TextStyle(color = Color(0xFF273B63), fontSize = 18.sp, textAlign = when (p.alignment) { "center" -> TextAlign.Center; "right" -> TextAlign.Right; else -> TextAlign.Left }),
-                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color(0xFF273B63), unfocusedTextColor = Color(0xFF273B63), disabledTextColor = Color(0xFF596780), cursorColor = StayColors.Purple, focusedBorderColor = StayColors.Purple, unfocusedBorderColor = Color(0xFFBDC9DE)),
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color(0xFF273B63), unfocusedTextColor = Color(0xFF273B63), disabledTextColor = Color(0xFF596780), cursorColor = Color(0xFF315B88), focusedBorderColor = Color(0xFF315B88), unfocusedBorderColor = Color(0xFFBDC9DE)),
                                         visualTransformation = VisualTransformation { input -> TransformedText(if (input.text == p.text) rich(p.runs) else input, OffsetMapping.Identity) })
                                     if (!p.editable) Text("이 문단은 읽기 전용입니다.", color = Color.DarkGray)
-                                } else Text(if (p.text.isBlank()) AnnotatedString("빈 문단") else rich(p.runs), Modifier.fillMaxWidth().clickable(enabled = !state.busy) { selected = p.id; field = TextFieldValue(p.text); selectedImage = null }.padding(vertical = 12.dp),
+                                } else Text(if (p.text.isBlank()) AnnotatedString("빈 문단") else rich(p.runs), Modifier.fillMaxWidth().clickable(enabled = !state.busy) { selected = p.id; field = TextFieldValue(p.text); selectedImage = null }.then(if (compact) Modifier.border(1.dp, Color(0xFF738DA8), RoundedCornerShape(8.dp)) else Modifier)
+                                    .padding(horizontal = if (compact) 12.dp else 0.dp, vertical = 12.dp),
                                     textAlign = when (p.alignment) { "center" -> TextAlign.Center; "right" -> TextAlign.Right; else -> TextAlign.Left })
                             }
                             items(view.tables, key = { "table-${it.id}" }) { table ->
@@ -131,7 +187,7 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
                                     OutlinedTextField(field, { next -> field = next; paragraph?.let { if (next.text != it.text) controller.setText(it.id, next.text) } },
                                         Modifier.fillMaxWidth().heightIn(min = 120.dp).testTag("docx-body"), enabled = editable && paragraph?.editable == true,
                                         textStyle = TextStyle(color = Color(0xFF273B63), fontSize = 18.sp), label = { Text("선택한 셀", color = Color.DarkGray) },
-                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color(0xFF273B63), unfocusedTextColor = Color(0xFF273B63), cursorColor = StayColors.Purple))
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color(0xFF273B63), unfocusedTextColor = Color(0xFF273B63), cursorColor = Color(0xFF315B88)))
                                 }
                             }
                             items(view.images, key = { "image-${it.id}" }) { image ->
@@ -163,7 +219,7 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
                             FilterChip(selected = selectedRuns.isNotEmpty() && selectedRuns.all { it.underline }, onClick = { format(DocxStyle(underline = selectedRuns.isEmpty() || !selectedRuns.all { it.underline })) }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text("U", fontSize = 20.sp, textDecoration = TextDecoration.Underline) })
                         }
                         Text("문단 정렬", color = StayColors.Secondary)
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("left" to "왼쪽", "center" to "가운데", "right" to "오른쪽").forEach { (value, label) ->
                                 FilterChip(selected = paragraph?.alignment == value, onClick = { paragraph?.let { p -> controller.edit { it.align(p.id, value) } } }, enabled = formatEnabled, modifier = Modifier.heightIn(min = 64.dp), label = { Text(label, fontSize = 20.sp) })
                             }
@@ -197,12 +253,15 @@ fun DocxEditorPanel(controller: DocxEditorController, onPicker: (DocxPickerKind,
             }
             if (maxWidth >= 1050.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 structure(Modifier.weight(.8f).fillMaxHeight()); document(Modifier.weight(2.6f).fillMaxHeight()); inspector(Modifier.weight(1f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                structure(Modifier.fillMaxWidth().height(380.dp)); document(Modifier.fillMaxWidth().height(750.dp)); inspector(Modifier.fillMaxWidth().height(700.dp))
+            } else when (pane) {
+                1 -> structure(Modifier.fillMaxSize())
+                2 -> inspector(Modifier.fillMaxSize())
+                else -> document(Modifier.fillMaxSize())
             }
         }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         Text(if (state.busy) "저장 중…" else editorStatus(state.message), Modifier.testTag("docx-status"), color = StayColors.Secondary, fontSize = 18.sp)
+    }
     }
  if(tableDialog)AlertDialog(onDismissRequest={tableDialog=false},title={Text("표 삽입")},text={Column{OutlinedTextField(rows,{rows=it.take(2)},label={Text("행 1~20")});OutlinedTextField(columns,{columns=it.take(2)},label={Text("열 1~10")})}},confirmButton={TextButton(onClick={controller.edit{it.addTable(rows.toIntOrNull() ?: 2,columns.toIntOrNull() ?: 2)};tableDialog=false}){Text("삽입")}},dismissButton={TextButton(onClick={tableDialog=false}){Text("취소")}})
  if(state.confirmDownloads)AlertDialog(onDismissRequest=controller::dismissDownloads,title={Text("다운로드 폴더에 DOCX 내보내기")},text={Column{

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -44,7 +45,8 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
         "암호화 초안을 보관하지 못했습니다. 현재 작업은 유지되며 외부 DOCX를 덮어쓰지 않습니다.",editor.busy,
         {actions?.retry(ActivityMode.WORK)},{recoveryDismissed=true}) }}
     if (state.allowed && editor.view != null) { Column { recovery();Box(Modifier.weight(1f)){DocxEditorPanel(model.docx, onDocxPicker, model.docx::mask)} }; return }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    var pane by rememberSaveable(state.allowed) { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("업무 · Work", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRealtime) { Text("자료함 연결") }
@@ -65,7 +67,7 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                         Text("내 문서", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                         PremiumAction("+ 새 DOCX", model.docx::newDocument, enabled = state.session != null && !state.busy && !editor.busy)
                     }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         listOf("Realtime 문서", "DOCX 초안", "최근 작업").forEachIndexed { index, label ->
                             FilterChip(selected = tab == index, onClick = { tab = index; if (index > 0) model.docx.listDrafts() }, label = { Text(label) }, enabled = !state.busy && !editor.busy)
                         }
@@ -86,8 +88,8 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
                             if (state.versions.isNotEmpty()) item { Text("버전 선택", fontSize = 22.sp, fontWeight = FontWeight.SemiBold) }
                             items(state.versions, key = { it.versionId }) { ref ->
                                 Surface(onClick = { selectedVersion = ref }, enabled = !state.busy,
-                                    shape = RoundedCornerShape(16.dp), color = if (selectedVersion?.versionId == ref.versionId) StayColors.Purple.copy(alpha = .28f) else StayColors.Surface,
-                                    border = BorderStroke(1.dp, if (selectedVersion?.versionId == ref.versionId) StayColors.Purple else StayColors.Border)) {
+                                    shape = RoundedCornerShape(16.dp), color = if (selectedVersion?.versionId == ref.versionId) StayColors.Selected else StayColors.Surface,
+                                    border = BorderStroke(1.dp, if (selectedVersion?.versionId == ref.versionId) StayColors.SelectionOutline else StayColors.Border)) {
                                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                         Text(ref.name, fontSize = 20.sp)
                                         Text("v${ref.versionNo} · ${(ref.sizeBytes + 1023) / 1024} KB", color = StayColors.Secondary)
@@ -146,8 +148,10 @@ fun WorkScreen(model: WorkViewModel, onRealtime: () -> Unit, onRecoverWaiting: (
             }
             if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 library(Modifier.weight(2.5f).fillMaxHeight()); tools(Modifier.weight(1f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                tools(Modifier.fillMaxWidth().height(650.dp)); library(Modifier.fillMaxWidth().height(800.dp))
+            } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactPanelSelector(listOf("문서", "업무 시간·파일 열기"), pane) { pane = it }
+                if (pane == 0) library(Modifier.fillMaxWidth().weight(1f))
+                else tools(Modifier.fillMaxWidth().weight(1f))
             }
         }
     }

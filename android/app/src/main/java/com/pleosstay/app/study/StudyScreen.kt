@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Presentation only; authorization, mode transitions and records remain in the ViewModel. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
     val actions=LocalActivityUiActions.current
@@ -42,7 +44,9 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
     val noteText = state.noteText
     val editId = state.editId
     var confirmDelete by remember(state.selected?.key, state.allowed) { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    var pane by rememberSaveable(state.allowed) { mutableIntStateOf(if (state.document == null) 0 else 1) }
+    LaunchedEffect(state.document) { if (state.document != null && pane == 0) pane = 1 }
+    Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("공부 · Study", Modifier.weight(1f), fontSize = 38.sp, fontWeight = FontWeight.Bold)
             if (state.active) Text(studyDuration(state.remainingMillis), fontSize = 28.sp, color = StayColors.Blue)
@@ -52,7 +56,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             NoticePanel("학습자료 잠김", state.message, true)
             return@Column
         }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!state.active) {
                 OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit).take(3) }, label = { Text("학습 시간 · 분") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(180.dp), enabled = !state.busy, singleLine = true)
@@ -67,6 +71,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             {viewModel.saveNote(editId,noteText)},{recoveryDismissed=true}) }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val wide = maxWidth >= 1000.dp
             val library: @Composable (Modifier) -> Unit = { modifier ->
                 StudyPanel(modifier) {
                     Text("학습 자료", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
@@ -76,8 +81,8 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                         items(state.files, key = { it.fileId }) { file ->
                             val selected = state.selected?.fileId == file.fileId
                             Surface(onClick = { viewModel.selectFile(file) }, enabled = !state.busy && state.active,
-                                shape = RoundedCornerShape(16.dp), color = if (selected) StayColors.Purple.copy(alpha = .28f) else StayColors.Surface,
-                                border = BorderStroke(1.dp, if (selected) StayColors.Purple else StayColors.Border)) {
+                                shape = RoundedCornerShape(16.dp), color = if (selected) StayColors.Selected else StayColors.Surface,
+                                border = BorderStroke(1.dp, if (selected) StayColors.SelectionOutline else StayColors.Border)) {
                                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(file.name, fontWeight = FontWeight.SemiBold, fontSize = 19.sp)
                                     Text(file.name.substringAfterLast('.', "문서").uppercase(), color = StayColors.Secondary, fontSize = 14.sp, maxLines = 1)
@@ -99,7 +104,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("자료를 선택해 주세요.", color = StayColors.Secondary) }
                     } else {
                         state.record?.progress?.fraction?.let { fraction ->
-                            LinearProgressIndicator(progress = { fraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Purple)
+                            LinearProgressIndicator(progress = { fraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Accent)
                         }
                         val count = document.pageCount ?: document.blocks.size
                         if (document.format == StudyFormat.PDF) {
@@ -131,8 +136,16 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
             }
             val notes: @Composable (Modifier) -> Unit = { modifier ->
                 StudyPanel(modifier) {
+                    val noteEditor: @Composable () -> Unit = {
+                            OutlinedTextField(noteText, { viewModel.updateNoteDraft(editId, it) }, label = { Text(if (editId == null) "새 메모" else "메모 수정") },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 260.dp), enabled = state.selected != null && !state.busy)
+                            Spacer(Modifier.height(12.dp))
+                            PremiumAction("메모 저장", { viewModel.saveNote(editId, noteText) }, Modifier.fillMaxWidth(), state.selected != null && noteText.isNotBlank() && !state.busy)
+                            if (editId != null) TextButton(onClick = { viewModel.cancelNoteDraft() }) { Text("수정 취소") }
+                    }
                     Text("옆 메모", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (!wide) item { noteEditor() }
                         items(state.record?.notes.orEmpty(), key = { it.id }) { note ->
                             Surface(color = StayColors.Surface, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, StayColors.Border)) {
                                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -144,13 +157,7 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                                 }
                             }
                         }
-                        item {
-                            OutlinedTextField(noteText, { viewModel.updateNoteDraft(editId, it) }, label = { Text(if (editId == null) "새 메모" else "메모 수정") },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 260.dp), enabled = state.selected != null && !state.busy)
-                            Spacer(Modifier.height(12.dp))
-                            PremiumAction("메모 저장", { viewModel.saveNote(editId, noteText) }, Modifier.fillMaxWidth(), state.selected != null && noteText.isNotBlank() && !state.busy)
-                            if (editId != null) TextButton(onClick = { viewModel.cancelNoteDraft() }) { Text("수정 취소") }
-                        }
+                        if (wide) item { noteEditor() }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(state.record?.progress?.completed == true, { viewModel.complete(it) }, enabled = state.selected != null && !state.busy)
@@ -159,10 +166,16 @@ fun StudyScreen(viewModel: StudyViewModel, onOpenFiles: () -> Unit) {
                     TextButton(onClick = { confirmDelete = true }, enabled = state.selected != null && !state.busy) { Text("학습 기록 삭제") }
                 }
             }
-            if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 library(Modifier.weight(.85f).fillMaxHeight()); reader(Modifier.weight(2.3f).fillMaxHeight()); notes(Modifier.weight(1.05f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                library(Modifier.fillMaxWidth().height(400.dp)); reader(Modifier.fillMaxWidth().height(700.dp)); notes(Modifier.fillMaxWidth().height(650.dp))
+            } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactPanelSelector(listOf("학습 자료", "문서", "메모"), pane) { pane = it }
+                val panel = Modifier.fillMaxWidth().weight(1f)
+                when (pane) {
+                    1 -> reader(panel)
+                    2 -> notes(panel)
+                    else -> library(panel)
+                }
             }
         }
     }

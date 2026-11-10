@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -63,15 +64,17 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     val pairing = state.pairing
     val filesReachable = state.connectionId != null && state.serverStatus != RealtimeServerStatus.UNAVAILABLE
     val version = state.versions.firstOrNull { it.optString("id") == selectedVersion }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    var pane by rememberSaveable(state.connectionId, state.allowed, state.unlocked) { mutableIntStateOf(if (state.connectionId == null) 0 else 1) }
+    Column(Modifier.fillMaxSize().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("파일 작업 · Realtime", fontSize = 38.sp, fontWeight = FontWeight.Bold)
         realtimeNotice(state.message)?.let { Text(it, color = StayColors.Secondary, fontSize = 18.sp) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val wide = maxWidth >= 1000.dp
             val connection: @Composable (Modifier) -> Unit = { modifier ->
                 TransferPanel(modifier) {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Text("PC 연결", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                        Surface(shape = RoundedCornerShape(20.dp), color = StayColors.Background.copy(alpha = .45f), border = BorderStroke(1.dp, StayColors.Border)) {
+                        if (wide) Surface(shape = RoundedCornerShape(20.dp), color = StayColors.Background.copy(alpha = .45f), border = BorderStroke(1.dp, StayColors.Border)) {
                             Row(Modifier.fillMaxWidth().height(145.dp).padding(20.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                                 StayIcon("WORK", Modifier.size(54.dp), StayColors.Blue)
                                 Text("↔", fontSize = 34.sp, color = StayColors.Secondary)
@@ -123,8 +126,8 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         items(state.files, key = { it.getString("id") }) { file ->
                             val id = file.getString("id")
                             Surface(onClick = { selectedFile = id; selectedVersion = null; otherOperation { model.versions(id) } }, enabled = !state.busy && filesReachable,
-                                color = if (selectedFile == id) StayColors.Purple.copy(alpha = .28f) else StayColors.Surface,
-                                shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, if (selectedFile == id) StayColors.Purple else StayColors.Border)) {
+                                color = if (selectedFile == id) StayColors.Selected else StayColors.Surface,
+                                shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, if (selectedFile == id) StayColors.SelectionOutline else StayColors.Border)) {
                                 Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                     StayIcon("FILES", Modifier.size(36.dp), StayColors.Blue)
                                     Text(file.getString("name"), fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
@@ -135,8 +138,8 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         if (state.versions.isEmpty()) item { Text("파일을 선택해 주세요.", color = StayColors.Secondary) }
                         items(state.versions, key = { it.getString("id") }) { v ->
                             Surface(onClick = { selectedVersion = v.getString("id") }, enabled = !state.busy,
-                                shape = RoundedCornerShape(16.dp), color = if (selectedVersion == v.getString("id")) StayColors.Purple.copy(alpha = .28f) else StayColors.Background.copy(alpha = .3f),
-                                border = BorderStroke(1.dp, if (selectedVersion == v.getString("id")) StayColors.Purple else StayColors.Border)) {
+                                shape = RoundedCornerShape(16.dp), color = if (selectedVersion == v.getString("id")) StayColors.Selected else StayColors.Background.copy(alpha = .3f),
+                                border = BorderStroke(1.dp, if (selectedVersion == v.getString("id")) StayColors.SelectionOutline else StayColors.Border)) {
                                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("v${v.getInt("versionNo")} · ${v.getString("fileName")}", fontSize = 20.sp)
                                     Text("${(v.getLong("size") + 1023) / 1024} KB", color = StayColors.Secondary)
@@ -161,7 +164,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         HorizontalDivider(color = StayColors.Border)
                         Text("전송 진행 상태", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         if (state.busy && (state.sendingWork || downloadUi?.freshSample == true)) {
-                            LinearProgressIndicator(progress = { state.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Purple)
+                            LinearProgressIndicator(progress = { state.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = StayColors.Accent)
                             Text("${(state.progress * 100).toInt()}%", fontSize = 26.sp, color = StayColors.Blue)
                         } else if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(when {
@@ -176,10 +179,16 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                     PremiumAction("화면 잠금", { otherOperation(model::lock) }, Modifier.fillMaxWidth(), secondary = true)
                 }
             }
-            if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 connection(Modifier.weight(1f).fillMaxHeight()); library(Modifier.weight(2.25f).fillMaxHeight()); transfer(Modifier.weight(1.15f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                connection(Modifier.fillMaxWidth().height(800.dp)); library(Modifier.fillMaxWidth().height(700.dp)); transfer(Modifier.fillMaxWidth().height(650.dp))
+            } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactPanelSelector(listOf("PC 연결", "자료함", "다운로드·전송"), pane) { pane = it }
+                val panel = Modifier.fillMaxWidth().weight(1f)
+                when (pane) {
+                    1 -> library(panel)
+                    2 -> transfer(panel)
+                    else -> connection(panel)
+                }
             }
         }
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,10 +69,11 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
                     Text(state.safetyMessage, fontSize = 21.sp, color = StayColors.Secondary)
                 }
             } else {
+                var pane by rememberSaveable(state.session?.id, inviteValid) { mutableIntStateOf(if (inviteValid) 1 else 0) }
                 val qrPanel: @Composable () -> Unit = {
                     PickupInvitationPanel(state, qr, inviteValid, { largeQr = true }, { guide = true }, {
                         if (invite == null) viewModel.issueInvitation() else confirmation = "reissue"
-                    })
+                    }, compact = !wide)
                 }
                 val statusPanel: @Composable () -> Unit = {
                     PickupStatusPanel(state, onStartWithPermission, { confirmation = "complete" }, { confirmation = "cancel" })
@@ -84,10 +86,19 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) { statusPanel() }
                     }
                     FeaturePanel(Modifier.weight(.78f).fillMaxHeight()) { PickupSteps(Modifier.verticalScroll(rememberScrollState())) }
-                } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                    FeaturePanel(Modifier.fillMaxWidth()) { statusPanel() }
-                    FeaturePanel(Modifier.fillMaxWidth()) { qrPanel() }
-                    FeaturePanel(Modifier.fillMaxWidth()) { PickupSteps() }
+                } else {
+                    CompactPanelSelector(listOf("진행 현황", "초대 QR", "참가 절차"), pane) { pane = it }
+                    key(pane) {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            FeaturePanel(Modifier.fillMaxWidth()) {
+                                when (pane) {
+                                    1 -> qrPanel()
+                                    2 -> PickupSteps()
+                                    else -> statusPanel()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -95,12 +106,12 @@ fun PickupScreen(viewModel: PickupViewModel, onStartWithPermission: () -> Unit, 
 }
 
 @Composable
-private fun PickupInvitationPanel(state: PickupUiState, qr: Bitmap?, inviteValid: Boolean, enlarge: () -> Unit, guide: () -> Unit, issue: () -> Unit) {
+private fun PickupInvitationPanel(state: PickupUiState, qr: Bitmap?, inviteValid: Boolean, enlarge: () -> Unit, guide: () -> Unit, issue: () -> Unit, compact: Boolean) {
     val active = state.session?.status == PickupSessionStatus.ACTIVE
     Text("Pickup 초대", fontSize = 27.sp, fontWeight = FontWeight.Bold)
     Text("참가자 1명 · 60분 유효", color = StayColors.Secondary, fontSize = 18.sp)
-    BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 300.dp).background(StayColors.Background), contentAlignment = Alignment.Center) {
-        if (qr != null) Image(qr.asImageBitmap(), "Pickup 공유 링크 QR", Modifier.size(minOf(maxWidth - 20.dp, 340.dp)).background(Color.White))
+    BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = if (compact) 180.dp else 300.dp).background(StayColors.Background), contentAlignment = Alignment.Center) {
+        if (qr != null) Image(qr.asImageBitmap(), "Pickup 공유 링크 QR", Modifier.size(minOf((maxWidth - 20.dp).coerceAtLeast(0.dp), if (compact) 230.dp else 340.dp)).background(Color.White))
         else Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             StayIcon("PICKUP", Modifier.size(72.dp), StayColors.Secondary)
             Text(when { state.session == null -> "초대 QR 발급 전"; !active -> "종료된 초대"; state.invitation != null && !inviteValid -> "초대가 만료되었습니다."; state.invitation != null -> "공유 링크를 사용할 수 없습니다. 다시 발급해 주세요."; else -> "초대를 발급하세요." }, fontSize = 21.sp, color = StayColors.Secondary)

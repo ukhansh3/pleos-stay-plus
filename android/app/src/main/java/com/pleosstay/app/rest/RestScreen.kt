@@ -18,7 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.pleosstay.app.R
 import com.pleosstay.app.ui.premium.StayColors
+import com.pleosstay.app.ui.theme.PleosStayPlusTheme
 import com.pleosstay.app.ui.premium.PremiumAction
+import com.pleosstay.app.ui.premium.CompactPanelSelector
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -43,8 +45,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -96,20 +98,25 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
         else if (editor != null) editor = null else onHome()
     }
 
-    val colors = if (active == null) MaterialTheme.colorScheme else when (active.preset.display) {
-        RestDisplay.DARK -> darkColorScheme(background = StayColors.Background, onBackground = StayColors.Text)
-        RestDisplay.MINIMAL -> darkColorScheme(background = Color.Black, onBackground = StayColors.Text)
-        RestDisplay.CALM -> darkColorScheme(background = StayColors.Background, onBackground = StayColors.Text)
-    }
+    val display = active?.preset?.display
     val selected = active?.preset ?: editor ?: RestPreset.defaults.first()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(active?.alarmToken) {
         while (active != null) { now = System.currentTimeMillis(); delay(500) }
     }
-    MaterialTheme(colorScheme = colors) {
-        Surface(color = colors.background, modifier = Modifier.fillMaxSize()) {
+    val darkDisplay = display == RestDisplay.DARK || display == RestDisplay.MINIMAL
+    PleosStayPlusTheme(darkTheme = StayColors.isDark || darkDisplay) {
+        Surface(
+            color = if (display == RestDisplay.MINIMAL) Color.Black else StayColors.Background,
+            contentColor = StayColors.Text,
+            modifier = Modifier.fillMaxSize(),
+        ) {
             BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
                 val wide = maxWidth >= 920.dp
+                var pane by rememberSaveable(active?.alarmToken, active?.targetPrompt) {
+                    mutableIntStateOf(if (active == null && (session?.end == null || showPresets || editor != null) || active?.targetPrompt == true) 1 else 0)
+                }
+                val compactTimerHeight = (maxHeight - 132.dp).coerceAtLeast(340.dp)
                 val panelHeight = (maxHeight - 100.dp).coerceIn(340.dp, 1000.dp)
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -117,12 +124,12 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                         TextButton(onClick = onHome, modifier = Modifier.heightIn(min = 56.dp)) { Text("홈으로 이동") }
                     }
                     val timer: @Composable (Modifier) -> Unit = { modifier ->
-                        RestTimerPanel(modifier.height(panelHeight), selected,
+                        RestTimerPanel(modifier.height(if (wide) panelHeight else compactTimerHeight), selected,
                             remaining = active?.remaining(inspection?.nowMillis ?: now) ?: selected.minutes * REST_MINUTE,
                             active = active != null, canUse = safety.canUse, safetyMessage = safety.message,
                             ended = session?.end?.takeIf { active == null && !showPresets && editor == null }?.label,
                             endsAt = active?.endsAt,
-                            onAgain = { showPresets = true },
+                            onAgain = { showPresets = true; pane = 1 },
                             actions = {
                                 if (active != null) {
                                     if (safety.canUse) {
@@ -140,7 +147,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                             })
                     }
                     val settings: @Composable (Modifier) -> Unit = { modifier ->
-                        RestPanel(modifier.height(if (wide) panelHeight else 620.dp)) {
+                        RestPanel(if (wide) modifier.height(panelHeight) else modifier) {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                                 Text("휴식 설정", fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
                                 if (active != null) Text("사용 중인 프리셋 · ${active.preset.name}", color = StayColors.Blue)
@@ -187,7 +194,7 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                                             OutlinedButton(onClick = { editingId = null; editor = preset },
                                                 modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
                                                 border = androidx.compose.foundation.BorderStroke(1.dp,
-                                                    if (chosen) StayColors.Purple else StayColors.Border)) {
+                                                    if (chosen) StayColors.SelectionOutline else StayColors.Border)) {
                                                 Text("${preset.name} · ${preset.minutes}분", color = if (chosen) StayColors.Text else StayColors.Secondary)
                                             }
                                         }
@@ -245,8 +252,11 @@ internal fun RestScreen(controller: RestController, onRecoverWaiting: () -> Unit
                     }
                     if (wide) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                         timer(Modifier.weight(1.3f)); settings(Modifier.weight(1f))
-                    } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        timer(Modifier.fillMaxWidth()); settings(Modifier.fillMaxWidth())
+                    } else {
+                        CompactPanelSelector(listOf("휴식 화면", "휴식 설정"), pane) { pane = it }
+                        if (pane == 0) {
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { timer(Modifier.fillMaxWidth()) }
+                        } else settings(Modifier.fillMaxWidth().weight(1f))
                     }
                 }
             }
@@ -325,16 +335,19 @@ private fun RestTimerPanel(modifier: Modifier, preset: RestPreset, remaining: Lo
     canUse: Boolean, safetyMessage: String, ended: String?, endsAt: Long?, onAgain: () -> Unit,
     actions: @Composable FlowRowScope.() -> Unit) {
     val shape = RoundedCornerShape(24.dp)
-    Box(modifier.clip(shape).background(if (preset.display == RestDisplay.MINIMAL && active) Color.Black else StayColors.Surface)
+    val minimal = preset.display == RestDisplay.MINIMAL && active
+    val timerText = if (minimal) Color.White else StayColors.Text
+    val timerSecondary = if (minimal) Color.LightGray else StayColors.Secondary
+    Box(modifier.clip(shape).background(if (minimal) Color.Black else StayColors.Surface)
         .border(1.dp, StayColors.Border, shape)) {
         if (canUse && (preset.display != RestDisplay.MINIMAL || !active)) {
             Image(painterResource(R.drawable.rest_pillow), null, Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop, alignment = Alignment.Center, alpha = .52f)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
-                StayColors.Background.copy(alpha = .82f), StayColors.Background.copy(alpha = .34f), StayColors.Background.copy(alpha = .86f)))))
+                StayColors.Background.copy(alpha = .90f), StayColors.Background.copy(alpha = if (StayColors.isDark) .58f else .72f), StayColors.Background.copy(alpha = .90f)))))
         }
         Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (active) "편안한 휴식" else "휴식 준비", Modifier.align(Alignment.Start), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (active) "편안한 휴식" else "휴식 준비", Modifier.align(Alignment.Start), color = timerText, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             if (!canUse) {
                 Text(safetyMessage, fontSize = 24.sp, color = StayColors.Warning)
@@ -343,15 +356,15 @@ private fun RestTimerPanel(modifier: Modifier, preset: RestPreset, remaining: Lo
                 Spacer(Modifier.height(24.dp))
                 PremiumAction("다시 휴식 시작", onAgain)
             } else {
-                Text(preset.name.ifBlank { "나만의 휴식" }, fontSize = 24.sp, color = StayColors.Secondary)
+                Text(preset.name.ifBlank { "나만의 휴식" }, fontSize = 24.sp, color = timerSecondary)
                 Spacer(Modifier.height(24.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     val timerSize = if (maxWidth >= 480.dp) 82.sp else 58.sp
                     Text(clockDuration(remaining), fontSize = timerSize, fontWeight = FontWeight.SemiBold,
-                        color = StayColors.Text, maxLines = 1, modifier = Modifier.testTag("rest_timer"))
+                        color = timerText, maxLines = 1, modifier = Modifier.testTag("rest_timer"))
                 }
                 Spacer(Modifier.height(20.dp))
-                Text(if (endsAt != null) "종료 예정 ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))}" else "${preset.minutes}분", color = StayColors.Secondary, fontSize = 20.sp)
+                Text(if (endsAt != null) "종료 예정 ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))}" else "${preset.minutes}분", color = timerSecondary, fontSize = 20.sp)
             }
             Spacer(Modifier.weight(1f))
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
@@ -395,7 +408,7 @@ private fun RestEditor(preset: RestPreset, onChange: (RestPreset) -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> RestOptions(values: List<T>, selected: T, label: (T) -> String, enabled: Boolean = true, select: (T) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { values.forEach { value -> TextButton(onClick = { select(value) }, enabled = enabled, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = Color(0xFFAACAE6)), modifier = Modifier.heightIn(min = 64.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { values.forEach { value -> TextButton(onClick = { select(value) }, enabled = enabled, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = StayColors.Blue), modifier = Modifier.heightIn(min = 64.dp)) {
         Text((if (value == selected) "✓ " else "") + label(value),fontSize=20.sp)
     } } }
 }
@@ -430,7 +443,7 @@ internal fun RestSoundControls(preset: RestPreset, enabled: Boolean, sound: (Res
         Text("배경음 볼륨 ${preset.volume}%", fontSize = 22.sp)
         androidx.compose.material3.Slider(value = preset.volume.toFloat(), onValueChange = { volume(it.toInt()) },
             valueRange = 0f..100f, enabled = enabled && preset.sound != RestSound.SILENT,
-            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color(0xFFAACAE6), activeTrackColor = Color(0xFFAACAE6), inactiveTrackColor = StayColors.Border),
+            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = StayColors.Blue, activeTrackColor = StayColors.Blue, inactiveTrackColor = StayColors.Border),
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("rest_sound_volume"))
         OutlinedButton(onClick = { mute(!preset.muted) }, enabled = enabled && preset.sound != RestSound.SILENT,
             modifier = Modifier.heightIn(min = 64.dp)) { Text(if (preset.muted) "음소거 해제" else "음소거", fontSize = 20.sp) }

@@ -33,7 +33,7 @@ fun PremiumAction(label:String,onClick:()->Unit,modifier:Modifier=Modifier,enabl
     Button(onClick=onClick,enabled=enabled,modifier=modifier.heightIn(min=64.dp),
         shape=RoundedCornerShape(18.dp),
         colors=ButtonDefaults.buttonColors(containerColor=if(secondary) StayColors.Surface else StayColors.Action,
-            contentColor=StayColors.Text,disabledContainerColor=StayColors.Surface,disabledContentColor=StayColors.Secondary)) {
+            contentColor=if(secondary) StayColors.Text else StayColors.OnAction,disabledContainerColor=StayColors.Surface,disabledContentColor=StayColors.Secondary)) {
         Text(label,fontSize=20.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold)
     }
 }
@@ -59,6 +59,18 @@ fun ResponsivePanels(leftWeight:Float=1f,left:@Composable ()->Unit,right:@Compos
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CompactPanelSelector(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        labels.forEachIndexed { index, label ->
+            FilterChip(selected == index, onClick = { onSelect(index) }, label = { Text(label) },
+                modifier = Modifier.heightIn(min = 48.dp))
+        }
+    }
+}
+
 @Composable
 fun NoticePanel(title:String,message:String,error:Boolean=false) {
     GlassPanel(Modifier.fillMaxWidth()) {
@@ -72,7 +84,7 @@ fun NoticePanel(title:String,message:String,error:Boolean=false) {
 fun FeaturePanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(24.dp)
     Column(modifier.clip(shape)
-        .background(Brush.verticalGradient(listOf(Color(0xFF172B43), Color(0xFF0D1D30))))
+        .background(Brush.verticalGradient(listOf(StayColors.PanelStart, StayColors.PanelEnd)))
         .border(1.dp, StayColors.Border.copy(alpha = .75f), shape).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides StayColors.Text) { content() }

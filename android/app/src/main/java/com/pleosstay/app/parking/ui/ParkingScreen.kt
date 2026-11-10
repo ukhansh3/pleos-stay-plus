@@ -30,12 +30,14 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
     val state = featureInspection()?.parking ?: liveState
     val inspectionSelected = featureInspection()?.parking?.selected?.id
     var detailId by rememberSaveable { mutableStateOf(inspectionSelected) }
+    var searchPane by rememberSaveable { mutableIntStateOf(if (state.places.isEmpty() && !state.loading) 0 else 1) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val search = {
         focus.clearFocus()
         keyboard?.hide()
         detailId = null
+        searchPane = 1
         onNearbySearch()
     }
     BackHandler(enabled = detailId != null) { detailId = null }
@@ -74,19 +76,22 @@ fun ParkingScreen(viewModel: ParkingViewModel, onNearbySearch: () -> Unit, modif
                         }
                     }
                 }
-            } else {
-                LazyColumn(Modifier.weight(1f), state = resultsScroll, verticalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item { FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, search) } }
-                    if (detailId != null) {
-                        item { TextButton(onClick = { detailId = null }) { Text("검색 결과로 돌아가기") } }
-                        if (selected != null) item { FeaturePanel(Modifier.fillMaxWidth()) { ParkingSelectedInfo(selected, state.navigationStatus, viewModel::navigate, onWaiting) } }
-                    } else {
-                        item { Text("검색 결과 · ${state.total}곳", fontSize = 27.sp, fontWeight = FontWeight.Bold) }
-                        items(state.places, key = { it.id }) { place -> ParkingRow(place, false) { detailId = place.id; viewModel.select(place) } }
-                        if (state.places.isEmpty() && !state.loading && state.error == null) item { Text(state.emptyResultsLabel(), color = StayColors.Secondary) }
+            } else if (detailId != null) {
+                TextButton(onClick = { detailId = null }) { Text("검색 결과로 돌아가기") }
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(detailScroll),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (selected != null) FeaturePanel(Modifier.fillMaxWidth()) {
+                        ParkingSelectedInfo(selected, state.navigationStatus, viewModel::navigate, onWaiting)
                     }
-                    if (state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                    state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+                    if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            } else {
+                CompactPanelSelector(listOf("검색 조건", "검색 결과 · ${state.total}곳"), searchPane) { searchPane = it }
+                if (searchPane == 0) Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    FeaturePanel(Modifier.fillMaxWidth()) { ParkingConditions(state, viewModel, search) }
+                } else ParkingResults(state, null, Modifier.weight(1f), resultsScroll) { place ->
+                    detailId = place.id; viewModel.select(place)
                 }
             }
         }

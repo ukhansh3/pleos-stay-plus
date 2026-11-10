@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -97,23 +98,27 @@ fun StayAppShell(
 fun StayNavigationRail(selected:NavigationGroup,navigate:(StayRoute)->Unit,width:androidx.compose.ui.unit.Dp=180.dp) {
     BoxWithConstraints(Modifier.width(width).fillMaxHeight().background(StayColors.Rail)) {
         val expanded=width>=160.dp
-        val itemHeight=((maxHeight-200.dp)/6).coerceIn(72.dp,116.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=14.dp,vertical=36.dp),
-            horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        val short = maxHeight <= 760.dp
+        val itemHeight = if (short) ((maxHeight - 195.dp) / 6).coerceIn(64.dp, 100.dp)
+            else ((maxHeight - 200.dp) / 6).coerceIn(72.dp, 116.dp)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp, vertical = if (short) 16.dp else 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (short) 10.dp else 16.dp)) {
             Image(painterResource(R.drawable.stay_brand_logo), "Stay+ 로고",
-                Modifier.size(if(expanded) 104.dp else 76.dp), contentScale=ContentScale.Fit)
+                Modifier.size(if(expanded) 104.dp else 76.dp), contentScale=ContentScale.Fit, colorFilter = if (StayColors.isDark) null else ColorFilter.tint(StayColors.Text))
             Spacer(Modifier.height(8.dp))
             listOf(StayRoute.HOME,StayRoute.PARKING,StayRoute.PICKUP,StayRoute.MODES,StayRoute.FILES,StayRoute.SETTINGS).forEach { route ->
                 val active=route.group==selected
                 val itemModifier=Modifier.fillMaxWidth().heightIn(min=itemHeight).clip(RoundedCornerShape(18.dp))
-                    .then(if(active) Modifier.background(StayColors.Active).border(1.dp,StayColors.Purple,RoundedCornerShape(18.dp)) else Modifier)
+                    .then(if(active) Modifier.background(StayColors.Selected).border(2.dp, StayColors.SelectionOutline, RoundedCornerShape(18.dp)) else Modifier)
                     .selectable(active,role=Role.Tab,onClick={navigate(route)}).testTag("nav_${route.name}")
                 if(expanded) Row(itemModifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
-                    StayIcon(route.name,Modifier.size(32.dp),if(active) StayColors.Text else StayColors.Secondary)
-                    Text(stringResource(route.label),fontSize=18.sp,color=if(active) StayColors.Text else StayColors.Secondary)
+                    StayIcon(route.name,Modifier.size(32.dp),if(active) StayColors.OnSelected else StayColors.Secondary)
+                    Text(stringResource(route.label),fontSize=18.sp,color=if(active) StayColors.OnSelected else StayColors.Secondary)
                 } else Column(itemModifier.padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                    StayIcon(route.name,tint=if(active) StayColors.Text else StayColors.Secondary)
-                    Text(stringResource(route.label),style=MaterialTheme.typography.labelMedium,color=if(active) StayColors.Text else StayColors.Secondary)
+                    StayIcon(route.name,tint=if(active) StayColors.OnSelected else StayColors.Secondary)
+                    Text(stringResource(route.label),style=MaterialTheme.typography.labelMedium,color=if(active) StayColors.OnSelected else StayColors.Secondary)
                 }
             }
         }

@@ -30,6 +30,7 @@
         <receiver android:name=".rest.RestAlarmReceiver" android:exported="false" />
         <activity
             android:name=".MainActivity"
+            android:configChanges="uiMode"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.PleosStayPlus"
