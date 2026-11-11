@@ -28,8 +28,9 @@
 
 - 실제 프로젝트: `C:/Users/ukhan/pleos-stay-plus`.
 - Android Debug APK와 Windows Debug EXE를 빌드했다. 설치/실행하지 않았다. Windows의 공개 인증 기본값은 로컬 빌드 설정에 들어 있어 매번 UI에서 입력할 필요가 없다.
-- `backend/src/realtime/.env.local`은 현재 없다. 기존 실제 서버에는 `REALTIME_SUPABASE_ENABLED`, URL, 공개 키, 서버 전용 secret, `REALTIME_PAIRING_SECRET`가 필요하다. 원래 Parking/Pickup 서버(3000), Next.js(3001) 실행만으로 Realtime(3012)이 켜지지 않는다.
-- 서버 전용 설정/새 HMAC 키 생성과 실제 Cloud 실행·쓰기는 이번 코드 변경만으로 임의 수행하지 않았다. 기존 승인 프로젝트의 설정을 재사용하더라도 새로운 서버 비밀키 파일 준비에는 별도 확인을 받는다.
+- 코드 검증 당시에는 `backend/src/realtime/.env.local`이 없었다. 이후 2026-11-11 사용자가 **로컬 서버 설정 파일까지 준비**를 승인했다. 기존 `backend/.env`의 승인된 Supabase 프로젝트 설정을 재사용하고 Realtime 전용 32바이트 난수 HMAC 키를 새로 생성해 해당 Git 제외 파일을 준비했다. 기존 파일은 덮어쓰지 않았다.
+- dotenv 재파싱으로 필수 값의 일치와 HMAC 64자리 hex 형식을 검사했고, Git ignored/untracked를 확인했다. 실제 값은 문서·Git·로그에 기록하지 않았다. `REALTIME_LOCAL_PORT=3012`, `REALTIME_CLOUD_TEST_APPROVED=false`이며 서버 실행·네트워크 요청·배포·DB 작업은 하지 않았다.
+- 원래 Parking/Pickup 서버(3000), Next.js(3001) 실행만으로 Realtime(3012)이 켜지지 않는다. 실제 실행 및 연결 검증은 이 파일 준비와 별개다.
 - 승인된 공개 HTTPS 서비스 주소/안내 페이지는 아직 없으므로 외부망 차량↔PC 연결과 안내 QR은 BLOCKED다. 새 서버/도메인/배포/DB/RLS/공모전 SDK를 도입하지 않았다.
 - 기존 `web/next-env.d.ts` 변경은 이 작업과 무관하여 보존하고 커밋에서 제외한다.
 
@@ -46,7 +47,7 @@
 | 실제 로컬 HTTP + C# 클라이언트 | PASS 차량 역할 코드 발급 → 명명된 PC 코드 입력 → 한쪽 승인만으로 파일 권한 없음 → 양쪽 승인 후 연결/전송. TXT/PDF/DOCX 원본·수정본·SHA-256·중복 요청·차량 DOCX 최초 업로드·PC 다운로드/XML 재열기·철회 차단. |
 | Backend 회귀 | PASS30개. 승인·코드 만료/재사용/추측 제한·파일 권한·기존 Parking/Pickup 포함. |
 | 실제 PLEOS 터치/PIN/키보드/코드 화면 | NOT RUN. 사용자의 에뮬레이터 제한을 지켜 실행/재시작/설치하지 않았다. |
-| 실제 Supabase Auth + Windows GUI + 차량 앱 왕복 | BLOCKED 현재 실제 서버 설정 미완료. 로컬 HTTP 테스트의 별도 테스트 인증을 실제 Cloud 검증으로 확대하지 않는다. |
+| 실제 Supabase Auth + Windows GUI + 차량 앱 왕복 | NOT RUN 서버 설정 파일은 후속 승인으로 준비했지만 실제 서버와 클라이언트 GUI는 실행하지 않았다. 로컬 HTTP 테스트의 별도 테스트 인증을 실제 Cloud 검증으로 확대하지 않는다. |
 | 보호 영역 | 홈/이미지/로고/차량 SDK/Waiting/ModeStartManager/Study 저장/DOCX 엔진/Backend API/DB 변경 없음. |
 
 ## 참조
