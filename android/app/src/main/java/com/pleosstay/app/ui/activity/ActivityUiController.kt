@@ -128,6 +128,14 @@ internal class ActivityUiController(
         val target=state.value.target ?: return
         setConsent(target);mutable.update{it.copy(input=false)};submit(target)
     }
+    fun openDocumentConnection() {
+        if (!state.value.preparing || state.value.busy) return
+        val source = state.value.source
+        cancelPreparation()
+        // Existing document activities retain the normal save/leave guard.
+        if (source?.document() == true) leave(source.route(), StayRoute.FILES)
+        else navigate(StayRoute.FILES)
+    }
     fun cancelPreparation(){if(!state.value.busy){retryAfterPreparation=false;retry=null;mutable.value=ActivityUiState(active=coordinator.currentState().active)}}
     fun finish(mode:ActivityMode) {
         if(state.value.busy || state.value.modal || coordinator.currentState().active!=mode)return

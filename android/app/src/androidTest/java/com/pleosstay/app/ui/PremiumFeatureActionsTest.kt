@@ -83,7 +83,7 @@ class PremiumFeatureActionsTest {
                 created = true
                 PleosStayPlusTheme { PickupScreen(model, { model.start() }) }
             }
-            ui.onNodeWithText("현재 위치로 Pickup 시작").performScrollTo().performClick()
+            ui.onNodeWithText("차량 위치에서 픽업 시작").performScrollTo().performClick()
             ui.waitUntil(15000) { model.state.value.session != null && !model.state.value.busy }
             assertNull(repository.waitingId)
             assertNotNull(model.state.value.locationMessage)
@@ -91,14 +91,14 @@ class PremiumFeatureActionsTest {
             ui.waitUntil(15000) { model.state.value.invitation != null && !model.state.value.busy }
             ui.onNodeWithContentDescription("Pickup 공유 링크 QR").performScrollTo().assertIsDisplayed()
             val first = model.state.value.invitation!!.shareUrl
-            ui.onNodeWithText("QR 재발급").performScrollTo().performClick()
+            ui.onNodeWithText("QR 다시 만들기").performScrollTo().performClick()
             ui.onNodeWithText("재발급", useUnmergedTree = true).performClick()
             ui.waitUntil(15000) { repository.invites == 2 && !model.state.value.busy }
             assertNotEquals(first, model.state.value.invitation!!.shareUrl)
             repository.failInvite = true
-            ui.onNodeWithText("QR 재발급").performScrollTo().performClick()
+            ui.onNodeWithText("QR 다시 만들기").performScrollTo().performClick()
             ui.onNodeWithText("재발급", useUnmergedTree = true).performClick()
-            ui.waitUntil(15000) { model.state.value.error != null && !model.state.value.busy }
+            ui.waitUntil(15000) { model.state.value.invitationError != null && !model.state.value.busy }
             ui.onNodeWithText("테스트 전용 네트워크 오류").performScrollTo().assertIsDisplayed()
             ui.onNodeWithText("합류 완료").performScrollTo().performClick()
             ui.onNodeWithText("완료", useUnmergedTree = true).performClick()

@@ -32,6 +32,27 @@ class ActivityUiControllerTest {
   val work get()=adapters.getValue(ActivityMode.WORK)
   fun handled(route:StayRoute){assertTrue(ui.takeNavigationPermit(route));assertFalse(ui.takeNavigationPermit(route))}
  }
+ @Test fun connectionSetupDoesNotStartWorkOrStopCurrentRest()=runTest {
+  val f=Fixture(this);f.ui.open(ActivityMode.REST);runCurrent();f.handled(StayRoute.REST)
+  f.documents=false;f.ui.open(ActivityMode.WORK)
+  assertTrue(f.ui.state.value.preparing)
+  f.ui.openDocumentConnection();runCurrent();f.handled(StayRoute.FILES)
+  assertFalse(f.ui.state.value.preparing);assertEquals(0,f.work.starts)
+  assertNotNull(f.rest.id);assertEquals(0,f.rest.stops)
+ }
+ @Test fun busyPreparationCannotBeReplacedByConnectionNavigation()=runTest {
+  val f=Fixture(this);f.documents=false;f.ui.open(ActivityMode.WORK)
+  assertTrue(f.ui.beginPreparation())
+  f.ui.openDocumentConnection()
+  assertTrue(f.ui.state.value.preparing);assertNull(f.ui.state.value.destination)
+ }
+ @Test fun connectionNavigationKeepsExistingWorkSaveConfirmation()=runTest {
+  val f=Fixture(this);f.ui.open(ActivityMode.WORK);runCurrent();f.handled(StayRoute.WORK)
+  f.confirmLeave=true;f.documents=false;f.ui.open(ActivityMode.STUDY)
+  f.ui.openDocumentConnection();runCurrent()
+  assertEquals(StayRoute.FILES,f.ui.state.value.leavePrompt)
+  assertNull(f.ui.state.value.destination);assertNotNull(f.work.id)
+ }
  @Test fun legacyAndUnknownRoutesAreDroppedFromSavedNavigation() {
   assertEquals(listOf("HOME", "MODES"), submissionRouteStack(listOf("HOME", "MODES", "ENTERTAINMENT")))
   assertEquals(listOf("HOME"), submissionRouteStack(listOf("ENTERTAINMENT", "UNKNOWN")))

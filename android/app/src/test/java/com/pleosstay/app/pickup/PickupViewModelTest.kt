@@ -202,13 +202,29 @@ class PickupViewModelTest {
 
         viewModel.issueInvitation()
         runCurrent()
+        assertEquals("network", viewModel.state.value.invitationError)
+        val snapshots = repository.snapshotCalls
+        advanceTimeBy(5_001)
+        runCurrent()
+        assertTrue(repository.snapshotCalls > snapshots)
+        assertEquals("network", viewModel.state.value.invitationError) // successful polling cannot hide the QR failure
+        assertEquals(PickupSessionStatus.ACTIVE, viewModel.state.value.session?.status)
         viewModel.issueInvitation()
         runCurrent()
+        assertEquals(null, viewModel.state.value.invitationError)
         assertEquals(repository.invitationKeys[0], repository.invitationKeys[1])
 
         viewModel.issueInvitation()
         runCurrent()
         assertNotEquals(repository.invitationKeys[1], repository.invitationKeys[2])
+        repository.invitationFailures = 1
+        viewModel.issueInvitation()
+        runCurrent()
+        assertEquals("network", viewModel.state.value.invitationError)
+        viewModel.complete()
+        runCurrent()
+        assertEquals(PickupSessionStatus.COMPLETED, viewModel.state.value.session?.status)
+        assertEquals(null, viewModel.state.value.invitationError)
         viewModel.releaseResources()
     }
 }

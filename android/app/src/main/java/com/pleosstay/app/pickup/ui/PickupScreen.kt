@@ -110,6 +110,7 @@ private fun PickupInvitationPanel(state: PickupUiState, qr: Bitmap?, inviteValid
     val active = state.session?.status == PickupSessionStatus.ACTIVE
     Text("픽업 초대", fontSize = 27.sp, fontWeight = FontWeight.Bold)
     Text("참가자 1명 · 60분 유효", color = StayColors.Secondary, fontSize = 18.sp)
+    state.invitationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 20.sp) }
     BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = if (compact) 180.dp else 300.dp).background(StayColors.Background), contentAlignment = Alignment.Center) {
         if (qr != null) Image(qr.asImageBitmap(), "Pickup 공유 링크 QR", Modifier.size(minOf((maxWidth - 20.dp).coerceAtLeast(0.dp), if (compact) 230.dp else 340.dp)).background(Color.White))
         else Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -140,8 +141,8 @@ private fun PickupStatusPanel(state: PickupUiState, start: () -> Unit, complete:
             session?.participant?.let { Text(it.status.label(), color = StayColors.Blue, fontSize = 22.sp) }
         }
         if (session != null) {
-            InfoLine("픽업", session.status.label())
-            InfoLine("위치 공유", if (state.sharingLocation) "공유 중" else "공유 중지")
+            InfoLine("픽업", if (active && state.invitation == null && session.participant == null) "초대 준비 중" else session.status.label())
+            InfoLine("차량 위치", if (state.sharingLocation) "갱신 중" else "갱신 중지")
             if (state.syncing) Text("참가자 상태 확인 중…", color = StayColors.Secondary, fontSize = 19.sp)
             state.lastLocationAt?.let { InfoLine("최근 갱신", it.timeLabel()) }
             if (state.proximityCandidate && active) Text("참가자가 가까이 있어요. 만나면 ‘합류 완료’를 눌러 주세요.", color = StayColors.Blue, fontSize = 22.sp)

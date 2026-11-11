@@ -46,6 +46,7 @@ data class PickupUiState(
     val lastEventRevision: Int = 0,
     val ttsMessage: String = "Pleos TTS 초기화 대기 중",
     val error: String? = null,
+    val invitationError: String? = null,
 )
 
 class PickupViewModel(
@@ -122,16 +123,16 @@ class PickupViewModel(
         if (mutableState.value.busy || !safety.state.value.canUse) return
         val key = invitationKey ?: UUID.randomUUID().toString().also { invitationKey = it }
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
+            mutableState.update { it.copy(busy = true, error = null, invitationError = null) }
             runCatching { repository.issueInvitation(sessionId, key) }
                 .onSuccess { invitation ->
                     invitationKey = null
-                    mutableState.update { it.copy(invitation = invitation, busy = false) }
+                    mutableState.update { it.copy(invitation = invitation, busy = false, invitationError = null) }
                     syncOnce(sessionId)
                 }
                 .onFailure { failure ->
                     if (failure is kotlinx.coroutines.CancellationException) throw failure
-                    mutableState.update { it.copy(busy = false, error = failure.message ?: "초대 링크를 발급하지 못했습니다.") }
+                    mutableState.update { it.copy(busy = false, invitationError = failure.message ?: "초대 링크를 발급하지 못했습니다.") }
                 }
         }
     }
@@ -154,7 +155,7 @@ class PickupViewModel(
                 .onSuccess { session ->
                     closeKeys.remove(operation)
                     locationJob?.cancel()
-                    mutableState.update { it.copy(session = session, invitation = null, sharingLocation = false, busy = false) }
+                    mutableState.update { it.copy(session = session, invitation = null, sharingLocation = false, busy = false, invitationError = null) }
                     syncOnce(id)
                 }
                 .onFailure { failure -> mutableState.update { it.copy(busy = false, error = failure.message) } }
@@ -222,7 +223,7 @@ class PickupViewModel(
         }
         if (session.status != PickupSessionStatus.ACTIVE) {
             locationJob?.cancel()
-            mutableState.update { it.copy(sharingLocation = false, invitation = null) }
+            mutableState.update { it.copy(sharingLocation = false, invitation = null, invitationError = null) }
         }
     }
 

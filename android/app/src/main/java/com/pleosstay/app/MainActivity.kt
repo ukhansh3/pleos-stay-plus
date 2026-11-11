@@ -1,5 +1,6 @@
 package com.pleosstay.app
 
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -70,6 +71,13 @@ class MainActivity : ComponentActivity() {
         @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(modelClass:Class<T>):T =
             PremiumActivityHost(waitingDependencies.rest,waitingDependencies.safety) as T
     } }
+    private val foregroundOwner = Any()
+    private fun setActivityForeground(value: Boolean) {
+        if (value) waitingDependencies.foreground.claim(foregroundOwner)
+        else waitingDependencies.foreground.release(foregroundOwner)
+        documentForeground.value = value
+        activityHost.setForeground(value)
+    }
     private var openRest by mutableStateOf(false)
     private val documentForeground = MutableStateFlow(false)
     private val waitingViewModel: WaitingViewModel by viewModels {
@@ -93,44 +101,36 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        waitingDependencies.safety.setForeground(true)
         waitingDependencies.safety.start()
     }
 
     override fun onResume() {
         super.onResume()
         if (android.os.Build.VERSION.SDK_INT < 29) {
-            waitingDependencies.rest.setForeground(true)
-            documentForeground.value = true
-            activityHost.setForeground(true)
+            setActivityForeground(true)
         }
     }
 
     override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
         super.onTopResumedActivityChanged(isTopResumedActivity)
         // PLEOS multi-window can keep several activities RESUMED after Home/app switches.
-        waitingDependencies.rest.setForeground(isTopResumedActivity)
-        documentForeground.value = isTopResumedActivity
-        activityHost.setForeground(isTopResumedActivity)
+        setActivityForeground(isTopResumedActivity)
         Log.d("RestLifecycle", "topResumed=" + isTopResumedActivity)
     }
 
     override fun onPause() {
-        documentForeground.value = false
-        activityHost.setForeground(false)
-        waitingDependencies.rest.setForeground(false)
+        setActivityForeground(false)
         super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         if (intent.getBooleanExtra("openRest", false)) openRest = true
     }
 
     override fun onStop() {
-        documentForeground.value = false
-        activityHost.setForeground(false)
-        waitingDependencies.safety.setForeground(false)
+        setActivityForeground(false)
         super.onStop()
     }
     private val parkingViewModel: ParkingViewModel by viewModels {
@@ -224,10 +224,20 @@ class MainActivity : ComponentActivity() {
                         visible=documentVisible && (filesVisible || activityUi.preparing),
                         presentation={ body ->
                             if(activityUi.preparing)ActivityModal(
-                                if (activityUi.target == ActivityMode.STUDY) "공부 자료를 준비하고 있어요"
-                                else "업무 문서를 준비하고 있어요",activityUi.busy,host.ui::cancelPreparation) {
-                                PremiumAction("취소",host.ui::cancelPreparation,enabled=!activityUi.busy,secondary=true)
-                                Box(Modifier.fillMaxWidth().height(820.dp)){body()}
+                                if (activityUi.target == ActivityMode.STUDY) "공부를 시작하기 전에"
+                                else "업무를 시작하기 전에",activityUi.busy,host.ui::cancelPreparation) {
+                                Text(if (safety.canUse) "파일 작업에서 PC 연결과 PIN을 확인해 주세요." else safety.message)
+                                if (activityUi.target == ActivityMode.STUDY && host.coordinator.currentState().active != ActivityMode.STUDY) {
+                                    var studyMinutes by remember { mutableStateOf(host.studyMinutes.toString()) }
+                                    OutlinedTextField(studyMinutes, {
+                                        studyMinutes = it.filter(Char::isDigit).take(3)
+                                        host.setStudyMinutes(studyMinutes.toIntOrNull() ?: 0)
+                                    }, label = { Text("학습 시간 · 분") }, singleLine = true, enabled = !activityUi.busy)
+                                }
+                                activityUi.preparationError?.let { Text(it, color = StayColors.Warning) }
+                                PremiumAction("파일 작업 열기",host.ui::openDocumentConnection,enabled=!activityUi.busy && safety.canUse)
+                                PremiumAction("연결 확인",host::prepareDocuments,enabled=!activityUi.busy && safety.canUse,secondary=true)
+                                PremiumAction("돌아가기",host.ui::cancelPreparation,enabled=!activityUi.busy,secondary=true)
                             } else body()
                         },
                         managedWorkspace={model,endpoint->rememberPremiumDocuments(applicationContext,model,endpoint,
@@ -289,6 +299,10 @@ private class WaitingDependencies(context: Context) {
     val monitor = WaitingDrivingMonitor(repository, safety.drivingEvents, scope)
     val modeStartManager = ModeStartManager(repository, safety)
     val rest = RestController(RestStore(context), RestAlarm(context), RestAudio(context), RestEvGateway(context), modeStartManager, safety, scope)
+    val foreground = com.pleosstay.app.ui.ActivityForegroundOwner { visible ->
+        safety.setForeground(visible)
+        rest.setForeground(visible)
+    }
     companion object {
         @Volatile private var instance: WaitingDependencies? = null
         fun get(context: Context): WaitingDependencies = instance ?: synchronized(this) {

@@ -12,8 +12,11 @@ internal object RealtimeDeployment {
     val guide = publicHttpsLink(BuildConfig.REALTIME_PAIRING_PAGE_URL.trim())
         ?.takeIf { it.path.trimEnd('/') == "/connect" && it.rawQuery == null && it.rawFragment == null && it.toString().length <= 512 }?.toString()
 
-    fun configured(endpoint: String, auth: String, key: String): Boolean {
-        val api = publicHttpsLink(endpoint) ?: return false
+    fun configured(endpoint: String, auth: String, key: String, allowLoopback: Boolean = BuildConfig.DEBUG): Boolean {
+        // The actual authenticated local server is also usable in Debug; it still requires Supabase Auth.
+        // Release accepts public HTTPS only. This is separate from fixed-token local QA authentication.
+        val api = publicHttpsLink(endpoint) ?: if (allowLoopback && isLoopbackRealtimeEndpoint(endpoint))
+            java.net.URI(endpoint) else return false
         val identity = publicHttpsLink(auth) ?: return false
         return api.path.trimEnd('/') == "/api/v1/realtime" &&
             api.rawQuery == null && api.rawFragment == null &&

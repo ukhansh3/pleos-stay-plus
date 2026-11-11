@@ -54,7 +54,7 @@ class RealtimeUiSession:ViewModel() {
  }
  }catch(c:kotlinx.coroutines.CancellationException){throw c}
  catch(_:Exception){error="저장한 연결 설정을 불러오지 못했습니다."}
- session.ready=if(local) validLocalRealtime(url,credential) else RealtimeDeployment.configured(url,authUrl,publicKey)
+ session.ready=RealtimeConnectionSettings.error(url,credential,authUrl,publicKey,local) == null
  session.loaded=true
  }
  val safetyState by safety.state.collectAsState()
@@ -67,24 +67,26 @@ class RealtimeUiSession:ViewModel() {
   Text("자료함 연결",fontSize=38.sp)
   FeaturePanel(Modifier.widthIn(max=760.dp).fillMaxWidth()) {
   if(!BuildConfig.DEBUG || !session.developerSettings) {
-   NoticePanel("PC 연결을 준비할 수 없습니다", "지금은 PC에 연결할 수 없어요. 문제가 계속되면 관리자에게 문의해 주세요.", true)
+   NoticePanel("PC 연결 서비스가 설정되지 않았습니다", "연결 서비스를 설정한 뒤 다시 시도해 주세요.", true)
    if(BuildConfig.DEBUG) TextButton(onClick={session.developerSettings=true}) { Text("개발자 연결 설정") }
    return@FeaturePanel
   }
   Text("개발자 연결 설정",fontSize=28.sp)
-  if(BuildConfig.DEBUG){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(local,{ local=it; if(it && url.isBlank()) url="http://10.0.2.2:3010/api/v1/realtime/" });Text("로컬 서버 연결")}}
+  if(BuildConfig.DEBUG){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(local,{ local=it; if(it && url.isBlank()) url="http://10.0.2.2:3010/api/v1/realtime/" });Text("개발 전용 테스트 인증")}}
   OutlinedTextField(url,{url=it},label={Text("서버 주소")},modifier=Modifier.fillMaxWidth(),singleLine=true)
   if(local) OutlinedTextField(credential,{credential=it},label={Text("로컬 연결 토큰")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
   else {
    OutlinedTextField(authUrl,{authUrl=it},label={Text("인증 서버 주소")},modifier=Modifier.fillMaxWidth(),singleLine=true)
    OutlinedTextField(publicKey,{publicKey=it},label={Text("인증 공개 키")},modifier=Modifier.fillMaxWidth(),singleLine=true)
   }
+  TextButton(onClick={session.developerSettings=false;error=""}) { Text("돌아가기") }
   if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
   Button(onClick={scope.launch{try{
-   require(if(local) validLocalRealtime(url,credential) else RealtimeDeployment.configured(url,authUrl,publicKey))
+   val validation = RealtimeConnectionSettings.error(url,credential,authUrl,publicKey,local)
+   if (validation != null) { error=validation; return@launch }
    RealtimeApi(url){credential}
    withContext(Dispatchers.IO){configStore.write(JSONObject().put("url",url).put("token",if(local)credential else "").put("local",local).put("authUrl",authUrl).put("publicKey",publicKey).toString())};ready=true
-  }catch(c:kotlinx.coroutines.CancellationException){throw c}catch(_:Exception){error="서버 주소와 연결 정보를 확인해 주세요."}}}){Text("연결")}
+  }catch(c:kotlinx.coroutines.CancellationException){throw c}catch(_:Exception){error="연결 설정을 저장하지 못했습니다. 다시 시도해 주세요."}}}){Text("설정 저장")}
  }}};return}
  val provider=remember(authUrl,publicKey,local){if(local)null else RealtimeIdentityProvider(authUrl,publicKey,RealtimeTokenStore(app,"realtime-auth-"+java.security.MessageDigest.getInstance("SHA-256").digest(authUrl.toByteArray()).joinToString(""){"%02x".format(it)}+".bin"))}
  val modelKey=remember(url,authUrl,local,credential){java.security.MessageDigest.getInstance("SHA-256").digest((url+authUrl+local+credential).toByteArray()).joinToString(""){"%02x".format(it)}}
@@ -104,10 +106,3 @@ class RealtimeUiSession:ViewModel() {
  }
 }
 }
-
-private fun validLocalRealtime(url: String, credential: String): Boolean = BuildConfig.DEBUG && credential.length >= 32 &&
-    runCatching {
-        val uri = java.net.URI(url)
-        uri.scheme == "http" && uri.host in listOf("10.0.2.2", "127.0.0.1", "localhost") &&
-            uri.path.trimEnd('/') == "/api/v1/realtime" && uri.userInfo == null && uri.query == null && uri.fragment == null
-    }.getOrDefault(false)
