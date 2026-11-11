@@ -36,3 +36,6 @@ __pycache__/
 # Supabase local
 supabase/.branches/
 supabase/.temp/
+
+# Local public client build settings (never server credentials)
+/windows/StayPlus.Desktop/Deployment.local.props

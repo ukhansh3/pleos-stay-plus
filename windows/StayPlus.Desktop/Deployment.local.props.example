@@ -1,0 +1,10 @@
+<Project>
+ <!-- Developer/packager input only. Copy to Deployment.local.props (Git ignored).
+      Only public Supabase client settings belong here. Never put server secrets or HMAC keys here.
+      Supply REALTIME_API_BASE_URL via the build environment for an approved HTTPS service.
+      Debug alone defaults to the existing authenticated loopback development server. -->
+ <PropertyGroup>
+  <REALTIME_SUPABASE_URL Condition="'$(REALTIME_SUPABASE_URL)' == ''">https://your-project.supabase.co</REALTIME_SUPABASE_URL>
+  <REALTIME_SUPABASE_PUBLIC_KEY Condition="'$(REALTIME_SUPABASE_PUBLIC_KEY)' == ''">sb_publishable_example</REALTIME_SUPABASE_PUBLIC_KEY>
+ </PropertyGroup>
+</Project>

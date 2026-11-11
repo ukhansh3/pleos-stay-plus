@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.util.Base64
 
 internal object RealtimeDeployment {
-    val endpoint = BuildConfig.REALTIME_API_BASE_URL.trim()
+    val endpoint = defaultEndpoint(BuildConfig.REALTIME_API_BASE_URL, BuildConfig.DEBUG)
     val auth = BuildConfig.REALTIME_SUPABASE_URL.trim().ifBlank { BuildConfig.SUPABASE_URL.trim() }
     val key = BuildConfig.REALTIME_SUPABASE_PUBLIC_KEY.trim().ifBlank { BuildConfig.SUPABASE_PUBLISHABLE_KEY.trim() }
     val guide = publicHttpsLink(BuildConfig.REALTIME_PAIRING_PAGE_URL.trim())
@@ -22,6 +22,10 @@ internal object RealtimeDeployment {
             api.rawQuery == null && api.rawFragment == null &&
             identity.path.trimEnd('/').isEmpty() && identity.rawQuery == null && identity.rawFragment == null &&
             publishable(key)
+    }
+
+    internal fun defaultEndpoint(configured: String, debug: Boolean): String = configured.trim().ifBlank {
+        if (debug) "http://10.0.2.2:3012/api/v1/realtime/" else ""
     }
 
     private fun publishable(key: String): Boolean = key.startsWith("sb_publishable_") || runCatching {

@@ -126,9 +126,13 @@ fun StayNavigationRail(selected:NavigationGroup,navigate:(StayRoute)->Unit,width
 }
 
 @Composable
-fun StaySettingsScreen() {
+fun StaySettingsScreen(onRealtimeDeveloperSettings: (() -> Unit)? = null, realtimeSettingsEnabled: Boolean = true) {
     Column(Modifier.fillMaxSize().padding(32.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
         Text(stringResource(R.string.stay_settings),style=MaterialTheme.typography.headlineLarge)
-        Text("아직 설정할 항목이 없어요.", color = StayColors.Secondary)
+        if (onRealtimeDeveloperSettings != null) {
+            Text("개발자 설정", style = MaterialTheme.typography.titleLarge)
+            PremiumAction("PC 연결 설정", onRealtimeDeveloperSettings, enabled = realtimeSettingsEnabled, secondary = true)
+            if (!realtimeSettingsEnabled) Text("문서 활동을 종료한 뒤 연결 설정을 변경할 수 있습니다.", color = StayColors.Secondary)
+        } else Text("아직 설정할 항목이 없어요.", color = StayColors.Secondary)
     }
 }

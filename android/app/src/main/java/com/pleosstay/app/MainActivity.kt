@@ -161,6 +161,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             PleosStayPlusTheme {
                 val host=activityHost
+                val realtimeSession: com.pleosstay.app.realtime.RealtimeUiSession =
+                    androidx.lifecycle.viewmodel.compose.viewModel(key = "realtime-connection-ui")
                 val activityUi by host.ui.state.collectAsState()
                 val documentVisible by documentForeground.collectAsState()
                 val safety by waitingDependencies.safety.state.collectAsState()
@@ -196,6 +198,7 @@ class MainActivity : ComponentActivity() {
                     },
                 ) { route, navigate ->
                     SideEffect{host.routeChanged(route)}
+                    LaunchedEffect(route) { if (route != StayRoute.FILES) realtimeSession.closeDeveloperSettings() }
                     LaunchedEffect(route,documentVisible){host.setForeground(documentVisible)}
                     val document=route.activityMode()?.document()==true || activityUi.documentLease
                     DisposableEffect(document) {
@@ -215,11 +218,18 @@ class MainActivity : ComponentActivity() {
                         StayRoute.MODES -> StayModeMenuScreen(
                             onRest = { navigate(StayRoute.REST) }, onStudy = { navigate(StayRoute.STUDY) },
                             onWork = { navigate(StayRoute.WORK) })
-                        StayRoute.SETTINGS -> StaySettingsScreen()
+                        StayRoute.SETTINGS -> StaySettingsScreen(
+                            onRealtimeDeveloperSettings = if (BuildConfig.DEBUG) ({
+                                realtimeSession.openDeveloperSettings()
+                                navigate(StayRoute.FILES)
+                            }) else null,
+                            realtimeSettingsEnabled = host.coordinator.currentState().active?.document() != true,
+                        )
                     }
                     // Kept at one composition location across routes; the original PIN gate owns all private rendering.
                     val filesVisible=route==StayRoute.FILES || route.activityMode()?.document()==true
                     RealtimeEntry(applicationContext,waitingDependencies.safety,
+                        session = realtimeSession,
                         foreground=documentVisible && (filesVisible || activityUi.documentLease),
                         visible=documentVisible && (filesVisible || activityUi.preparing),
                         presentation={ body ->

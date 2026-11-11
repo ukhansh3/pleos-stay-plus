@@ -3,6 +3,12 @@ using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using StayPlus.Desktop;
 void Check(bool value,string message){if(!value)throw new Exception(message);}
+Check(DeploymentSettings.Prefer("https://runtime.invalid/api/v1/realtime/", "") == "https://runtime.invalid/api/v1/realtime/", "runtime defaults must not be overwritten by empty build metadata");
+Check(DeploymentSettings.Prefer(" ", "https://embedded.invalid/api/v1/realtime/") == "https://embedded.invalid/api/v1/realtime/", "embedded defaults fallback");
+Check(DeploymentSettings.AllowsApi(new Uri("http://127.0.0.1:3012/api/v1/realtime/"), true), "authenticated local API in development");
+Check(!DeploymentSettings.AllowsApi(new Uri("http://127.0.0.1:3012/api/v1/realtime/"), false), "no Release HTTP fallback");
+Check(!DeploymentSettings.AllowsApi(new Uri("http://public.invalid/api/v1/realtime/"), true), "no external cleartext API");
+Console.WriteLine("PASS Windows deployment defaults and Release transport restrictions");
 string? saved=null;var fake=new FakeAuth();using(var auth=new IdentityProvider("https://fake.invalid","public",()=>saved,s=>saved=s,fake)){
  Check(await auth.ValidToken()=="access-1","signup");Check(await auth.ValidToken()=="access-1" && fake.Count==1,"cached token");
  var j=JsonNode.Parse(saved!)!;j["expires_at"]=0;saved=j.ToJsonString();Check(await auth.ValidToken()=="access-2"&&fake.LastPath.Contains("refresh_token"),"refresh");

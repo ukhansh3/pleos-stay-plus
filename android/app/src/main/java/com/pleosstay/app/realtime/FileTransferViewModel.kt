@@ -137,12 +137,29 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
         }
     }
 
+    private var connectionEntryHandled = false
+
+    /** One user request, one automatic code. Returning after cancel/expiry must not reissue silently. */
+    fun openConnection() = run {
+        ensureRegistered()
+        if (restore() != null) loadFiles()
+        else if (!connectionEntryHandled && state.value.pairingId == null) {
+            connectionEntryHandled = true
+            createPairing()
+        }
+    }
+
     fun issue() = run {
         ensureRegistered()
         if (restore() != null) {
             loadFiles()
             return@run
         }
+        connectionEntryHandled = true
+        createPairing()
+    }
+
+    private suspend fun createPairing() {
         val response = api.call("POST", "pairings")
         checkAccess()
         mutable.update { it.copy(pairingId=response.getString("id"), code=response.getString("code"),

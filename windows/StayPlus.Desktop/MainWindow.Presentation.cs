@@ -11,9 +11,9 @@ public partial class MainWindow
     // These are public deployment settings. Authentication remains in IdentityProvider.
     private void SetDisplayDefaults()
     {
-        Server.Text = Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_API_URL") ?? "";
-        AuthUrl.Text = Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_AUTH_URL") ?? "";
-        PublicKey.Text = Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_PUBLISHABLE_KEY") ?? "";
+        Server.Text = DeploymentSettings.Prefer(Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_API_URL"), BuildSetting("RealtimeApi"));
+        AuthUrl.Text = DeploymentSettings.Prefer(Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_AUTH_URL"), BuildSetting("RealtimeAuth"));
+        PublicKey.Text = DeploymentSettings.Prefer(Environment.GetEnvironmentVariable("STAYPLUS_DESKTOP_PUBLISHABLE_KEY"), BuildSetting("RealtimePublicKey"));
     }
 
     private string? vehicleId;
@@ -137,15 +137,29 @@ public partial class MainWindow
         return "연결 상태와 선택한 파일을 확인한 뒤 다시 시도해 주세요.";
     }
 
+    private static bool IsDeveloperBuild {
+        get {
+#if DEBUG
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
     private bool HasUsableSettings()
     {
         bool local = LocalMode.IsChecked == true;
+        if (local && !IsDeveloperBuild) {
+            Status.Text = "이 연결 설정은 사용할 수 없습니다. 앱 설정을 확인해 주세요.";
+            return false;
+        }
         if (local && string.IsNullOrWhiteSpace(Server.Text))
             Server.Text = "http://127.0.0.1:3010/api/v1/realtime/";
         if (!Uri.TryCreate(Server.Text.Trim(), UriKind.Absolute, out var endpoint)
             || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0
             || endpoint.AbsolutePath.TrimEnd('/') != "/api/v1/realtime"
-            || (endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && endpoint.IsLoopback))
+            || !DeploymentSettings.AllowsApi(endpoint, IsDeveloperBuild)
             || (local && (!endpoint.IsLoopback || Token.Password.Length == 0)))
         {
             Status.Text = "전송 서비스 설정이 필요합니다. 설정 담당자에게 문의해 주세요.";
@@ -153,7 +167,7 @@ public partial class MainWindow
         }
         if (!local)
         {
-            if (endpoint.Scheme != "https" || !Uri.TryCreate(AuthUrl.Text, UriKind.Absolute, out var auth) || auth.Scheme != "https"
+            if (!Uri.TryCreate(AuthUrl.Text, UriKind.Absolute, out var auth) || auth.Scheme != "https"
                 || auth.UserInfo.Length != 0 || auth.Query.Length != 0 || auth.Fragment.Length != 0 || auth.AbsolutePath != "/"
                 || !IsPublishable(PublicKey.Text.Trim()))
             {

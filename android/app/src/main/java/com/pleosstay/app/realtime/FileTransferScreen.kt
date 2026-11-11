@@ -28,7 +28,7 @@ import org.json.JSONObject
 
 /** The same authenticated transport and PIN gate supply every action on this screen. */
 @Composable
-fun FileTransferScreen(model: FileTransferViewModel) {
+fun FileTransferScreen(model: FileTransferViewModel, developerTools: Boolean = false) {
     DisposableEffect(model) { onDispose { model.closeWorkTransferScreen() } }
     val liveState by model.state.collectAsState()
     val state = featureInspection()?.files ?: liveState
@@ -53,7 +53,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
     var selectedVersion by remember(state.connectionId, state.allowed, state.unlocked) { mutableStateOf(inspectionFiles?.versions?.firstOrNull()?.optString("id")) }
     if (!state.allowed || !state.unlocked) { NoticePanel("파일 화면 잠김", "정차 상태와 PIN을 확인해 주세요.", true); return }
     if (inspectionFiles == null) {
-        LaunchedEffect(model) { model.register() }
+        LaunchedEffect(model) { model.openConnection() }
         LaunchedEffect(model, state.pairingId, state.connectionId) {
             while (state.pairingId != null || state.connectionId != null) {
                 delay(if (state.connectionId == null) 2500 else 10_000)
@@ -92,7 +92,7 @@ fun FileTransferScreen(model: FileTransferViewModel) {
                         if (networkDown) PremiumAction("연결 다시 확인", { otherOperation(model::register) }, Modifier.fillMaxWidth(), !state.busy, true)
                         if (state.connectionId == null) {
                             PcPairingContent(state, model)
-                            if (BuildConfig.DEBUG) {
+                            if (BuildConfig.DEBUG && developerTools) {
                                 var showReverse by remember { mutableStateOf(false) }
                                 TextButton(onClick = { showReverse = !showReverse }) { Text("개발자용 PC 발급 코드 입력") }
                                 if (showReverse) {

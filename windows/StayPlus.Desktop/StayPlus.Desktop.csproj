@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>Stay+</AssemblyName><RootNamespace>StayPlus.Desktop</RootNamespace></PropertyGroup>
+ <Import Project="Deployment.local.props" Condition="Exists('Deployment.local.props')"/>
+ <PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(REALTIME_API_BASE_URL)' == ''">
+  <REALTIME_API_BASE_URL>http://127.0.0.1:3012/api/v1/realtime/</REALTIME_API_BASE_URL>
+ </PropertyGroup>
  <ItemGroup>
   <AssemblyMetadata Include="RealtimeApi" Value="$(REALTIME_API_BASE_URL)"/>
   <AssemblyMetadata Include="RealtimeAuth" Value="$(REALTIME_SUPABASE_URL)"/>

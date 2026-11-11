@@ -105,7 +105,7 @@
     <TextBlock Text="설정" FontSize="27" FontWeight="SemiBold" Margin="0,0,0,16"/>
     <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="파일 전송" Style="{StaticResource Heading}"/>
      <TextBlock Text="TXT, PDF, DOCX 문서를 파일당 최대 20 MiB까지 보낼 수 있습니다. 수정본은 원본과 별도 버전으로 보관합니다." Style="{StaticResource Note}"/></StackPanel></Border>
-    <Border Style="{StaticResource Card}"><Expander Header="개발자 설정"><StackPanel Margin="0,14,0,0">
+    <Border x:Name="DeveloperConfiguration" Style="{StaticResource Card}"><Expander Header="개발자 설정"><StackPanel Margin="0,14,0,0">
      <TextBlock Text="전송 서버 주소"/><TextBox x:Name="Server" AutomationProperties.Name="전송 서버 주소"/>
      <TextBlock Text="Supabase URL"/><TextBox x:Name="AuthUrl" AutomationProperties.Name="Supabase URL"/>
      <TextBlock Text="공개 키 (publishable key)"/><TextBox x:Name="PublicKey" AutomationProperties.Name="공개 키"/>

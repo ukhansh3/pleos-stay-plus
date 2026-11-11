@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 /** Integrating host provides the existing Waiting safety-backed model and this local profile lock. */
 @Composable fun RealtimeLockedScreen(model: FileTransferViewModel, pins: RealtimePinStore,
  content: @Composable () -> Unit = { FileTransferScreen(model) }) {
+ val focus = androidx.compose.ui.platform.LocalFocusManager.current
+ val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
  val state by model.state.collectAsState();var pin by remember { mutableStateOf("") };var confirm by remember { mutableStateOf("") };var message by remember { mutableStateOf("") };var busy by remember { mutableStateOf(false) };val scope=rememberCoroutineScope()
  if(!state.allowed){NoticePanel("파일 화면 잠김","정차 상태가 확인되지 않아 파일 화면이 잠겼습니다.",true);return}
  if(state.unlocked){content();return}
@@ -39,7 +41,11 @@ import kotlinx.coroutines.withContext
       }
       pins.verify(submittedPin)
      }
-     if (accepted) model.unlockAfterUserVerification()
+     if (accepted) {
+      focus.clearFocus(force = true)
+      keyboard?.hide()
+      model.unlockAfterUserVerification()
+     }
      else message = "PIN이 맞지 않아요. 다시 입력해 주세요."
     } catch (e: kotlinx.coroutines.CancellationException) {
      throw e

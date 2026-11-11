@@ -1,5 +1,7 @@
 # Realtime FileTransfer — 로컬 구현 및 인계
 
+2026-11-11 업데이트: 일반 사용자는 PC 연결하기 → 기존 PIN → 차량 발급 8자리 코드 → Windows 입력 → 양쪽 승인 흐름을 사용한다. 서버·토큰 입력은 Debug 설정으로 분리했으며, 실제 서버 준비와 검증 한계는 [간편 연결 구현 보고서](../verification/2026-11-11-realtime-simple-connect.md)를 따른다.
+
 2026-11-09 업데이트. 사용자가 주소를 입력하지 않는 배포 설정과 차량 발급 코드 흐름은 [PC 간편 연결 QA](../verification/2026-11-09-qa-pc-onboarding.md)에 기록했다.
 
 2026-11-04 기준. 자동 동기화가 아닌 수동 파일 전송 MVP다. 기존 Waiting Safety Gateway를 재사용하며 Work 편집기는 구현하지 않는다.

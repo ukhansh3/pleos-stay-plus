@@ -18,9 +18,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SetDisplayDefaults();
-        Server.Text = BuildSetting("RealtimeApi");
-        AuthUrl.Text = BuildSetting("RealtimeAuth");
-        PublicKey.Text = BuildSetting("RealtimePublicKey");
+        Pages.SelectedItem = Vehicles;
+        DeveloperConfiguration.Visibility = IsDeveloperBuild ? Visibility.Visible : Visibility.Collapsed;
         try { var saved = TokenStore.Load(); if (saved is { Length: 2 }) { Server.Text = saved[0]; Token.Password = saved[1]; LocalMode.IsChecked = saved[1].Length > 0; } var config = TokenStore.ReadSecret("connection-config"); if (config != null) { var j = JsonNode.Parse(config)!; Server.Text = j["server"]!.GetValue<string>(); AuthUrl.Text = j["authUrl"]!.GetValue<string>(); PublicKey.Text = j["publicKey"]!.GetValue<string>(); LocalMode.IsChecked = j["local"]!.GetValue<bool>(); } } catch { Status.Text = "저장한 연결 설정을 읽을 수 없습니다. 설정 담당자에게 문의해 주세요."; }
         pairingPoll.Tick += async (_, _) => await ObservePairing();
         pairingPoll.Start();
