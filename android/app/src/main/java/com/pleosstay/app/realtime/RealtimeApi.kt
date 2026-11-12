@@ -45,7 +45,18 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
     }
     suspend fun call(method: String, path: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
         val c = connection(method, path)
-        try { if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) } }; response(c) }
+        try {
+            val payload = realtimeControlPayload(method, body?.toString())
+            if (payload != null) {
+                // Android's body-less POST defaults to form encoding. All control writes use JSON.
+                val bytes = payload.toByteArray(Charsets.UTF_8)
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json")
+                c.setFixedLengthStreamingMode(bytes.size)
+                c.outputStream.use { it.write(bytes) }
+            }
+            response(c)
+        }
         finally { c.disconnect() }
     }
     suspend fun upload(id: String, file: File, progress: (Long, Long) -> Unit): JSONObject = withContext(Dispatchers.IO) {
@@ -110,3 +121,7 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
       } } catch (error: Throwable) { completed?.delete(); throw error }
     }
 }
+
+/** Binary upload has its own API; control POST/PUT/PATCH must never become implicit form requests. */
+internal fun realtimeControlPayload(method: String, serializedBody: String?): String? = serializedBody
+    ?: if (method.uppercase(java.util.Locale.ROOT) in setOf("POST", "PUT", "PATCH")) "{}" else null

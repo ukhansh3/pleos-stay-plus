@@ -43,3 +43,27 @@ test("real HTTP: pair, PC original, car revision, immutable downloads, isolation
   assert.equal((await request("pc","GET",`/versions/${v1.id}/content`)).status,404);
  } finally { await app.close(); await rm(root,{recursive:true,force:true}); }
 });
+
+
+test("control POST rejects Android implicit form encoding as 415 and accepts explicit empty JSON", async () => {
+ const root = await mkdtemp(join(tmpdir(), "stay-control-wire-"));
+ const app = Fastify();
+ const pairing = new LocalPairingService("synthetic-test-secret-".repeat(3));
+ const transfer = new LocalTransferService(pairing, new LocalStorageGateway(root), 1024);
+ await registerRealtimeRoutes(app, pairing, transfer, new LocalIdentityVerifier(new Map([["synthetic-control-token", "car"]])));
+ const headers = { authorization: "Bearer synthetic-control-token" };
+ try {
+  await app.inject({method:"POST",url:"/api/v1/realtime/devices",headers:{...headers,"content-type":"application/json"},payload:JSON.stringify({kind:"VEHICLE",name:"Synthetic wire test"})});
+  for (const path of ["pairings", "pairings/synthetic/approve", "uploads/synthetic/complete"]) {
+   const response = await app.inject({method:"POST",url:"/api/v1/realtime/"+path,headers:{...headers,"content-type":"application/x-www-form-urlencoded"},payload:""});
+   assert.equal(response.statusCode,415);
+   assert.equal(response.json().error.code,"UNSUPPORTED_CONTENT_TYPE");
+  }
+  const response = await app.inject({method:"POST",url:"/api/v1/realtime/pairings",headers:{...headers,"content-type":"application/json"},payload:"{}"});
+  assert.equal(response.statusCode,200);
+  assert.match(response.json().code,/^[0-9]{8}$/);
+  const malformed = await app.inject({method:"POST",url:"/api/v1/realtime/pairings",headers:{...headers,"content-type":"application/json"},payload:"{"});
+  assert.equal(malformed.statusCode,400);
+  assert.equal(malformed.json().error.code,"INVALID_INPUT");
+ } finally { await app.close(); await rm(root,{recursive:true,force:true}); }
+});

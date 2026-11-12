@@ -16,8 +16,11 @@ export async function registerRealtimeRoutes(app: FastifyInstance, pairing: Pair
     });
     scope.setErrorHandler((error, request, reply) => {
       const known = error instanceof RealtimeError; const invalid = error instanceof Error && "validation" in error;
-      const status = known ? error.statusCode : invalid ? 400 : 500;
-      reply.code(status).send({ error: { code: known ? error.code : invalid ? "INVALID_INPUT" : "INTERNAL_ERROR", message: known ? error.code : "Request failed", requestId: request.id } });
+      const frameworkStatus = error instanceof Error && "statusCode" in error ? Number(error.statusCode) : 500;
+      const status = known ? error.statusCode : invalid ? 400 :
+        Number.isInteger(frameworkStatus) && frameworkStatus >= 400 && frameworkStatus < 500 ? frameworkStatus : 500;
+      const code = known ? error.code : status === 415 ? "UNSUPPORTED_CONTENT_TYPE" : status < 500 ? "INVALID_INPUT" : "INTERNAL_ERROR";
+      reply.code(status).send({ error: { code, message: known ? error.code : "Request failed", requestId: request.id } });
     });
     scope.addContentTypeParser("application/octet-stream", (_request, payload, done) => done(null, payload));
     const actor = (request: object) => actors.get(request)!;
