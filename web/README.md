@@ -25,3 +25,17 @@ npm run build
 ```
 
 Continuous browser GPS is best-effort and not a background-location guarantee. Closing the page, revoking consent, invite reissue, or closing the Pickup stops updates; user-initiated status controls continue to work when GPS is denied.
+
+## Stay+ mobile Pickup (2026-11-13)
+
+The participant UI follows the existing Stay+ navy/purple brand; the Android home and its assets are unchanged. `public/stay-brand-logo.png` is a byte-for-byte copy of the existing approved Android logo, with no new image service or license dependency.
+
+- Driver QR: `/share/{token}`. Share/copy only; does not reveal vehicle coordinates or join automatically.
+- Participant: `/pickup/{token}`. Explicit consent, optional nickname (blank is omitted from the request), then authenticated vehicle map/status view.
+- Refresh recovery: `/pickup/session`. The binding is scoped to the authenticated guest and invitation fingerprint; a different invitation never silently opens an older Pickup.
+- Supabase changes trigger snapshots, with a five-second visible-page fallback and re-query on network/visibility recovery. The UI separately identifies last-observed vehicle data and stale positions; no ETA or route distance is fabricated.
+- Kakao Map instance stays mounted while vehicle/participant markers move. Dragging pauses vehicle following; `차량 보기` restores it. The SDK needs the **exact** web origin registered in Kakao Developers. An expiring Quick Tunnel origin must be re-registered if it changes. A successful localhost SDK response does not prove the temporary origin is authorized.
+- GPS is opt-in. Switching off, permission loss, leaving the page or session closure clears the watcher and aborts pending client sends; late callbacks are ignored. Already accepted server coordinates remain subject to the existing session-end deletion policy. The UI never claims that turning off the switch deletes a previously received sample.
+- Manual completion/cancellation requires confirmation. Closed/revoked sessions immediately lose the map and local binding. Browser history restoration rechecks authorization before redisplaying positions.
+
+Responsibilities: `PickupPanel` renders; `usePickupSession` owns session/UI actions; `lib/api` owns the existing HTTP contract; `pickup-gps` owns the cancellable browser watcher; `KakaoPickupMap` owns the SDK adapter. No new backend endpoints, permissions or dependencies were introduced.

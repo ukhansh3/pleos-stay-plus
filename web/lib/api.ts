@@ -27,12 +27,12 @@ async function call<T>(path:string, token:string, init:RequestInit = {}):Promise
 export const pickupApi = {
   create: (access:string, idempotencyKey=crypto.randomUUID()) => call<PickupSession>("/pickup/sessions",access,{method:"POST",headers:{"Idempotency-Key":idempotencyKey},body:JSON.stringify({waitingSessionId:null,locationSharingConsent:true})}),
   invite: (access:string, sessionId:string, idempotencyKey=crypto.randomUUID()) => call<PickupInvitation>(`/pickup/sessions/${sessionId}/invitations`,access,{method:"POST",headers:{"Idempotency-Key":idempotencyKey},body:"{}"}),
-  redeem: (access:string, invitation:string, consent:boolean, displayName:string) => call<{participantId:string;sessionId:string;status:ParticipantStatus;revision:number}>("/pickup/invitations/redeem", access, {method:"POST",body:JSON.stringify({token:invitation,consent,displayName})}),
+  redeem: (access:string, invitation:string, consent:boolean, displayName:string) => call<{participantId:string;sessionId:string;status:ParticipantStatus;revision:number}>("/pickup/invitations/redeem", access, {method:"POST",body:JSON.stringify({token:invitation,consent,...(displayName.trim()?{displayName:displayName.trim()}:{})})}),
   snapshot: (access:string, sessionId:string) => call<PickupSnapshot>(`/pickup/sessions/${sessionId}/snapshot`,access),
   status: (access:string, participantId:string, status:ParticipantStatus) => call(`/pickup/participants/${participantId}/status`,access,{method:"POST",body:JSON.stringify({status,clientEventId:crypto.randomUUID()})}),
-  location: (access:string, participantId:string, position:GeolocationPosition) => call(`/pickup/participants/${participantId}/location`,access,{method:"PUT",body:JSON.stringify({latitude:position.coords.latitude,longitude:position.coords.longitude,accuracyMeters:position.coords.accuracy,observedAt:new Date(position.timestamp).toISOString(),source:"REAL"})}),
-  complete: (access:string, sessionId:string) => call(`/pickup/sessions/${sessionId}/complete`,access,{method:"POST",headers:{"Idempotency-Key":crypto.randomUUID()},body:"{}"}),
-  cancel: (access:string, sessionId:string) => call(`/pickup/sessions/${sessionId}/cancel`,access,{method:"POST",headers:{"Idempotency-Key":crypto.randomUUID()},body:JSON.stringify({reason:"PARTICIPANT_CANCELLED"})}),
+  location: (access:string, participantId:string, position:GeolocationPosition, signal?:AbortSignal) => call(`/pickup/participants/${participantId}/location`,access,{method:"PUT",signal,body:JSON.stringify({latitude:position.coords.latitude,longitude:position.coords.longitude,accuracyMeters:position.coords.accuracy,observedAt:new Date(position.timestamp).toISOString(),source:"REAL"})}),
+  complete: (access:string, sessionId:string, idempotencyKey=crypto.randomUUID()) => call(`/pickup/sessions/${sessionId}/complete`,access,{method:"POST",headers:{"Idempotency-Key":idempotencyKey},body:"{}"}),
+  cancel: (access:string, sessionId:string, idempotencyKey=crypto.randomUUID()) => call(`/pickup/sessions/${sessionId}/cancel`,access,{method:"POST",headers:{"Idempotency-Key":idempotencyKey},body:JSON.stringify({reason:"PARTICIPANT_CANCELLED"})}),
 };
 
 export interface SimulatedLocationInput { latitude:number;longitude:number;accuracyMeters:number;observedAt:string;simulatedNow?:string }
