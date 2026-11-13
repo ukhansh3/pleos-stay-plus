@@ -204,6 +204,7 @@ paths:
     post:
       tags: [Pickup]
       summary: Participant changes pickup status
+      description: CANCELLED closes the Pickup session atomically, deletes current locations and revokes participant access. A retry uses the same clientEventId.
       parameters: [{$ref: '#/components/parameters/participantId'}]
       requestBody:
         required: true

@@ -21,6 +21,9 @@ import com.pleosstay.app.pickup.tts.PickupTtsGateway
 import com.pleosstay.app.pickup.tts.UnsupportedPickupTtsGateway
 import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +63,7 @@ class PickupViewModel(
     val state: StateFlow<PickupUiState> = mutableState.asStateFlow()
     private var locationJob: Job? = null
     private var syncJob: Job? = null
+    private var sessionGeneration = 0L
     private var createKey: String? = null
     private var invitationKey: String? = null
     private val closeKeys = mutableMapOf<String, String>()
@@ -77,16 +81,23 @@ class PickupViewModel(
     }
 
     fun start(waitingSessionId: String? = null) {
-        if (mutableState.value.busy || mutableState.value.session != null) return
+        if (mutableState.value.busy || mutableState.value.session?.status == PickupSessionStatus.ACTIVE) return
         if (!safety.state.value.canUse) {
             mutableState.update { it.copy(blocked = true, error = safety.state.value.message) }
             return
         }
+        val generation = ++sessionGeneration
+        locationJob?.cancel()
+        syncJob?.cancel()
+        invitationKey = null
+        closeKeys.clear()
         val key = createKey ?: UUID.randomUUID().toString().also { createKey = it }
+        mutableState.value = PickupUiState(busy = true, safetyMessage = safety.state.value.message, ttsMessage = mutableState.value.ttsMessage)
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             try {
                 val session = repository.create(waitingSessionId, key)
+                currentCoroutineContext().ensureActive()
+                if (generation != sessionGeneration) return@launch
                 createKey = null
                 mutableState.update {
                     it.copy(
@@ -97,23 +108,12 @@ class PickupViewModel(
                     )
                 }
                 startSyncLoop(session.id)
-                when (val first = locationGateway.getCurrentLocation()) {
-                    is CurrentLocationResult.Success -> runCatching {
-                        val location = first.location.toPickupLocation()
-                        repository.sendVehicleLocation(session.id, location)
-                        location
-                    }.onSuccess { location ->
-                        mutableState.update { it.copy(sharingLocation = true, lastLocationAt = location.observedAt, locationMessage = null) }
-                        startLocationLoop(session.id)
-                    }.onFailure { failure ->
-                        mutableState.update { it.copy(sharingLocation = false, locationMessage = "Pickup은 시작됐지만 차량 위치를 전송하지 못했습니다: ${failure.errorMessage()}") }
-                    }
-                    else -> mutableState.update {
-                        it.copy(sharingLocation = false, locationMessage = "Pickup은 시작됐지만 ${first.message()}")
-                    }
-                }
+                if (canShare(session.id, generation)) startLocationLoop(session.id, generation)
+                else stopLocationSharing("차량 상태가 안전 조건을 벗어나 위치 공유를 중지했습니다")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
-                mutableState.update { it.copy(busy = false, blocked = error is DriverIdentityException && error.blocked, error = error.message ?: "Pickup 시작에 실패했습니다") }
+                mutableState.update { it.copy(busy = false, blocked = !safety.state.value.canUse || (error is DriverIdentityException && error.blocked), error = error.message ?: "Pickup 시작에 실패했습니다") }
             }
         }
     }
@@ -121,17 +121,23 @@ class PickupViewModel(
     fun issueInvitation() {
         val sessionId = mutableState.value.session?.takeIf { it.status == PickupSessionStatus.ACTIVE }?.id ?: return
         if (mutableState.value.busy || !safety.state.value.canUse) return
+        val generation = sessionGeneration
         val key = invitationKey ?: UUID.randomUUID().toString().also { invitationKey = it }
+        // A request may have committed even when its response is lost. Never
+        // keep presenting the previous link as usable during reissue/retry.
+        mutableState.update { it.copy(busy = true, invitation = null, error = null, invitationError = null) }
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null, invitationError = null) }
             runCatching { repository.issueInvitation(sessionId, key) }
                 .onSuccess { invitation ->
+                    currentCoroutineContext().ensureActive()
+                    if (!isCurrentSession(sessionId, generation) || mutableState.value.session?.status != PickupSessionStatus.ACTIVE) return@launch
                     invitationKey = null
                     mutableState.update { it.copy(invitation = invitation, busy = false, invitationError = null) }
                     syncOnce(sessionId)
                 }
                 .onFailure { failure ->
-                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    if (failure is CancellationException) throw failure
+                    if (!isCurrentSession(sessionId, generation)) return@launch
                     mutableState.update { it.copy(busy = false, invitationError = failure.message ?: "초대 링크를 발급하지 못했습니다.") }
                 }
         }
@@ -148,17 +154,26 @@ class PickupViewModel(
     private fun close(operation: String, action: suspend (String, String) -> PickupSession) {
         val id = mutableState.value.session?.id ?: return
         if (mutableState.value.busy) return
+        val generation = sessionGeneration
         val key = closeKeys.getOrPut(operation) { UUID.randomUUID().toString() }
+        // User termination stops local sharing before waiting for the server.
+        stopLocationSharing("위치 공유를 중지했습니다")
+        mutableState.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null) }
             runCatching { action(id, key) }
                 .onSuccess { session ->
+                    currentCoroutineContext().ensureActive()
+                    if (!isCurrentSession(id, generation)) return@launch
                     closeKeys.remove(operation)
                     locationJob?.cancel()
                     mutableState.update { it.copy(session = session, invitation = null, sharingLocation = false, busy = false, invitationError = null) }
                     syncOnce(id)
                 }
-                .onFailure { failure -> mutableState.update { it.copy(busy = false, error = failure.message) } }
+                .onFailure { failure ->
+                    if (failure is CancellationException) throw failure
+                    if (!isCurrentSession(id, generation)) return@launch
+                    mutableState.update { it.copy(busy = false, error = failure.message) }
+                }
         }
     }
 
@@ -175,10 +190,13 @@ class PickupViewModel(
 
     private suspend fun syncOnce(sessionId: String) {
         mutableState.update { it.copy(syncing = true) }
+        val generation = sessionGeneration
         val after = mutableState.value.lastEventRevision
         val eventPage = runCatching { repository.events(sessionId, after) }.getOrNull()
         val snapshot = runCatching { repository.snapshot(sessionId) }.getOrNull()
         val session = snapshot?.session ?: runCatching { repository.getSession(sessionId) }.getOrNull()
+        currentCoroutineContext().ensureActive()
+        if (!isCurrentSession(sessionId, generation)) return
         val displayName = session?.participant?.displayName ?: mutableState.value.session?.participant?.displayName
         eventPage?.events
             ?.filter { it.revision > after }
@@ -223,7 +241,7 @@ class PickupViewModel(
         }
         if (session.status != PickupSessionStatus.ACTIVE) {
             locationJob?.cancel()
-            mutableState.update { it.copy(sharingLocation = false, invitation = null, invitationError = null) }
+            mutableState.update { it.copy(sharingLocation = false, invitation = null, invitationError = null, busy = false) }
         }
     }
 
@@ -246,19 +264,47 @@ class PickupViewModel(
         }
     }
 
-    private fun startLocationLoop(sessionId: String) {
+    private fun isCurrentSession(sessionId: String, generation: Long) =
+        generation == sessionGeneration && mutableState.value.session?.id == sessionId
+
+    private fun canShare(sessionId: String, generation: Long) =
+        isCurrentSession(sessionId, generation) && safety.state.value.canUse &&
+            mutableState.value.session?.status == PickupSessionStatus.ACTIVE
+
+    private fun startLocationLoop(sessionId: String, generation: Long) {
         locationJob?.cancel()
         locationJob = viewModelScope.launch {
-            while (isActive && safety.state.value.canUse) {
-                delay(refreshIntervalMs)
-                when (val result = locationGateway.getCurrentLocation()) {
-                    is CurrentLocationResult.Success -> runCatching { repository.sendVehicleLocation(sessionId, result.location.toPickupLocation()) }
-                        .onSuccess {
-                            mutableState.update { current -> current.copy(lastLocationAt = result.location.toPickupLocation().observedAt, locationMessage = null) }
+            var first = true
+            while (isActive && canShare(sessionId, generation)) {
+                if (!first) delay(refreshIntervalMs)
+                currentCoroutineContext().ensureActive()
+                if (!canShare(sessionId, generation)) break
+                val result = try { locationGateway.getCurrentLocation() }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) { CurrentLocationResult.Failed(failure.errorMessage()) }
+                currentCoroutineContext().ensureActive()
+                if (!canShare(sessionId, generation)) break
+                when (result) {
+                    is CurrentLocationResult.Success -> {
+                        try {
+                            val location = result.location.toPickupLocation()
+                            repository.sendVehicleLocation(sessionId, location)
+                            currentCoroutineContext().ensureActive()
+                            if (!canShare(sessionId, generation)) break
+                            mutableState.update { it.copy(sharingLocation = true, lastLocationAt = location.observedAt, locationMessage = null) }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            mutableState.update { it.copy(locationMessage = if (first) "Pickup은 시작됐지만 차량 위치를 전송하지 못했습니다: ${failure.errorMessage()}" else "차량 위치 전송 실패: ${failure.errorMessage()}") }
+                            if (first) break
                         }
-                        .onFailure { failure -> mutableState.update { current -> current.copy(locationMessage = "차량 위치 전송 실패: ${failure.errorMessage()}") } }
-                    else -> { stopLocationSharing(result.message()); break }
+                    }
+                    else -> {
+                        stopLocationSharing(if (first) "Pickup은 시작됐지만 ${result.message()}" else result.message())
+                        break
+                    }
                 }
+                first = false
             }
         }
     }
@@ -269,6 +315,7 @@ class PickupViewModel(
     }
 
     internal fun releaseResources() {
+        sessionGeneration++
         locationJob?.cancel()
         syncJob?.cancel()
         locationGateway.close()

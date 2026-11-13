@@ -149,7 +149,7 @@ private fun PickupStatusPanel(state: PickupUiState, start: () -> Unit, complete:
             if (active) {
                 PremiumAction("합류 완료", complete, Modifier.fillMaxWidth(), !state.busy)
                 PremiumAction("픽업 취소", cancel, Modifier.fillMaxWidth(), !state.busy, true)
-            }
+            } else PremiumAction("새 픽업 시작", start, Modifier.fillMaxWidth(), !state.busy)
         } else PremiumAction(if (state.busy) "시작 중…" else "차량 위치에서 픽업 시작", start, Modifier.fillMaxWidth(), !state.busy)
     }
 }

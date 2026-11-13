@@ -22,12 +22,12 @@ async function principal(request: FastifyRequest, auth: PickupAuthVerifier): Pro
   return (await auth.verify(bearerToken(request.headers.authorization))).uid;
 }
 function location(value: Record<string, unknown>, allowSimulated = false): PickupLocationUpdate {
-  const latitude = Number(value.latitude); const longitude = Number(value.longitude);
-  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new PickupApiError(400, "INVALID_LOCATION", "위치 좌표가 올바르지 않습니다");
-  const accuracy = value.accuracyMeters === undefined || value.accuracyMeters === null ? null : Number(value.accuracyMeters);
-  if (accuracy !== null && (!Number.isFinite(accuracy) || accuracy <= 0)) throw new PickupApiError(400, "INVALID_LOCATION", "위치 정확도가 올바르지 않습니다");
-  const confidence = value.confidence === undefined || value.confidence === null ? null : Number(value.confidence);
-  if (confidence !== null && !Number.isFinite(confidence)) throw new PickupApiError(400, "INVALID_LOCATION", "위치 confidence가 올바르지 않습니다");
+  const latitude = value.latitude; const longitude = value.longitude;
+  if (typeof latitude !== "number" || typeof longitude !== "number" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new PickupApiError(400, "INVALID_LOCATION", "위치 좌표가 올바르지 않습니다");
+  const accuracy = value.accuracyMeters === undefined || value.accuracyMeters === null ? null : value.accuracyMeters;
+  if (accuracy !== null && (typeof accuracy !== "number" || !Number.isFinite(accuracy) || accuracy <= 0)) throw new PickupApiError(400, "INVALID_LOCATION", "위치 정확도가 올바르지 않습니다");
+  const confidence = value.confidence === undefined || value.confidence === null ? null : value.confidence;
+  if (confidence !== null && (typeof confidence !== "number" || !Number.isFinite(confidence))) throw new PickupApiError(400, "INVALID_LOCATION", "위치 confidence가 올바르지 않습니다");
   const observedAt = string(value.observedAt, "observedAt")!;
   if (!Number.isFinite(Date.parse(observedAt))) throw new PickupApiError(400, "INVALID_LOCATION", "observedAt이 올바르지 않습니다");
   if (value.source !== "REAL" && value.source !== "SIMULATED") throw new PickupApiError(400, "INVALID_LOCATION", "source가 올바르지 않습니다");

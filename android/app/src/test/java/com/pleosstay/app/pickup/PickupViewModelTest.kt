@@ -16,6 +16,9 @@ import com.pleosstay.app.waiting.safety.DrivingEventBuffer
 import com.pleosstay.app.waiting.safety.VehicleMotion
 import com.pleosstay.app.waiting.safety.WaitingSafety
 import com.pleosstay.app.waiting.safety.WaitingSafetyGateway
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -227,6 +230,195 @@ class PickupViewModelTest {
         assertEquals(null, viewModel.state.value.invitationError)
         viewModel.releaseResources()
     }
+
+    @Test fun failedStartCannotUnblockAnUnsafeScreen() = runTest(dispatcher) {
+        val safety = MutableSafety(WaitingSafety(VehicleMotion.PARKED, false))
+        val pending = CompletableDeferred<PickupSession>()
+        val repository = object : PickupRepository by FakePickupRepository() {
+            override suspend fun create(waitingSessionId: String?, idempotencyKey: String) = pending.await()
+        }
+        val model = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), safety, RecordingTts())
+        try {
+            model.start(); runCurrent()
+            safety.state.value = WaitingSafety(VehicleMotion.UNKNOWN, true); runCurrent()
+            pending.completeExceptionally(java.io.IOException("network")); runCurrent()
+            assertTrue(model.state.value.blocked)
+            assertFalse(model.state.value.busy)
+        } finally { model.releaseResources() }
+    }
+
+    @Test fun lateInitialLocationIsIgnoredAfterDrivingOrUnknown() = runTest(dispatcher) {
+        for (motion in listOf(VehicleMotion.DRIVING, VehicleMotion.UNKNOWN)) {
+            val safety = MutableSafety(WaitingSafety(VehicleMotion.PARKED, false))
+            val pending = CompletableDeferred<CurrentLocationResult>()
+            var sends = 0
+            val repository = object : PickupRepository by FakePickupRepository() {
+                override suspend fun sendVehicleLocation(sessionId: String, location: PickupVehicleLocation) { sends++ }
+            }
+            val gateway = object : CurrentLocationGateway {
+                override suspend fun getCurrentLocation() = withContext(NonCancellable) { pending.await() }
+                override fun showAccessBlockedInformation() = Unit
+                override fun close() = Unit
+            }
+            val model = PickupViewModel(repository, gateway, safety, RecordingTts())
+            try {
+                model.start(); runCurrent()
+                safety.state.value = WaitingSafety(motion, true); runCurrent()
+                pending.complete(CurrentLocationResult.Success(VehicleLocation(37.0, 127.0, 1_793_600_000_000)))
+                runCurrent()
+                assertEquals(0, sends)
+                assertFalse(model.state.value.sharingLocation)
+            } finally { model.releaseResources() }
+        }
+    }
+
+    @Test fun latePeriodicLocationIsIgnoredAfterSafetyLoss() = runTest(dispatcher) {
+        val safety = MutableSafety(WaitingSafety(VehicleMotion.PARKED, false))
+        val pending = CompletableDeferred<CurrentLocationResult>()
+        var calls = 0
+        var sends = 0
+        val repository = object : PickupRepository by FakePickupRepository() {
+            override suspend fun sendVehicleLocation(sessionId: String, location: PickupVehicleLocation) { sends++ }
+        }
+        val gateway = object : CurrentLocationGateway {
+            override suspend fun getCurrentLocation(): CurrentLocationResult = if (++calls == 1) CurrentLocationResult.Success(VehicleLocation(37.0, 127.0, 1_793_600_000_000)) else withContext(NonCancellable) { pending.await() }
+            override fun showAccessBlockedInformation() = Unit
+            override fun close() = Unit
+        }
+        val model = PickupViewModel(repository, gateway, safety, RecordingTts())
+        try {
+            model.start(); runCurrent()
+            assertEquals(1, sends)
+            advanceTimeBy(5_001); runCurrent()
+            assertEquals(2, calls)
+            safety.state.value = WaitingSafety(VehicleMotion.DRIVING, true); runCurrent()
+            pending.complete(CurrentLocationResult.Success(VehicleLocation(37.1, 127.1, 1_793_600_005_000)))
+            runCurrent()
+            assertEquals(1, sends)
+            assertFalse(model.state.value.sharingLocation)
+        } finally { model.releaseResources() }
+    }
+
+    @Test fun completedCancelledAndEndedPickupCanStartAFreshSession() = runTest(dispatcher) {
+        for (action in listOf("complete", "cancel", "end")) {
+            val repository = FakePickupRepository()
+            val model = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), ParkedSafety(), RecordingTts())
+            try {
+                model.start(if (action == "end") "waiting" else null); runCurrent()
+                when (action) { "complete" -> model.complete(); "cancel" -> model.cancel(); else -> model.endLinkedWaiting() }
+                runCurrent()
+                assertNotEquals(PickupSessionStatus.ACTIVE, model.state.value.session?.status)
+                model.start(); model.start(); runCurrent()
+                assertEquals(2, repository.createCalls)
+                assertEquals("session-2", model.state.value.session?.id)
+                assertEquals(PickupSessionStatus.ACTIVE, model.state.value.session?.status)
+                assertEquals(null, model.state.value.invitation)
+                assertEquals(null, model.state.value.lastLocationAt)
+                assertFalse(model.state.value.proximityCandidate)
+            } finally { model.releaseResources() }
+        }
+    }
+
+    @Test fun closeRequestCancelsTheFirstPositionBeforeTheServerReply() = runTest(dispatcher) {
+        val pending = CompletableDeferred<CurrentLocationResult>()
+        val closeReply = CompletableDeferred<Unit>()
+        val base = FakePickupRepository()
+        var sends = 0
+        val repository = object : PickupRepository by base {
+            override suspend fun sendVehicleLocation(sessionId: String, location: PickupVehicleLocation) { sends++ }
+            override suspend fun complete(sessionId: String, idempotencyKey: String): PickupSession {
+                closeReply.await()
+                return base.complete(sessionId, idempotencyKey)
+            }
+        }
+        val gateway = object : CurrentLocationGateway {
+            override suspend fun getCurrentLocation() = withContext(NonCancellable) { pending.await() }
+            override fun showAccessBlockedInformation() = Unit
+            override fun close() = Unit
+        }
+        val model = PickupViewModel(repository, gateway, ParkedSafety(), RecordingTts())
+        try {
+            model.start(); runCurrent()
+            model.complete(); runCurrent()
+            pending.complete(CurrentLocationResult.Success(VehicleLocation(37.0, 127.0, 1_793_600_000_000)))
+            runCurrent()
+            assertEquals(0, sends)
+            assertFalse(model.state.value.sharingLocation)
+            assertTrue(model.state.value.busy)
+            closeReply.complete(Unit); runCurrent()
+            assertEquals(PickupSessionStatus.COMPLETED, model.state.value.session?.status)
+        } finally { model.releaseResources() }
+    }
+
+    @Test fun terminalSyncReleasesBusyAndLateCommandsCannotReplaceTheNextSession() = runTest(dispatcher) {
+        for (command in listOf("invite", "close")) {
+            val reply = CompletableDeferred<Unit>()
+            val base = FakePickupRepository()
+            var ended = false
+            val repository = object : PickupRepository by base {
+                override suspend fun issueInvitation(sessionId: String, idempotencyKey: String): PickupInvitation {
+                    reply.await()
+                    return PickupInvitation("old", "https://pickup.example.test/share/" + "A".repeat(43), "2030-01-01T00:00:00Z")
+                }
+                override suspend fun complete(sessionId: String, idempotencyKey: String): PickupSession {
+                    val old = base.getSession(sessionId)
+                    reply.await()
+                    return old.copy(status = PickupSessionStatus.COMPLETED, revision = 2)
+                }
+                override suspend fun snapshot(sessionId: String): PickupSnapshot {
+                    val snapshot = base.snapshot(sessionId)
+                    return if (ended && sessionId == "session") snapshot.copy(session = snapshot.session.copy(status = PickupSessionStatus.COMPLETED, revision = 2), revision = 2) else snapshot
+                }
+            }
+            val model = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), ParkedSafety(), RecordingTts())
+            try {
+                model.start(); runCurrent()
+                if (command == "invite") model.issueInvitation() else model.complete()
+                runCurrent()
+                assertTrue(model.state.value.busy)
+                ended = true
+                advanceTimeBy(5_001); runCurrent()
+                assertEquals(PickupSessionStatus.COMPLETED, model.state.value.session?.status)
+                assertFalse(model.state.value.busy)
+                model.start(); runCurrent()
+                assertEquals("session-2", model.state.value.session?.id)
+                reply.complete(Unit); runCurrent()
+                assertEquals("session-2", model.state.value.session?.id)
+                assertEquals(PickupSessionStatus.ACTIVE, model.state.value.session?.status)
+                assertEquals(null, model.state.value.invitation)
+            } finally { model.releaseResources() }
+        }
+    }
+
+    @Test fun reissueHidesOldQrAndRecoversWithTheSameRetryKey() = runTest(dispatcher) {
+        val pending = CompletableDeferred<PickupInvitation>()
+        val keys = mutableListOf<String>()
+        val first = PickupInvitation("first", "https://pickup.example.test/share/" + "A".repeat(43), "2030-01-01T00:00:00Z")
+        val replacement = first.copy(invitationId = "replacement", shareUrl = "https://pickup.example.test/share/" + "B".repeat(43))
+        val repository = object : PickupRepository by FakePickupRepository() {
+            override suspend fun issueInvitation(sessionId: String, idempotencyKey: String): PickupInvitation {
+                keys += idempotencyKey
+                return when (keys.size) { 1 -> first; 2 -> pending.await(); else -> replacement }
+            }
+        }
+        val model = PickupViewModel(repository, SequencedLocationGateway(CurrentLocationResult.Timeout), ParkedSafety(), RecordingTts())
+        try {
+            model.start(); runCurrent()
+            model.issueInvitation(); runCurrent()
+            assertEquals(first, model.state.value.invitation)
+            model.issueInvitation(); runCurrent()
+            assertTrue(model.state.value.busy)
+            assertEquals(null, model.state.value.invitation)
+            pending.completeExceptionally(java.io.IOException("lost response")); runCurrent()
+            assertEquals(null, model.state.value.invitation)
+            assertEquals("lost response", model.state.value.invitationError)
+            model.issueInvitation(); runCurrent()
+            assertEquals(replacement, model.state.value.invitation)
+            assertNotEquals(keys[0], keys[1])
+            assertEquals(keys[1], keys[2])
+        } finally { model.releaseResources() }
+    }
+
 }
 
 private class FakePickupRepository : PickupRepository {
@@ -242,7 +434,7 @@ private class FakePickupRepository : PickupRepository {
     override suspend fun create(waitingSessionId: String?, idempotencyKey: String): PickupSession {
         createCalls++
         createWaitingIds += waitingSessionId
-        baseSession = baseSession.copy(waitingSessionId = waitingSessionId)
+        baseSession = PickupSession(if (createCalls == 1) "session" else "session-$createCalls", waitingSessionId, PickupSessionStatus.ACTIVE, true, null, null, 0, "2026-11-04T00:00:00Z", null)
         return baseSession
     }
     override suspend fun getSession(sessionId: String) = baseSession

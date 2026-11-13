@@ -26,6 +26,16 @@ export class SupabasePickupRepository implements PickupRepository {
   }
 
   async updateParticipantStatus(input: { guestUid: string; participantId: string; status: PickupParticipantStatus; clientEventId: string; now: string }): Promise<{ accepted: boolean; status: PickupParticipantStatus; revision: number }> {
+    if (input.status === "CANCELLED") {
+      // Resolve only this guest's participant. The existing CLOSE_SESSION RPC
+      // rechecks authorization under its lock and atomically triggers revocation
+      // and location deletion. Its actor-scoped key also replays a lost reply.
+      const [linked] = await this.rows("pickup_participants", `id=eq.${encodeURIComponent(input.participantId)}&auth_uid=eq.${encodeURIComponent(input.guestUid)}`);
+      if (!linked) throw this.notFound();
+      const closed = await this.closeSession({ actorUid: input.guestUid, sessionId: String(linked.session_id), action: "CANCELLED", reason: "PARTICIPANT_CANCELLED", idempotencyKey: input.clientEventId, now: input.now, driverOnly: false });
+      if (closed.id !== String(linked.session_id) || closed.status !== "CANCELLED") throw new PickupApiError(409, "INVALID_PARTICIPANT_TRANSITION", "이미 처리된 요청입니다");
+      return { accepted: true, status: "CANCELLED", revision: closed.revision };
+    }
     const result = await this.command("UPDATE_PARTICIPANT_STATUS", input.guestUid, input);
     return { accepted: Boolean(result.accepted), status: result.status as PickupParticipantStatus, revision: Number(result.revision) };
   }

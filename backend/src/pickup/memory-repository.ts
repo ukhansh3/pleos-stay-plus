@@ -88,7 +88,15 @@ export class InMemoryPickupRepository implements PickupRepository {
   }
 
   async updateParticipantStatus(input: { guestUid: string; participantId: string; status: PickupParticipantStatus; clientEventId: string; now: string }): Promise<{ accepted: boolean; status: PickupParticipantStatus; revision: number }> {
-    const record = this.participantRecord(input.participantId); active(record); const linked = participant(record, input.guestUid);
+    const record = this.participantRecord(input.participantId);
+    // CANCELLED is a session termination, not a display-only participant status.
+    if (input.status === "CANCELLED") {
+      if (record.participant?.id !== input.participantId || record.participant.guestUid !== input.guestUid) throw new PickupApiError(404, "PICKUP_NOT_FOUND", "Pickup 참가자를 찾을 수 없습니다");
+      const closed = await this.closeSession({ actorUid: input.guestUid, sessionId: record.session.id, action: "CANCELLED", reason: "PARTICIPANT_CANCELLED", idempotencyKey: input.clientEventId, now: input.now, driverOnly: false });
+      if (closed.status !== "CANCELLED") throw new PickupApiError(409, "INVALID_PARTICIPANT_TRANSITION", "이미 처리된 요청입니다");
+      return { accepted: true, status: "CANCELLED", revision: closed.revision };
+    }
+    active(record); const linked = participant(record, input.guestUid);
     const replay = linked.events.get(input.clientEventId);
     if (replay) return { accepted: true, status: replay.status, revision: replay.revision };
     if (linked.status === input.status) return { accepted: true, status: linked.status, revision: record.session.revision };
