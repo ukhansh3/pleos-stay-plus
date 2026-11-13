@@ -46,12 +46,13 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
     suspend fun call(method: String, path: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
         val c = connection(method, path)
         try {
+            // Android also supplies implicit form headers on body-less DELETE requests.
+            c.setRequestProperty("Content-Type", "application/json")
             val payload = realtimeControlPayload(method, body?.toString())
             if (payload != null) {
                 // Android's body-less POST defaults to form encoding. All control writes use JSON.
                 val bytes = payload.toByteArray(Charsets.UTF_8)
                 c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json")
                 c.setFixedLengthStreamingMode(bytes.size)
                 c.outputStream.use { it.write(bytes) }
             }
@@ -122,6 +123,6 @@ class RealtimeApi(private val baseUrl: String, private val token: suspend () -> 
     }
 }
 
-/** Binary upload has its own API; control POST/PUT/PATCH must never become implicit form requests. */
+/** Binary upload has its own API; control POST/PUT/PATCH/DELETE must never become implicit form requests. */
 internal fun realtimeControlPayload(method: String, serializedBody: String?): String? = serializedBody
-    ?: if (method.uppercase(java.util.Locale.ROOT) in setOf("POST", "PUT", "PATCH")) "{}" else null
+    ?: if (method.uppercase(java.util.Locale.ROOT) in setOf("POST", "PUT", "PATCH", "DELETE")) "{}" else null

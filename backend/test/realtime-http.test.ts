@@ -62,6 +62,11 @@ test("control POST rejects Android implicit form encoding as 415 and accepts exp
   const response = await app.inject({method:"POST",url:"/api/v1/realtime/pairings",headers:{...headers,"content-type":"application/json"},payload:"{}"});
   assert.equal(response.statusCode,200);
   assert.match(response.json().code,/^[0-9]{8}$/);
+  const pairingId = response.json().id;
+  const cancel = await app.inject({method:"DELETE",url:`/api/v1/realtime/pairings/${pairingId}`,headers:{...headers,"content-type":"application/json"},payload:"{}"});
+  assert.equal(cancel.statusCode,204);
+  const cancelled = await app.inject({method:"GET",url:`/api/v1/realtime/pairings/${pairingId}`,headers});
+  assert.equal(cancelled.json().state,"CANCELLED");
   const malformed = await app.inject({method:"POST",url:"/api/v1/realtime/pairings",headers:{...headers,"content-type":"application/json"},payload:"{"});
   assert.equal(malformed.statusCode,400);
   assert.equal(malformed.json().error.code,"INVALID_INPUT");
