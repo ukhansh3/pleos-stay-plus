@@ -52,6 +52,9 @@ class FileTransferViewModel(private val api: RealtimeApi, private val safety: Wa
     // Only a host that verified the local user/PIN may call this. No implicit unlock on restart.
     fun unlockAfterUserVerification() { if (state.value.allowed) mutable.update { it.copy(unlocked=true) } }
     fun lock() { operation?.cancel(); mutable.update { it.copy(unlocked=false, files=emptyList(), versions=emptyList(), workPicker=null, sendingWork=false) } }
+    // The caller supplies actual Activity visibility, never an internal route.
+    // Returning to foreground does not itself authorize or unlock the session.
+    fun setAppForeground(foreground: Boolean) { if (!foreground) lock() }
     private fun checkAccess() {
         check(safety.state.value.canUse && state.value.allowed && state.value.unlocked) { "SAFETY_OR_USER_LOCKED" }
     }

@@ -127,7 +127,7 @@ class RealtimeUiSession : ViewModel() {
     })
     DisposableEffect(model) { onDispose { model.lock() } }
     val protectedContent = managedWorkspace?.invoke(model, config.url)
-    LaunchedEffect(foreground, model) { if (!foreground) model.lock() }
+    LaunchedEffect(foreground, model) { model.setAppForeground(foreground) }
     if (!visible) return
     presentation {
         if (!foreground) NoticePanel("문서 화면 잠김", "PIN을 다시 확인해 주세요.")

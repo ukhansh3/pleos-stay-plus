@@ -230,13 +230,13 @@ class MainActivity : ComponentActivity() {
                     val filesVisible=route==StayRoute.FILES || route.activityMode()?.document()==true
                     RealtimeEntry(applicationContext,waitingDependencies.safety,
                         session = realtimeSession,
-                        foreground=documentVisible && (filesVisible || activityUi.documentLease),
+                        foreground=documentVisible,
                         visible=documentVisible && (filesVisible || activityUi.preparing),
                         presentation={ body ->
                             if(activityUi.preparing)ActivityModal(
                                 if (activityUi.target == ActivityMode.STUDY) "공부를 시작하기 전에"
                                 else "업무를 시작하기 전에",activityUi.busy,host.ui::cancelPreparation) {
-                                Text(if (safety.canUse) "파일 작업에서 PC 연결과 PIN을 확인해 주세요." else safety.message)
+                                if (!safety.canUse) Text(safety.message)
                                 if (activityUi.target == ActivityMode.STUDY && host.coordinator.currentState().active != ActivityMode.STUDY) {
                                     var studyMinutes by remember { mutableStateOf(host.studyMinutes.toString()) }
                                     OutlinedTextField(studyMinutes, {
@@ -244,9 +244,13 @@ class MainActivity : ComponentActivity() {
                                         host.setStudyMinutes(studyMinutes.toIntOrNull() ?: 0)
                                     }, label = { Text("학습 시간 · 분") }, singleLine = true, enabled = !activityUi.busy)
                                 }
-                                activityUi.preparationError?.let { Text(it, color = StayColors.Warning) }
-                                PremiumAction("파일 작업 열기",host.ui::openDocumentConnection,enabled=!activityUi.busy && safety.canUse)
-                                PremiumAction("연결 확인",host::prepareDocuments,enabled=!activityUi.busy && safety.canUse,secondary=true)
+                                // Keep connection/PIN recovery in the requested mode. A verified
+                                // in-app session proceeds automatically without a trip to Files.
+                                Box(Modifier.fillMaxWidth().heightIn(min = 280.dp, max = 520.dp)) { body() }
+                                activityUi.preparationError?.let {
+                                    Text(it, color = StayColors.Warning)
+                                    PremiumAction("다시 시도",host::prepareDocuments,enabled=!activityUi.busy && safety.canUse)
+                                }
                                 PremiumAction("돌아가기",host.ui::cancelPreparation,enabled=!activityUi.busy,secondary=true)
                             } else body()
                         },

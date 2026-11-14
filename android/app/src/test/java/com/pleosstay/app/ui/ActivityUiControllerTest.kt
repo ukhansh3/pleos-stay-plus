@@ -53,6 +53,42 @@ class ActivityUiControllerTest {
   assertEquals(StayRoute.FILES,f.ui.state.value.leavePrompt)
   assertNull(f.ui.state.value.destination);assertNotNull(f.work.id)
  }
+ @Test fun verifiedDocumentPreparationContinuesIntoRequestedModeWithoutFilesDetour()=runTest {
+  for(mode in listOf(ActivityMode.STUDY,ActivityMode.WORK)) {
+   val f=Fixture(this)
+   f.ui.leave(StayRoute.FILES,StayRoute.HOME);runCurrent();f.handled(StayRoute.HOME)
+   // Owners are hidden on Home, then perform fresh authorization for the selected mode.
+   f.documents=false;f.ui.open(mode)
+   assertTrue(f.ui.state.value.preparing);assertEquals(mode,f.ui.state.value.target)
+   assertTrue(f.ui.beginPreparation())
+   f.documents=true;f.ui.prepared();runCurrent()
+   assertFalse(f.ui.state.value.preparing)
+   assertEquals(mode.route(),f.ui.state.value.destination)
+   assertEquals(1,f.adapters.getValue(mode).starts)
+  }
+ }
+ @Test fun modeEntryRefreshesEvenAnAlreadyVerifiedWorkspaceBeforeStarting()=runTest {
+  for(mode in listOf(ActivityMode.STUDY,ActivityMode.WORK)) {
+   val f=Fixture(this);f.documents=true
+   f.ui.open(mode,refreshDocuments=true);runCurrent()
+   assertTrue(f.ui.state.value.preparing)
+   assertEquals(0,f.adapters.getValue(mode).starts)
+   assertNull(f.ui.state.value.destination)
+   assertTrue(f.ui.beginPreparation());f.ui.prepared();runCurrent()
+   assertEquals(mode.route(),f.ui.state.value.destination)
+   assertEquals(1,f.adapters.getValue(mode).starts)
+  }
+ }
+ @Test fun documentEntryCannotSkipAnUnverifiedOrRevokedSession()=runTest {
+  for(mode in listOf(ActivityMode.STUDY,ActivityMode.WORK)) {
+   val f=Fixture(this);f.documents=false;f.ui.open(mode)
+   assertTrue(f.ui.beginPreparation());f.ui.prepared();runCurrent()
+   assertTrue(f.ui.state.value.preparing)
+   assertNull(f.ui.state.value.destination)
+   assertEquals(0,f.adapters.getValue(mode).starts)
+   f.ui.cancelPreparation();assertFalse(f.ui.state.value.preparing)
+  }
+ }
  @Test fun legacyAndUnknownRoutesAreDroppedFromSavedNavigation() {
   assertEquals(listOf("HOME", "MODES"), submissionRouteStack(listOf("HOME", "MODES", "ENTERTAINMENT")))
   assertEquals(listOf("HOME"), submissionRouteStack(listOf("ENTERTAINMENT", "UNKNOWN")))

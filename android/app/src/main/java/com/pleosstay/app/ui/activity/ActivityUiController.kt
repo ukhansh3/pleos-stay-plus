@@ -75,10 +75,10 @@ internal class ActivityUiController(
             finally { mutable.update{it.copy(busy=false,active=coordinator.currentState().active)} }
         }
     }
-    fun open(target:ActivityMode) {
+    fun open(target:ActivityMode,refreshDocuments:Boolean=false) {
         if(state.value.busy || state.value.modal)return
         mutable.value=ActivityUiState(active=coordinator.currentState().active,target=target,source=coordinator.currentState().active)
-        if(needsDocuments(target)) mutable.update{it.copy(preparing=true)} else submit(target)
+        if((refreshDocuments && target.document()) || needsDocuments(target)) mutable.update{it.copy(preparing=true)} else submit(target)
     }
     fun beginPreparation():Boolean {
         if(!state.value.preparing || state.value.busy)return false

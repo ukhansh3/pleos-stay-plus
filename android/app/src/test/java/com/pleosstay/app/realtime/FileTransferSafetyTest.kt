@@ -36,5 +36,26 @@ class FileTransferSafetyTest {
    assertEquals(0,safety.starts);assertEquals(0,safety.stops)
   }finally{owner.clear();Dispatchers.resetMain()}
  }
+ @Test fun verifiedPinSurvivesInternalNavigationButNotBackgroundOrExplicitLock()=runTest {
+  Dispatchers.setMain(StandardTestDispatcher(testScheduler));val owner=ViewModelStore()
+  try {
+   val safety=SafetyFixture().apply{state.value=WaitingSafety(VehicleMotion.PARKED,false)}
+   val vm=FileTransferViewModel(RealtimeApi("https://fake.invalid/"){error("NETWORK_FORBIDDEN")},safety,RevisionFixture(),File("unused"))
+   owner.put("realtime",vm);runCurrent()
+   assertFalse(vm.state.value.unlocked)
+   vm.unlockAfterUserVerification()
+   // MainActivity now supplies the actual app foreground through Files/Home/Modes/Study/Work.
+   repeat(5){vm.setAppForeground(true);runCurrent();assertTrue(vm.state.value.unlocked)}
+   vm.setAppForeground(false);assertFalse(vm.state.value.unlocked)
+   vm.setAppForeground(true);runCurrent();assertFalse(vm.state.value.unlocked)
+   vm.unlockAfterUserVerification();vm.lock();vm.setAppForeground(true)
+   assertFalse(vm.state.value.unlocked)
+   vm.unlockAfterUserVerification()
+   safety.state.value=WaitingSafety(VehicleMotion.UNKNOWN,true);runCurrent()
+   assertFalse(vm.state.value.unlocked)
+   safety.state.value=WaitingSafety(VehicleMotion.PARKED,false);runCurrent()
+   vm.setAppForeground(true);assertFalse(vm.state.value.unlocked)
+  }finally{owner.clear();Dispatchers.resetMain()}
+ }
  @Test fun mimeAllowlistIsExplicit(){assertEquals("application/pdf",LocalFileStore.documentMime("Report.PDF"));assertNull(LocalFileStore.documentMime("report.docm"));assertNull(LocalFileStore.documentMime("report.exe"))}
 }

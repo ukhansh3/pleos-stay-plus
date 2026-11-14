@@ -830,6 +830,12 @@ interface WaitingRepository {
 - Current detailed source: `docs/contracts/DOCUMENT_WORKSPACE_CONTRACT.md`, `docs/features/STUDY_MVP_SPEC.md`, `docs/features/WORK_DOCUMENT_MVP_SPEC.md`, `docs/api/MODE_API_MATRIX.md`, each new package `AGENTS.md`.
 - Scope is approved as a product goal; code execution/SDK selection/editor fidelity **not** verified by this documentation commit. Do not mark implemented until device E2E and editor acceptance tests pass.
 
+## 2026-11-14 문서 화면 이동 및 PIN 확인 UX
+
+- 같은 사용자·연결의 앱 전면 세션에서 확인한 PIN은 파일 작업 → 홈/대기 모드 → 공부/업무 이동만으로 다시 잠그지 않는다. 문서 화면을 숨기는 것과 앱이 백그라운드로 가는 것을 구분한다.
+- 공부·업무 진입 시 기존 자료함 권한을 다시 확인하고 해당 화면의 문서 목록을 자동 조회한다. 이미 확인한 PIN을 재입력하거나 파일 작업을 다시 여는 동선을 요구하지 않는다.
+- 실제 잠금/연결 준비가 필요한 경우 요청한 모드 안에서 처리한다. 앱 백그라운드·주행·UNKNOWN·명시적 잠금·사용자/연결 변경·권한 철회·프로세스 재시작에는 기존 잠금과 민감 화면 차폐를 유지한다. PIN 확인을 생략해 새 권한을 부여하는 변경은 아니다.
+
 ## 23. Work DOCX-only follow-up — 2026-11-07
 
 - Latest task implements a custom DOCX editor after isolated API34 probes, while excluding PDF editing and Realtime uploads. [Current scope](docs/features/WORK_DOCX_EDITOR_SPEC.md) records supported formats/operations and limits.

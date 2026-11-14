@@ -88,17 +88,21 @@ internal class PremiumActivityHost(val rest:RestController,
         viewModelScope.launch {
             val result=guarded {
                 check(foreground && safety.state.value.canUse)
+                // Resolve the current connection before authorizing either workspace.
+                // A revoked link must show connection recovery, not a loop of PIN prompts.
+                checkNotNull(transfer).refreshWorkspaceConnection()
+                check(transfer?.state?.value?.connectionId!=null)
                 check(studyOwner?.gateway?.refreshAccess()?.allowed==true)
                 check(workOwner?.gateway?.refreshAccess()?.allowed==true)
                 ActivityOperation.Done
             }
-            if(result.success)ui.prepared() else ui.preparationFailed("자료함 등록·PC 연결·PIN을 확인한 뒤 다시 시도해 주세요.")
+            if(result.success)ui.prepared() else ui.preparationFailed("자료함에 연결하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.")
         }
     }
     override fun startRest(preset:RestPreset){selectedPreset=preset;ui.open(ActivityMode.REST)}
-    override fun startStudy(minutes:Int){studyMinutes=minutes;ui.open(ActivityMode.STUDY)}
-    override fun startWork(){ui.open(ActivityMode.WORK)}
-    fun open(mode:ActivityMode){ui.open(mode)}
+    override fun startStudy(minutes:Int){studyMinutes=minutes;ui.open(ActivityMode.STUDY,refreshDocuments=true)}
+    override fun startWork(){ui.open(ActivityMode.WORK,refreshDocuments=true)}
+    fun open(mode:ActivityMode){ui.open(mode,refreshDocuments=mode.document())}
     override fun finish(mode:ActivityMode){ui.finish(mode)}
     override fun home(){ui.leave(route,StayRoute.HOME)}
     override fun choose(mode:ActivityMode,choice:WaitingChoice) {

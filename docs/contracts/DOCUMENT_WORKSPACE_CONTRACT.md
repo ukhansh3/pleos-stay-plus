@@ -82,6 +82,8 @@ Common `ModeStartResult` handling: `Ready` starts only requested mode after safe
 
 - Read existing `WaitingSafetyGateway` state on entry, resume, document selection, render, input and upload. **UNKNOWN/DRIVING/UX-restricted = hide sensitive surface and suspend work immediately**, not just disable buttons.
 - A PIN/user lock and authorized device pair remain mandatory; never call `unlockAfterUserVerification` from an unverified UI callback.
+- **2026-11-14 user-approved navigation UX:** a PIN verified for the current foreground app session remains valid across internal Files/Home/Modes/Study/Work navigation. Hiding a document route still masks its content; it is not app backgrounding and must not clear the verified PIN. Real foreground loss, unsafe/UNKNOWN vehicle state, explicit lock, identity/configuration change and revoked access retain fail-closed behavior. No PIN is persisted as unlocked after process restart.
+- Study/Work entry refreshes authorization and continues automatically within the requested mode. If authentication/PIN is genuinely needed, recover in that mode instead of forcing navigation to Files. File/version selection stays in the existing feature library and never treats cached bytes as permission.
 - Do not log document text, filenames with sensitive details, annotations, access tokens, file content, or clipboard contents. No secret in APK.
 - User-switch/revocation: clear display, editor buffers, temporary previews and drafts as per approved retention rules; preserve recoverable failed upload only within same authorized user and connection.
 - Drafts and study notes are not new Supabase tables. Local persistence security, key binding, delete/retention and backup exclusion require implementation review.
