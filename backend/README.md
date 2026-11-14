@@ -1,6 +1,8 @@
-# Parking API server
+# Parking / Pickup API server
 
 Node.js 20+, TypeScript, and Fastify implementation of the Parking v0.2 contract.
+
+See the [reviewer setup guide](../docs/review/LOCAL_SETUP.md) for the separate Realtime server, Windows client and mobile web. Latest automated results: [handoff verification](../docs/verification/2026-11-14-review-handoff.md).
 
 ## Local setup
 
@@ -26,7 +28,7 @@ npm run dev
 
 Pickup v0.3 is independent from Waiting and uses `/api/v1/pickup/**`. Driver and guest clients each send a Supabase Anonymous Auth JWT; request-body owner IDs are never trusted. Invitations last 60 minutes, only their SHA-256 hash is stored, and completion/cancellation/end removes current locations and revokes access.
 
-The versioned schema/RLS migrations are under `../supabase/migrations/` and must be applied in filename order. Migrations through `20261103002000` were applied to the approved Supabase project on 2026-11-03 and verified with temporary anonymous users. The atomic-command migration `20261103003000` requires a separate reviewed application before live verification.
+Schema/RLS/RPC source is under `../supabase/`. The initial migrations were verified on 2026-11-03; later live Auth, RLS, invitation, cleanup and Realtime scenarios are recorded in [2026-11-13 QA](../docs/verification/2026-11-13-realtime-pickup-live-qa.md). Do not automatically apply every SQL file to an existing project. Compare the target database with its approved migration/application records first. This handoff makes no DB changes.
 
 For Supabase persistence, set `PICKUP_STORAGE=supabase` together with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, server-only `SUPABASE_SECRET_KEY`, `PUBLIC_WEB_BASE_URL`, and a separate random `PICKUP_INVITATION_HMAC_SECRET` of at least 32 characters. Set PUBLIC_WEB_BASE_URL to the approved HTTPS web origin without a path. If it is missing or local, invitation creation returns PICKUP_SHARE_NOT_CONFIGURED before storing a new invitation. The secret key is sent only through Supabase's `apikey` header and never as a bearer token.
 

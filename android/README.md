@@ -1,35 +1,53 @@
-# Android (Pleos Connect)
+# PLEOS Android 앱
 
-The Kotlin/Jetpack Compose project now contains the Parking search flow:
+Kotlin·Jetpack Compose 기반 차량 앱입니다. 홈과 Premium Navigation Rail에서 Parking, Waiting, Pickup, Realtime, Rest, Study, Work로 이동합니다.
 
-- “내 주변 검색” backed by official Pleos FusedLocation 1.1.3 and `pleos.car.permission.FUSED_LOCATION`
-- Permission denial, disabled location, unsupported runtime, timeout, and SDK error guidance with manual fallback
-- Manual WGS84 coordinates retained behind a developer-test toggle
-- Parking list and detail views connected to the Fastify API
-- Explicit loading, empty, stale-data, missing-field, and error states
-- `NavigationGateway` backed by official NaviHelper 3.0.5 `requestRoute(RouteInfo)`
-- Separate current-vehicle, manual-test, and future destination search-origin models
-- Only the documented Pleos permissions: `FUSED_LOCATION` and `NAVI_ROUTE_SEARCH`; no guessed Android fine/coarse permission
+## 실행·검토
 
-The debug API URL defaults to `http://10.0.2.2:3000/api/v1/`. Override it at build time with `-PPARKING_API_BASE_URL=https://.../api/v1/`. Cleartext traffic is enabled only in the debug manifest.
+- [저장소 전체 소개](../README.md)
+- [담당자 검토 순서](../docs/review/REVIEW_GUIDE.md)
+- [서버·인증·Android 설정](../docs/review/LOCAL_SETUP.md)
+- [에뮬레이터 없는 Compose Preview](../docs/ui/COMPOSE_PREVIEW_GUIDE.md)
+- [현재 빌드·검증 결과](../docs/verification/2026-11-14-review-handoff.md)
 
-## Pickup
+## 빌드
 
-- Pickup starts independently from Home; an active local Waiting UUID is optional linkage only.
-- The driver identity provider uses the official Supabase Auth REST endpoints for UI-less anonymous signup/refresh. Tokens are encrypted with an app-private Android Keystore AES-GCM key.
-- Put `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in ignored `android/local.properties`, Gradle properties, or process environment. Never place `SUPABASE_SECRET_KEY` in Android.
-- Vehicle sharing reuses Pleos FusedLocation, starts only after explicit consent and the existing fail-closed parked safety gate, targets roughly five-second refresh, and stops on driving/UNKNOWN/permission/location failure.
-- FusedLocation 1.1.3 exposes provider `confidence` but no meter accuracy. The app does not invent `accuracyMeters`; such vehicle positions cannot contribute to automatic proximity until an approved accuracy source exists.
-- QR encoding uses ZXing Core 3.5.4 (Apache-2.0). The QR opens the driver share handoff page and does not itself grant location access.
-- QR reissue uses a stable idempotency key while retrying; a successful reissue receives a new key and relies on the atomic backend command to revoke the previous invitation and participant access.
-- Participant/session synchronization runs independently from vehicle GPS upload. The app consumes the durable revision-ordered event cursor and refreshes a snapshot every five seconds, so a location failure does not stop status recovery.
-- Official Pleos TextToSpeech 3.3.1 is integrated in `ON_DEVICE` mode with `pleos.car.permission.TTS_SERVICE`, initialization/error callbacks, listener cleanup, and event-id deduplication. Maven resolution and Android compilation are verified; permission grant and audible playback remain `SDK_VERIFY` until exercised on the Pleos emulator.
+Android SDK와 JDK를 준비한 후 이 폴더에서 실행합니다.
 
-`assembleDebug` verifies compilation against the official dependencies. FusedLocation permission denial and last-known coordinate reception were also exercised on Pleos Connect Emulator v2.1.0. The emulator did not propagate `adb emu geo fix` into the Pleos FusedLocation service, and Navi route acceptance remains unverified. Check `docs/verification/2026-11-02-parking-api.md` for exact evidence and `SDK_VERIFY` items.
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug --max-workers=1
+```
 
-See [DEVELOPMENT_GUIDE.md](../DEVELOPMENT_GUIDE.md) and [AGENTS.md](../AGENTS.md).
+출력은 `app/build/outputs/apk/debug/app-debug.apk`입니다. Debug APK는 로컬 검토·시연용이며, 이 명령은 에뮬레이터나 서버를 켜지 않습니다.
 
+## 연결 설정
 
-## UI 미리보기
+| 항목 | Debug 기본 대상 / 설정 |
+|---|---|
+| Parking / Pickup API | `http://10.0.2.2:3000/api/v1/` |
+| Realtime API | `http://10.0.2.2:3012/api/v1/realtime/` |
+| Supabase Auth | 무시된 `local.properties` 등의 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` |
+| 별도 서버 | Gradle의 `PARKING_API_BASE_URL`, `PICKUP_API_BASE_URL`, `REALTIME_API_BASE_URL` 설정 |
 
-[에뮬레이터 없는 UI 미리보기](../docs/ui/COMPOSE_PREVIEW_GUIDE.md) — debug의 `ParkingPreview.kt` 등을 열고 Design/Split에서 한 화면씩 확인합니다. 에뮬레이터·서버를 실행하지 않습니다.
+서버 secret은 Android에 넣지 않습니다. 공개 URL·publishable key는 권한을 대신하지 않으며 서버 인증·소유권·PIN·안전 검사를 유지합니다. Release에는 로컬 HTTP 연결을 허용하지 않습니다.
+
+## 구조
+
+`MainActivity`는 진입과 화면을 연결합니다. `ui/premium`은 공통 표현, 기능별 ViewModel/Controller는 명령·상태, Repository/Gateway는 저장·API·공식 SDK를 담당합니다.
+
+- `parking/`: 현재 위치·검색·상세·NaviHelper. 수동 좌표는 Debug만 허용합니다.
+- `waiting/`, `modes/`: Room 대기 세션·안전 게이트·공통 모드 시작과 전환
+- `pickup/`: 독립 Pickup·실제 QR·동의 기반 위치·참가자 동기화
+- `realtime/`: 코드·양쪽 승인·PIN·자료 수동 전송
+- `documents/`, `workspace/`: Study/Work 공통 자료·권한·파일 버전
+- `rest/`, `study/`, `work/`: 휴식, 읽기·메모·진도, DOCX 편집·초안·내보내기
+
+## 안전과 검증 경계
+
+주행·UNKNOWN·권한 상실 시 정차 전용 화면을 차단합니다. 확인된 PIN은 같은 앱 전면 세션의 내부 화면 이동에서 재사용하며, 백그라운드·잠금·사용자 변경 등에서는 잠급니다.
+
+Pleos FusedLocation 1.1.3, NaviHelper 3.0.5, TextToSpeech 3.3.1을 기존 Gateway로 사용합니다. FusedLocation의 confidence를 미터 정확도로 바꾸지 않으며 정확도를 확인할 수 없으면 자동 근접 판정을 하지 않습니다. 내비 경로 수락·콜백, 실제 차량 신호와 TTS 출력은 컴파일 결과와 구분해 보고합니다.
+
+[11/02 초기 SDK 검증](../docs/verification/2026-11-02-parking-api.md)은 당시의 관측입니다. 이후 수정·환경 결과는 [검증 목차](../docs/README.md)를 함께 확인하세요.
