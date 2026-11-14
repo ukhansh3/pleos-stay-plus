@@ -127,7 +127,23 @@ public partial class MainWindow : Window
         finally { checkingPairing = false; }
     }
     async void PairStatus(object sender, RoutedEventArgs e) => await Run(async () => { await Restore(); if (pairingId == null) { Status.Text = "먼저 연결 코드를 발급하거나 입력하세요."; return; } PairNote.Text = DescribePair(await Api.Send("GET", $"pairings/{pairingId}")); Status.Text = PairNote.Text; });
-    async void Approve(object sender, RoutedEventArgs e) => await Run(async () => { if (pairingId == null) { Status.Text = "먼저 연결 코드를 발급하거나 입력하세요."; return; } var p = await Api.Send("GET", $"pairings/{pairingId}"); PairNote.Text = DescribePair(p); if (vehicleName == null || !ApproveVehicle.IsEnabled) { Status.Text = PairNote.Text; return; } if (MessageBox.Show(this, $"‘{vehicleName}’ 차량과 이 PC를 연결할까요?", "차량 연결 승인", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return; PairNote.Text = DescribePair(await Api.Send("POST", $"pairings/{pairingId}/approve")); await Restore(); Status.Text = connectionId != null ? "차량과 연결했습니다." : "PC에서 승인했습니다. 차량에서도 이 PC를 승인해 주세요."; if (connectionId != null) await LoadFiles(); });
+    async void Approve(object sender, RoutedEventArgs e) => await Run(async () =>
+    {
+        if (pairingId == null) { Status.Text = "먼저 연결 코드를 발급하거나 입력하세요."; return; }
+        var p = await Api.Send("GET", $"pairings/{pairingId}");
+        PairNote.Text = DescribePair(p);
+        if (!PairingApproval.CanApprove(p))
+        {
+            Status.Text = PairNote.Text;
+            if (Field(p, "state") == "CONNECTED") { await Restore(); if (connectionId != null) await LoadFiles(); }
+            return;
+        }
+        if (MessageBox.Show(this, $"‘{vehicleName}’ 차량과 이 PC를 연결할까요?", "차량 연결 승인", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+        PairNote.Text = DescribePair(await Api.Send("POST", $"pairings/{pairingId}/approve"));
+        await Restore();
+        Status.Text = connectionId != null ? "차량과 연결했습니다." : "PC에서 승인했습니다. 차량에서도 이 PC를 승인해 주세요.";
+        if (connectionId != null) await LoadFiles();
+    });
     async void Disconnect(object sender, RoutedEventArgs e) => await Run(async () => { if (connectionId != null) await Api.Send("DELETE", $"connections/{connectionId}"); Files.Items.Clear(); ResetFileSelection(); await Restore(); Code.Clear(); pairingId = null; ApproveVehicle.IsEnabled = false; PairNote.Text = "새 차량과 연결하려면 차량의 코드를 입력하세요."; Status.Text = "차량 연결을 해제했습니다."; });
     async Task LoadFiles() { var result = await Api.Send("GET", "files"); Files.Items.Clear(); ResetFileSelection(); foreach (var f in result!["items"]!.AsArray()) Files.Items.Add(new Item(f!["id"]!.GetValue<string>(), f["name"]!.GetValue<string>(), f)); Empty.Visibility = Files.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed; await ShowFileDates(); }
     async void Refresh(object sender, RoutedEventArgs e) => await Run(async () => { await Restore(); await LoadFiles(); Status.Text = "파일 목록을 새로 고쳤습니다."; });

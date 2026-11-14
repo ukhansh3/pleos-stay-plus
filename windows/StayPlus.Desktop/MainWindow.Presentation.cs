@@ -61,7 +61,7 @@ public partial class MainWindow
         var pcId = Field(pc, "id");
         bool alreadyApproved = pcId != null && pair?["approvedDeviceIds"] is JsonArray approvals &&
             approvals.Any(value => value?.GetValue<string>() == pcId);
-        ApproveVehicle.IsEnabled = phase == "CLAIMED" && vehicleName != null && !alreadyApproved;
+        ApproveVehicle.IsEnabled = PairingApproval.CanApprove(pair);
         var state = phase switch
         {
             "CLAIMED" when alreadyApproved => "차량 승인을 기다리고 있습니다.",

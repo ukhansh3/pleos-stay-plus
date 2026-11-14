@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
- <ItemGroup><Compile Include="../StayPlus.Desktop/DeploymentSettings.cs" Link="DeploymentSettings.cs"/><Compile Include="../StayPlus.Desktop/RealtimeClient.cs" Link="RealtimeClient.cs"/><Compile Include="../StayPlus.Desktop/IdentityProvider.cs" Link="IdentityProvider.cs"/></ItemGroup>
+ <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+ <ItemGroup><Using Include="System.IO"/><Using Include="System.Net.Http"/><Compile Include="../StayPlus.Desktop/PairingApproval.cs" Link="PairingApproval.cs"/><Compile Include="../StayPlus.Desktop/DeploymentSettings.cs" Link="DeploymentSettings.cs"/><Compile Include="../StayPlus.Desktop/RealtimeClient.cs" Link="RealtimeClient.cs"/><Compile Include="../StayPlus.Desktop/IdentityProvider.cs" Link="IdentityProvider.cs"/></ItemGroup>
 </Project>

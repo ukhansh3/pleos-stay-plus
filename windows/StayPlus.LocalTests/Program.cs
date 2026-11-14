@@ -9,6 +9,39 @@ Check(DeploymentSettings.AllowsApi(new Uri("http://127.0.0.1:3012/api/v1/realtim
 Check(!DeploymentSettings.AllowsApi(new Uri("http://127.0.0.1:3012/api/v1/realtime/"), false), "no Release HTTP fallback");
 Check(!DeploymentSettings.AllowsApi(new Uri("http://public.invalid/api/v1/realtime/"), true), "no external cleartext API");
 Console.WriteLine("PASS Windows deployment defaults and Release transport restrictions");
+var approvalPair = JsonNode.Parse("""
+{"state":"CLAIMED","issuer":{"id":"car","kind":"VEHICLE","name":"Test vehicle"},"claimant":{"id":"pc","kind":"WINDOWS","name":"Test PC"},"approvedDeviceIds":["car"]}
+""")!;
+Check(PairingApproval.CanApprove(approvalPair), "vehicle approval must permit the PC's own explicit approval");
+Exception? approvalFailure = null;
+var approvalThread = new Thread(() => {
+ try {
+  var panel = new System.Windows.Controls.StackPanel();
+  var button = new System.Windows.Controls.Button { IsEnabled = true };
+  panel.Children.Add(button);
+  Check(button.IsEnabled, "initial approval control");
+  panel.IsEnabled = false; // Exactly what MainWindow.Run does before Approve.
+  button.IsEnabled = PairingApproval.CanApprove(approvalPair);
+  Check(!button.IsEnabled, "WPF parent disables the button during busy work");
+  Check(PairingApproval.CanApprove(approvalPair), "busy UI must not suppress a valid approval action");
+ } catch (Exception e) { approvalFailure = e; }
+});
+approvalThread.SetApartmentState(ApartmentState.STA);
+approvalThread.Start(); approvalThread.Join();
+if (approvalFailure != null) throw approvalFailure;
+foreach (var state in new[] { "OPEN", "CONNECTED", "EXPIRED", "CANCELLED" }) {
+ var invalid = approvalPair.DeepClone(); invalid["state"] = state;
+ Check(!PairingApproval.CanApprove(invalid), "approval forbidden in " + state);
+}
+var alreadyApproved = approvalPair.DeepClone(); alreadyApproved["approvedDeviceIds"]!.AsArray().Add("pc");
+Check(!PairingApproval.CanApprove(alreadyApproved), "duplicate PC approval must remain disabled");
+var missingPeer = approvalPair.DeepClone(); missingPeer["issuer"] = null;
+Check(!PairingApproval.CanApprove(missingPeer), "vehicle identity required");
+var missingApprovals = approvalPair.DeepClone(); missingApprovals.AsObject().Remove("approvedDeviceIds");
+Check(!PairingApproval.CanApprove(missingApprovals), "incomplete response must fail closed");
+Check(!PairingApproval.CanApprove(null), "missing response must fail closed");
+Console.WriteLine("PASS WPF busy-parent approval regression and pairing-state approval guards");
+
 string? saved=null;var fake=new FakeAuth();using(var auth=new IdentityProvider("https://fake.invalid","public",()=>saved,s=>saved=s,fake)){
  Check(await auth.ValidToken()=="access-1","signup");Check(await auth.ValidToken()=="access-1" && fake.Count==1,"cached token");
  var j=JsonNode.Parse(saved!)!;j["expires_at"]=0;saved=j.ToJsonString();Check(await auth.ValidToken()=="access-2"&&fake.LastPath.Contains("refresh_token"),"refresh");
