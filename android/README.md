@@ -1,5 +1,7 @@
 # PLEOS Android 앱
 
+> 제출용 서명 Release APK와 공개 서버 실행 안내: [저장소 README](../README.md). 최신 결과: [Release 검증](../docs/verification/2026-11-14-submission-release.md). 아래 Debug/로컬 설정은 개발용입니다.
+
 Kotlin·Jetpack Compose 기반 차량 앱입니다. 홈과 Premium Navigation Rail에서 Parking, Waiting, Pickup, Realtime, Rest, Study, Work로 이동합니다.
 
 ## 실행·검토

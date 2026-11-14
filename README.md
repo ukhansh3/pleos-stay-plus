@@ -5,7 +5,7 @@
 주차 장소를 찾고, 대기시간을 관리하며, 픽업 상대에게 차량 위치를 공유합니다. PC에서 받은 자료는 차량에서 읽거나 DOCX로 편집하고, 사용자가 선택한 파일만 수동 전송합니다.
 
 > 담당자 검토 기준은 `main`입니다. 최신 `dev`의 기능 코드·규칙을 보존해 통합했습니다.
-> 처음 보신다면 [검토 가이드](docs/review/REVIEW_GUIDE.md) → [설정·실행](docs/review/LOCAL_SETUP.md) → [검증 결과](docs/verification/2026-11-14-review-handoff.md) 순서로 읽어 주세요.
+> 제출 APK는 아래에서 내려받을 수 있습니다. [검토 가이드](docs/review/REVIEW_GUIDE.md)와 [Release 검증 결과](docs/verification/2026-11-14-submission-release.md)를 함께 확인해 주세요.
 
 ## 구현 범위
 
@@ -21,18 +21,70 @@
 
 Entertainment는 팀 결정으로 제외됐습니다. **AirDesk는 별도 앱·저장소**이며 Stay+ Work에 통합된 기능으로 표시하지 않습니다.
 
-## 빠르게 확인하기
+## APK 파일 위치
 
-- **APK 검토:** 담당자 검토·시연용은 Debug 빌드입니다. APK 설치만으로 서버나 인증 설정이 만들어지지는 않습니다.
-- **로컬 시연:** Parking/Pickup `3000`, Pickup 웹 `3001`, Supabase Realtime 어댑터 `3012`를 사용합니다. Android 에뮬레이터는 PC의 loopback에 `10.0.2.2`로 접근합니다.
-- **다른 휴대전화:** `localhost` 대신 승인된 공개 HTTPS 웹 주소가 필요합니다. 임시 QA 주소는 영구 배포 주소가 아닙니다.
-- **UI만 확인:** [Compose Preview 안내](docs/ui/COMPOSE_PREVIEW_GUIDE.md)를 참고하세요. 에뮬레이터를 자동 실행하지 않습니다.
+**[Team_EX_PleosStayPlus_release.apk 내려받기](apk/Team_EX_PleosStayPlus_release.apk)**
 
-자세한 명령과 환경변수 역할은 [설정·실행 가이드](docs/review/LOCAL_SETUP.md)에 있습니다. 실제 비밀키·토큰·서명키·개인 파일은 Git에 포함하지 않습니다.
+- 저장소 경로: `apk/Team_EX_PleosStayPlus_release.apk`
+- GitHub 파일 화면에서 **Download raw file**로 APK를 내려받으세요.
+- 제출용 **서명된 Release** 빌드입니다. 기존 로컬 시연용 Debug APK와 구분합니다.
+- 무결성 확인: [SHA-256](apk/Team_EX_PleosStayPlus_release.apk.sha256)
+
+## 실행 방법
+
+1. PLEOS Connect 환경을 실행하고 위 Release APK를 설치합니다.
+2. 앱 목록에서 **Pleos Stay+**를 실행합니다. 정차 전용 기능은 차량의 정차 상태가 확인되어야 사용할 수 있습니다.
+3. 인터넷 연결과 요청되는 위치 권한을 확인한 뒤 **주차·대기**에서 주변 장소를 검색합니다.
+4. **픽업 공유**는 초대 QR을 발급하고 휴대전화 브라우저로 열어 참가 동의 후 사용합니다. 휴대전화에서 앱을 설치할 필요는 없습니다.
+5. PC 자료를 사용하려면 Windows용 **Stay+**를 실행하고, 차량의 **파일 작업 → PC 연결하기**에서 발급한 8자리 코드를 입력한 뒤 **차량과 PC 양쪽에서 승인**합니다. 기존 PIN 확인은 유지됩니다.
+6. 연결한 자료는 Study에서 열람하거나 Work에서 DOCX로 편집합니다. 파일 전송과 공개 Downloads 내보내기는 사용자가 직접 승인합니다.
+
+제출 APK에는 아래 공개 HTTPS 주소가 설정되어 있습니다. **심사자가 로컬 Backend·웹 서버를 실행하거나 API 키를 입력할 필요는 없습니다.** PC 파일 송수신에는 별도 Windows Stay+ 프로그램이 필요합니다. **[Windows 프로그램 내려받기](https://github.com/ukhansh3/pleos-stay-plus/releases/download/submission-2026-11-14/StayPlus-Windows-x64.zip)** → 압축 해제 → `Stay+.exe` 실행으로 사용합니다. 서버 주소 입력이나 별도의 .NET 설치는 필요하지 않습니다. 설치 프로그램 형식이 아닌 휴대용 x64 실행 파일입니다. [전체 Release 파일](https://github.com/ukhansh3/pleos-stay-plus/releases/tag/submission-2026-11-14)에서 함께 받을 수 있습니다. Windows 소스·개발 빌드는 [로컬 실행 가이드](docs/review/LOCAL_SETUP.md)를 참고하세요.
+
+이미 실행 중인 에뮬레이터가 한 대인 경우 설치·실행 명령은 다음과 같습니다. Android SDK의 `platform-tools`에서 실행하며, 이 명령은 에뮬레이터를 새로 켜지 않습니다.
+
+```powershell
+adb -e install -r "팀에서_내려받은_경로\Team_EX_PleosStayPlus_release.apk"
+adb -e shell am start -n "com.pleosstay.app/.MainActivity"
+```
+
+기존 Debug 앱과 제출 APK는 서명이 달라 업데이트 설치가 거부될 수 있습니다. 이때 기존 데이터를 삭제하지 말고 별도 테스트 환경에서 설치하세요. 일반 휴대전화용 APK가 아닌 PLEOS 차량용 앱입니다.
+
+## 테스트 환경 및 필요한 설정
+
+| 항목 | 환경·조건 |
+|---|---|
+| 개발에 사용한 에뮬레이터 | **Pleos Connect Emulator v2.1.0 / Android API 34 / x86_64** |
+| 전체 디스플레이 | **2560 × 1440** |
+| Stay+ 앱 콘텐츠 영역 | **약 1682 × 1210 (약 1.39:1)**. 시스템 영역·밀도·창 제약에 따라 달라지며 dp 기반 레이아웃을 사용합니다. |
+| Android 빌드 | Kotlin / Jetpack Compose, Android Studio JBR 25.0.4, compile/target SDK 37, min SDK 28 |
+| 서버·웹 검증 환경 | Node.js 24.13.0, TypeScript, Fastify, Next.js, 기존 Supabase Auth·Storage·DB |
+| PC 자료 송수신 | Windows x64 Stay+ 클라이언트, 양쪽 승인 페어링·PIN·인터넷 연결 |
+| 권한·안전 | 위치 권한 및 위치 서비스. 정차 상태 UNKNOWN/주행 중에는 제한합니다. |
+
+### 제출본 서버
+
+| 역할 | 공개 HTTPS 주소 |
+|---|---|
+| Parking / Pickup API | https://stayplus-review-20261114-api.onrender.com |
+| Realtime API | https://stayplus-review-20261114-realtime.onrender.com |
+| Pickup 모바일 웹 / PC 연결 안내 | https://stayplus-review-20261114-web.onrender.com |
+
+Render 무료 심사용 서비스와 기존 Supabase를 사용합니다. 미사용 시 서버가 휴면하므로 첫 요청에 시간이 걸릴 수 있습니다. 잠시 기다린 뒤 재시도해 주세요. 무료 사용량 한도에 도달하면 서비스가 중단될 수 있으며, 상시 가용성을 보장하지 않습니다. 결제수단·유료 인스턴스는 추가하지 않았습니다.
+
+### 검증 범위
+
+- **PASS:** Release 빌드·서명·정렬·APK 무결성, Android JVM 231 통과 / 1 제외, Backend 38/38, Web 16/16 및 타입 검사.
+- **PASS:** 공개 서버의 실제 Parking 데이터 조회, Supabase 익명 인증, Pickup 초대·참가·재발급·수동 완료, Realtime 양쪽 승인·TXT 원본/수정본·신규 DOCX 업로드·다운로드·SHA-256·철회 차단.
+- **NOT RUN:** 이번 Release APK의 새 에뮬레이터 설치·UI 조작·실차 GPS·NaviHelper·스피커·휴대전화 지도 표시. 사용자 요청으로 에뮬레이터를 실행하지 않았습니다.
+- QA 임시 계정 정리의 DB 참조 제약 오류 등 상세 결과는 [Release 검증 기록](docs/verification/2026-11-14-submission-release.md)에 분리했습니다. API 검증을 실제 차량 UI 검증으로 간주하지 않습니다.
+
+개발자가 직접 빌드할 때만 [로컬 설정 가이드](docs/review/LOCAL_SETUP.md)에 따라 서버 환경변수와 공개 클라이언트 설정을 준비합니다. 서버 secret·서명키는 Git과 APK에 포함하지 않습니다. [Compose Preview](docs/ui/COMPOSE_PREVIEW_GUIDE.md)로 UI를 확인할 수도 있습니다.
 
 ## 저장소 구조
 
 ```text
+apk/                      서명된 제출 Release APK·SHA-256
 android/                  PLEOS Kotlin / Jetpack Compose 앱
   app/src/main/java/com/pleosstay/app/
     MainActivity.kt       앱 진입과 화면 연결
@@ -76,7 +128,7 @@ npm run validate:openapi
 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug --max-workers=1
 ```
 
-웹·Windows·전체 검증 명령은 [실행 가이드](docs/review/LOCAL_SETUP.md)를 참고하세요. 최신 결과와 미실행 항목은 [이번 검증 기록](docs/verification/2026-11-14-review-handoff.md)에 분리했습니다. 빌드 성공은 실제 차량 SDK·내비·휴대전화 지도 동작 검증과 다릅니다.
+웹·Windows·전체 검증 명령은 [실행 가이드](docs/review/LOCAL_SETUP.md)를 참고하세요. 최신 결과와 미실행 항목은 [Release 검증 기록](docs/verification/2026-11-14-submission-release.md)에 분리했습니다. 빌드 성공은 실제 차량 SDK·내비·휴대전화 지도 동작 검증과 다릅니다.
 
 ## 안전·운영 경계
 

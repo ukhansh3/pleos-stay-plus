@@ -4,7 +4,8 @@
 
 | 목적 | 문서 |
 |---|---|
-| 이번 전달본의 테스트·제약 | [2026-11-14 검증 기록](verification/2026-11-14-review-handoff.md) |
+| 제출 Release·공개 서버 검증 | [2026-11-14 Release 검증](verification/2026-11-14-submission-release.md) |
+| 이전 Debug 전달본의 테스트·제약 | [2026-11-14 검증 기록](verification/2026-11-14-review-handoff.md) |
 | HTTP / LOCAL / SDK 구분 | [API 안내](api/README.md) · [모드 API 매트릭스](api/MODE_API_MATRIX.md) |
 | Parking·Pickup 계약 | [OpenAPI](api/openapi.yaml) |
 | 파일·버전·PIN·초안 계약 | [공통 문서 계약](contracts/DOCUMENT_WORKSPACE_CONTRACT.md) |

@@ -1,5 +1,7 @@
 # Parking / Pickup API server
 
+> 제출용 서명 Release APK와 공개 서버 실행 안내: [저장소 README](../README.md). 최신 결과: [Release 검증](../docs/verification/2026-11-14-submission-release.md). 아래 Debug/로컬 설정은 개발용입니다.
+
 Node.js 20+, TypeScript, and Fastify implementation of the Parking v0.2 contract.
 
 See the [reviewer setup guide](../docs/review/LOCAL_SETUP.md) for the separate Realtime server, Windows client and mobile web. Latest automated results: [handoff verification](../docs/verification/2026-11-14-review-handoff.md).

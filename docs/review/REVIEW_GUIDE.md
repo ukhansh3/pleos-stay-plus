@@ -4,6 +4,8 @@
 
 이번 `main`은 최신 `dev`의 기능 코드와 개발 규칙을 보존한 기준입니다. 구조를 설명하기 위해 소스 폴더를 대규모로 옮기거나 API를 바꾸지 않았습니다. 확정 홈·로고·이미지와 기존 사용자 데이터 정책도 유지합니다.
 
+제출 APK·Windows 프로그램은 [저장소 README](../../README.md), 최신 실행 결과는 [Release 검증](../verification/2026-11-14-submission-release.md)을 확인하세요. 아래 기능별 검토 경로는 그대로 유지합니다.
+
 ## 1. 앱 전체 흐름
 
 1. [MainActivity](../../android/app/src/main/java/com/pleosstay/app/MainActivity.kt)에서 앱 초기화·화면 연결을 확인합니다.
